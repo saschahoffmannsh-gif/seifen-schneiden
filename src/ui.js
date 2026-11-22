@@ -15,7 +15,7 @@ export function createUI() {
   for (const s of SOAP_LIST) {
     const b = document.createElement('button');
     b.className = 'soap-btn';
-    b.innerHTML = `<div class="swatch" style="background:${s.swatch}"></div>${s.emoji} ${s.name}`;
+    b.innerHTML = `<div class="swatch" style="background:${s.swatch}"></div><span class="tag">${s.emoji} ${s.name}</span>`;
     b.addEventListener('click', () => onPick && onPick(s));
     el.shelfGrid.appendChild(b);
     soapButtons.set(s.id, b);
