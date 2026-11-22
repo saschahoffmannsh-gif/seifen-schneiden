@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#f6e3d6" />
+  <title>Seifen-Schneiden</title>
+  
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <!-- Kopfzeile: Bestellung + Münzen -->
+  <div id="hud">
+    <div id="order" class="ticket">
+      <div class="ticket-title">Bestellung</div>
+      <div id="order-text">…</div>
+      <div id="order-progress"></div>
+    </div>
+    <div id="coins" class="pill">🪙 <span id="coin-count">0</span></div>
+  </div>
+
+  <!-- Hinweistext / Statuszeile -->
+  <div id="hint"></div>
+
+  <!-- Schrank mit den Seifen -->
+  <div id="shelf" class="panel hidden">
+    <div class="panel-title">Schrank</div>
+    <div id="shelf-grid"></div>
+  </div>
+
+  <!-- Ofen-Fortschritt -->
+  <div id="oven" class="panel hidden">
+    <div class="panel-title">🔥 Ofen – Seife schmilzt …</div>
+    <div class="bar"><div id="oven-bar"></div></div>
+  </div>
+
+  <!-- Aktions-Knöpfe -->
+  <div id="actions"></div>
+
+  <!-- schwebende Texte ("So satisfying!") -->
+  <div id="popups"></div>
+  <div id="fps" class="hidden"></div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

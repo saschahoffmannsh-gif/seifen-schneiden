@@ -1,0 +1,26 @@
+// Eingabe: Touch und Maus über Pointer Events. Liefert nur Zustand, keine Spiellogik.
+export function createInput(el, onFirstGesture) {
+  const state = { down: false, x: 0, y: 0, id: -1 };
+  const setPos = (e) => {
+    const r = el.getBoundingClientRect();
+    state.x = ((e.clientX - r.left) / r.width) * 2 - 1;   // NDC -1..1
+    state.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+  };
+  el.addEventListener('pointerdown', (e) => {
+    if (state.down) return;
+    state.down = true; state.id = e.pointerId; setPos(e);
+    el.setPointerCapture?.(e.pointerId);
+    onFirstGesture?.();
+    e.preventDefault();
+  }, { passive: false });
+  el.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== state.id && state.down) return;
+    setPos(e);
+  });
+  const up = (e) => { if (e.pointerId === state.id) { state.down = false; state.id = -1; } };
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', up);
+  // iOS: kein Doppeltipp-Zoom / Scrollen
+  document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+  return state;
+}
