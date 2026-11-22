@@ -20,9 +20,9 @@ export function createScene(canvas) {
   pmrem.dispose();
 
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 60);
-  const target = new THREE.Vector3(0, 0.75, 0);
+  const target = new THREE.Vector3(0, 0.9, 0);
   // Blickrichtung (von vorne oben); Abstand wird beim Resize ans Seitenverhältnis angepasst
-  const viewDir = new THREE.Vector3(0.18, 0.5, 1).normalize(); // leicht schräg von vorne: Vorderseite + Schnittfläche gut sichtbar
+  const viewDir = new THREE.Vector3(0.18, 0.68, 1).normalize(); // leicht schräg von vorne: Vorderseite + Schnittfläche gut sichtbar
 
   // Licht: Himmel/Boden + eine Richtung. Keine Schatten-Maps.
   scene.add(new THREE.HemisphereLight(0xffffff, 0xc9a48c, 1.25));
@@ -86,7 +86,7 @@ export function createScene(canvas) {
   scene.add(rack);
 
   // Kamera so weit weg, dass Breite UND Höhe der Szene ins Bild passen (Hoch- und Querformat)
-  const FIT_W = 2.95, FIT_H = 2.8;
+  const FIT_W = 2.95, FIT_H = 3.1;
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false);

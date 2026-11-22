@@ -1,7 +1,7 @@
 // Der intakte Seifenblock: ein einziges InstancedMesh mit nx*ny*nz Würfeln.
 // Geschnittene Würfel werden nur auf Skalierung 0 gesetzt (kein Erzeugen/Löschen von Meshes).
 import * as THREE from 'three';
-import { BLOCK, CUBE, BLOCK_BASE_Y } from './config.js';
+import { BLOCK, CUBE, BLOCK_BASE_Y, SLICES, SLICE_DEPTH } from './config.js';
 import { cubeColor } from './soaps.js';
 
 const _m = new THREE.Matrix4();
@@ -41,19 +41,21 @@ export class SoapBlock {
     this.soap = soap;
     this.released.fill(0);
     this.releasedCount = 0;
-    const s = CUBE; // keine Lücke: außen wirkt die Seife glatt, Fugen zeichnet der Shader nur innen
+    // minimal überlappend: außen eine geschlossene, glatte Seifenoberfläche ohne Pixel-Ritzen;
+    // die feinen Fugen zeichnet der Shader nur auf Schnitt-/Innenflächen
+    const s = CUBE * 1.015;
     for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
       const n = this.index(i, j, k);
       _m.makeScale(s, s, s).setPosition(this.cubeX(i), this.cubeY(j), this.cubeZ(k));
       this.mesh.setMatrixAt(n, _m);
-      cubeColor(soap, i, j, k, _rgb, i === 0 || j === 0 || k === 0 || i === nx - 1 || j === ny - 1 || k === nz - 1);
+      cubeColor(soap, _rgb);
       _c.setRGB(_rgb[0], _rgb[1], _rgb[2], THREE.SRGBColorSpace);
       this.mesh.setColorAt(n, _c);
       this.colors[n * 3] = _c.r; this.colors[n * 3 + 1] = _c.g; this.colors[n * 3 + 2] = _c.b;
     }
     this.mesh.instanceMatrix.needsUpdate = true;
     this.mesh.instanceColor.needsUpdate = true;
-    this.slice = nz - 1;      // nz-1 = Kamera-Seite (vorne)
+    this.slice = SLICES - 1;  // SLICES-1 = Kamera-Seite (vorne)
     this.rowsCut = 0;
     this.mesh.visible = true;
   }
@@ -66,9 +68,9 @@ export class SoapBlock {
   get topY() { return BLOCK_BASE_Y + BLOCK.ny * CUBE; }
   get bottomY() { return BLOCK_BASE_Y; }
   /** z-Position der Schnittebene hinter der aktuellen Scheibe (dort läuft das Messer). */
-  get cutZ() { return this.cubeZ(Math.max(this.slice, 0)) - CUBE / 2; }
+  get cutZ() { return this.cubeZ(Math.max(this.slice, 0) * SLICE_DEPTH) - CUBE / 2; }
   /** z der Vorderseite des noch intakten Blocks. */
-  get frontZ() { return this.cubeZ(Math.max(this.slice, 0)) + CUBE / 2; }
+  get frontZ() { return this.cubeZ(Math.max(this.slice, 0) * SLICE_DEPTH + SLICE_DEPTH - 1) + CUBE / 2; }
 
   /**
    * Löst die Würfel der vordersten Scheibe von oben nach unten bis zum Anteil `frac` (0..1).
@@ -82,13 +84,14 @@ export class SoapBlock {
     let n = 0;
     while (this.rowsCut < target) {
       const j = ny - 1 - this.rowsCut; // oben zuerst
-      for (let i = 0; i < nx; i++) {
-        const idx = this.index(i, j, this.slice);
+      for (let dk = SLICE_DEPTH - 1; dk >= 0; dk--) for (let i = 0; i < nx; i++) {
+        const k = this.slice * SLICE_DEPTH + dk;
+        const idx = this.index(i, j, k);
         if (this.released[idx]) continue;
         this.released[idx] = 1;
         this.releasedCount++;
         this.mesh.setMatrixAt(idx, _zero);
-        onCube(this.cubeX(i), this.cubeY(j), this.cubeZ(this.slice),
+        onCube(this.cubeX(i), this.cubeY(j), this.cubeZ(k),
           this.colors[idx * 3], this.colors[idx * 3 + 1], this.colors[idx * 3 + 2], this.soap.id);
         n++;
       }

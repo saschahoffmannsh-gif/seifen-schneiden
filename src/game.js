@@ -118,8 +118,7 @@ export class Game {
     const parts = [];
     const counts = this.loose.typeCounts;
     for (const s of SOAP_BY_ID) if (counts[s.id] > 0) {
-      parts.push({ rgb: s.base, w: counts[s.id] * 0.65 });
-      parts.push({ rgb: s.light, w: counts[s.id] * 0.35 });
+      parts.push({ rgb: s.base, w: counts[s.id] });
     }
     // Farben abwechselnd mischen, damit Adern verschiedener Sorten nebeneinander liegen
     parts.sort((a, b) => (a.rgb[0] + a.rgb[2]) - (b.rgb[0] + b.rgb[2]));

@@ -45,6 +45,7 @@ export class LooseCubes {
     this.blockHalfX = 0; this.blockHalfZ = 0;
     this.onLand = null;                   // Callback für Klick-Geräusch
     this.dirtyMin = MAX; this.dirtyMax = -1;
+    this.colMin = MAX; this.colMax = -1;
   }
 
   /** Einen Würfel aus dem Pool holen. Ist der Pool voll, wird der älteste recycelt. */
@@ -68,7 +69,8 @@ export class LooseCubes {
     this.spin[o + 1] = (Math.random() - 0.5) * 8;
     this.spin[o + 2] = (Math.random() - 0.5) * 14;
     this.mesh.setColorAt(i, _tmpColor.setRGB(r, g, b));
-    this.mesh.instanceColor.needsUpdate = true;
+    if (i < this.colMin) this.colMin = i;
+    if (i > this.colMax) this.colMax = i;
     this.writeMatrix(i);
   }
 
@@ -142,9 +144,9 @@ export class LooseCubes {
     const o = i * 3, P = this.pos;
     let c = this.cellAt(P[o], P[o + 2]);
     const limR = BOWL.floorR - HALF;
-    for (let it = 0; it < 4; it++) {
+    for (let it = 0; it < 6; it++) {
       const cx = c % GRID, cz = (c / GRID) | 0;
-      let best = c, bh = this.heights[c] - CUBE * 0.6;
+      let best = c, bh = this.heights[c] - CUBE * 1.6; // erst ab 1,6 Würfeln Höhenunterschied rutschen -> Haufen
       for (let d = 0; d < 4; d++) {
         const nx = cx + (d === 0 ? 1 : d === 1 ? -1 : 0);
         const nz = cz + (d === 2 ? 1 : d === 3 ? -1 : 0);
@@ -183,6 +185,13 @@ export class LooseCubes {
 
   /** Einmal pro Frame: nur den geänderten Bereich zur GPU hochladen. */
   flush() {
+    if (this.colMax >= 0) {
+      const c = this.mesh.instanceColor;
+      c.clearUpdateRanges();
+      c.addUpdateRange(this.colMin * 3, (this.colMax - this.colMin + 1) * 3);
+      c.needsUpdate = true;
+      this.colMin = MAX; this.colMax = -1;
+    }
     if (this.dirtyMax < 0) return;
     const attr = this.mesh.instanceMatrix;
     attr.clearUpdateRanges();

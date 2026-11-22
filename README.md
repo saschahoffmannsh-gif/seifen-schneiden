@@ -12,7 +12,8 @@ Ein entspannendes Handy-Spiel im Browser: Seifen aus dem Schrank nehmen, in fein
 
 1. **Bestellung lesen** – oben steht, was die Kundschaft möchte, z. B. „Anna möchte: Erdbeere + Vanille“.
 2. **Seife aus dem Schrank nehmen** – unten im Schrank auf eine Sorte tippen (gewünschte Sorten sind gelb umrandet).
-3. **Schneiden** – den Finger einfach **hin und her (links ↔ rechts)** wischen. Das Messer sägt
+3. **Schneiden** – die Seife steht aufrecht in einer Halterung über der Schale und hat genau eine Farbe.
+   Sie besteht aus 2880 feinen Würfeln (15 × 24 × 8), aufgeteilt in 4 Scheiben. Den Finger einfach **hin und her (links ↔ rechts)** wischen. Das Messer sägt
    sich wie beim Brotschneiden durch die **vorderste Scheibe** von oben nach unten. Die Seife
    besteht aus kleinen Würfeln: Während das Messer tiefer geht, lösen sich die Würfel dieser
    Scheibe von oben nach unten und purzeln in die Schale. Unten angekommen fährt das Messer
@@ -59,8 +60,8 @@ Bei jedem Push auf `main` baut eine GitHub Action das Spiel und veröffentlicht 
 
 ## Technik: warum es nicht ruckelt
 
-- **Instancing:** Alle losen Würfel (bis zu 4000) sind *ein* `InstancedMesh` = ein Draw Call.
-  Der intakte Block ist ebenfalls ein `InstancedMesh`. Insgesamt ca. 10 Draw Calls.
+- **Instancing:** Alle losen Würfel (bis zu 10 000) sind *ein* `InstancedMesh` = ein Draw Call.
+  Der intakte Block ist ebenfalls ein `InstancedMesh`. Insgesamt ca. 10 Draw Calls. Die runde Seifenform entsteht im Vertex-Shader (Würfel-Ecken werden auf ein abgerundetes Seifenstück projiziert), nicht durch zusätzliche Objekte.
 - **Nichts wird zur Laufzeit erzeugt:** Pool fest reserviert, geschnittene Würfel werden nur
   versteckt bzw. aus dem Pool aktiviert. Ist der Pool voll, wird der älteste Würfel recycelt.
 - **Eigene, billige Physik statt Physik-Engine:** Schwerkraft, Abprallen an Block, Schalenwand

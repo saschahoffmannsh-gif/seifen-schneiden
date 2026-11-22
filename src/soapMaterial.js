@@ -51,7 +51,7 @@ export function createBlockMaterial() {
       .replace('#include <color_fragment>', `#include <color_fragment>
         // feine Fuge nur auf Schnitt-/Innenflächen
         float e = min(min(vCubeUv.x, 1.0 - vCubeUv.x), min(vCubeUv.y, 1.0 - vCubeUv.y));
-        diffuseColor.rgb *= mix(1.0, 0.8, (1.0 - smoothstep(0.0, 0.07, e)) * (1.0 - vShell));`);
+        diffuseColor.rgb *= mix(1.0, 0.86, (1.0 - smoothstep(0.0, 0.07, e)) * (1.0 - vShell));`);
   };
   return mat;
 }

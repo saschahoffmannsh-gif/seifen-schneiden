@@ -12,7 +12,6 @@ import { Game } from './game.js';
 import { unlockAudio, sndTick } from './audio.js';
 import { PHYS } from './config.js';
 import { createBlockMaterial, createLooseMaterial } from './soapMaterial.js';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 const canvas = document.getElementById('scene');
 const view = createScene(canvas);
@@ -20,10 +19,11 @@ const ui = createUI();
 const input = createInput(canvas, unlockAudio);
 document.addEventListener('pointerdown', unlockAudio, { once: true });
 
-// Block: unterteilte Würfel (damit die Rundung im Shader weich wird), lose Würfel: leicht abgerundet.
+// Block: unterteilte Würfel (damit die Rundung im Shader weich wird).
 // Geometrien/Materialien werden genau einmal erzeugt.
-const blockGeo = new THREE.BoxGeometry(1, 1, 1, 3, 3, 3);
-const looseGeo = new RoundedBoxGeometry(1, 1, 1, 2, 0.14);
+const blockGeo = new THREE.BoxGeometry(1, 1, 1, 2, 2, 2);
+// lose Würfel sind sehr klein -> einfache Box (24 Vertices), damit auch 10 000 Stück billig bleiben
+const looseGeo = new THREE.BoxGeometry(1, 1, 1);
 const block = new SoapBlock(view.scene, blockGeo, createBlockMaterial());
 const loose = new LooseCubes(view.scene, looseGeo, createLooseMaterial());
 loose.onLand = sndTick;

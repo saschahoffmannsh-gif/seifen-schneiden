@@ -1,11 +1,15 @@
 // Zentrale Konstanten für Welt, Seife, Schale und Physik.
 // Alle Maße in "Welt-Einheiten" (ca. 1 Einheit = 10 cm).
 
-export const CUBE = 0.11;           // Kantenlänge eines Seifenwürfels (Voxel)
+export const CUBE = 0.05;           // Kantenlänge eines Seifenwürfels (Voxel) – fein geschnitten
 
 // Seifenblock: Anzahl Würfel in x (Breite), y (Höhe), z (Tiefe)
-export const BLOCK = { nx: 9, ny: 7, nz: 4 };   // genau 4 Scheiben von vorne nach hinten
-export const SOAP_RADIUS = 0.13;    // Rundung der Kanten/Ecken des Seifenstücks
+// Aufrecht stehendes Seifenstück: höher als breit, 4 Scheiben von vorne nach hinten.
+// 15 x 24 x 8 = 2880 Würfel pro Seife; jede Scheibe ist 2 Würfel dick (15 x 24 x 2 = 720 Würfel).
+export const BLOCK = { nx: 15, ny: 24, nz: 8 };
+export const SLICES = 4;
+export const SLICE_DEPTH = BLOCK.nz / SLICES;   // Würfel pro Scheibe in z
+export const SOAP_RADIUS = 0.12;    // Rundung der Kanten/Ecken des Seifenstücks
 
 // Schale (Form): innerer Boden bei y = 0
 export const BOWL = {
@@ -23,13 +27,13 @@ export const PHYS = {
   gravity: 9.8,
   step: 1 / 120,          // fester Zeitschritt
   maxSteps: 4,            // max. Physik-Schritte pro Frame (Schutz vor "Spiral of death")
-  maxCubes: 4000,         // vorab reservierter Pool loser Würfel
+  maxCubes: 10000,        // vorab reservierter Pool loser Würfel (reicht für 3 Seifen à 2880)
 };
 
 // Schneiden: wie weit (Welt-Einheiten) ein Wisch mindestens gehen muss, damit er zählt
 export const CUT = {
   // Hin-und-her-Wischen treibt das Messer durch die vorderste Scheibe nach unten:
-  strokePerSlice: 1.5,    // so viel Wischweg (Welt-Einheiten) braucht eine ganze Scheibe (oben -> unten)
+  strokePerSlice: 2.0,    // so viel Wischweg (Welt-Einheiten) braucht eine ganze Scheibe (oben -> unten)
   knifeRange: 0.32,       // Messer darf sich +- so weit seitlich bewegen
   returnSpeed: 9,         // wie schnell das Messer nach einer Scheibe wieder hochfährt
 };
