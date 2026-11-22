@@ -1,9 +1,9 @@
-// Rendering-Grundgerüst: Renderer, Kamera, Licht, Holztisch, Metallschale, Gitter, Fake-Schatten,
-// Küchen-Hintergrund. Bewusst billig gehalten: keine Shadow-Maps, Texturen einmalig per Canvas
-// erzeugt, Hintergrund nur bei Resize gerendert (siehe setting/backdrop.js), max. DPR 2.
+// Rendering-Grundgerüst: Renderer, Kamera, Licht, Holztisch, Metallschale, Fake-Schatten,
+// Wand mit Holz-Ablagen direkt hinter dem Tisch (siehe setting/wall.js). Bewusst billig gehalten:
+// keine Shadow-Maps, Texturen einmalig per Canvas erzeugt, Wiederholtes als InstancedMesh, max. DPR 2.
 import * as THREE from 'three';
-import { BOWL, RACK_Y } from './config.js';
-import { createBackdrop, WALL_Z, TABLE_Y } from './setting/backdrop.js';
+import { BOWL } from './config.js';
+import { createKitchenWall, WALL_Z, TABLE_Y } from './setting/wall.js';
 import { makeWoodTexture, makeBrushedTexture, makeEnvTexture } from './setting/textures.js';
 
 export function createScene(canvas) {
@@ -49,10 +49,10 @@ export function createScene(canvas) {
   table.position.set(0, TABLE_Y, (TABLE_FRONT + WALL_Z) / 2);
   scene.add(table);
 
-  // Hintergrund (Wand + Regale), als unscharfes Vollbild hinter allem
-  const backdrop = createBackdrop(renderer, tableMat);
-  scene.add(backdrop.backdrop);
-  const bg = backdrop.tint; // wird beim Ofen warm eingefärbt
+  // Wand mit Ablagen direkt an der hinteren Tischkante (echte Geometrie, gleiches Licht)
+  createKitchenWall(scene, { env, aniso });
+  const bg = new THREE.Color('#d8c3a6');
+  scene.background = bg;
 
   // Fake-Schatten: weicher Kreis aus einer Canvas-Textur (einmalig erzeugt)
   const sc = document.createElement('canvas');
@@ -90,18 +90,6 @@ export function createScene(canvas) {
   const bowl = new THREE.Mesh(new THREE.LatheGeometry(pts, 64), steel);
   scene.add(bowl);
 
-  // Gitter (zwei Stäbe) über der Schale, auf dem der Seifenblock liegt
-  const rackMat = new THREE.MeshStandardMaterial({ color: 0xc8c9cc, metalness: 1, roughness: 0.3, envMap: env, envMapIntensity: 1 });
-  const rackGeo = new THREE.CylinderGeometry(0.018, 0.018, BOWL.rimR * 2 + 0.1, 8);
-  const rack = new THREE.Group();
-  for (const z of [-0.18, 0.18]) {
-    const bar = new THREE.Mesh(rackGeo, rackMat);
-    bar.rotation.z = Math.PI / 2;
-    bar.position.set(0, RACK_Y, z);
-    rack.add(bar);
-  }
-  scene.add(rack);
-
   // Kamera so weit weg, dass Breite UND Höhe der Szene ins Bild passen (Hoch- und Querformat)
   const FIT_W = 2.95, FIT_H = 3.1;
   function resize() {
@@ -116,11 +104,9 @@ export function createScene(canvas) {
     camera.position.y += 0.05;
     camera.lookAt(target.x, target.y - 0.12, target.z);
     camera.updateProjectionMatrix();
-    camera.updateMatrixWorld();
-    backdrop.render(camera);   // Hintergrund nur hier neu zeichnen, nicht pro Bild
   }
   resize();
   window.addEventListener('resize', resize);
 
-  return { renderer, scene, camera, bowl, rack, ovenLight, bg };
+  return { renderer, scene, camera, bowl, ovenLight, bg };
 }

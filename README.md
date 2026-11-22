@@ -49,7 +49,8 @@ Bei jedem Push auf `main` baut eine GitHub Action das Spiel und veröffentlicht 
 | `src/soapBlock.js` | Intakter Seifenblock aus Voxeln (ein `InstancedMesh`) |
 | `src/looseCubes.js` | Lose Würfel: Pool, eigene Mini-Physik, Höhenfeld zum Stapeln |
 | `src/soaps.js` | Seifensorten, Farben und Innenmuster |
-| `src/scene.js` | Renderer, Kamera, Licht, Schale, Gitter, Fake-Schatten |
+| `src/scene.js` | Renderer, Kamera, Licht, Holztisch, Metallschale, Fake-Schatten |
+| `src/setting/wall.js` | Wand direkt hinter dem Tisch mit Holz-Ablagen und Deko (echte 3D-Geometrie, InstancedMesh) |
 | `src/knife.js` | Gezacktes Messer |
 | `src/marble.js` | Marmor-Textur für die fertige Seife |
 | `src/confetti.js` | Konfetti-Partikel |

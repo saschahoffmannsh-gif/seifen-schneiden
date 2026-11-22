@@ -90,7 +90,7 @@ export function makePlasterTexture({ repeat = [1, 1] } = {}) {
   const W = 512, H = 512;
   const [c, g] = canvas(W, H);
   const r = rng(11);
-  g.fillStyle = '#e9d6bb'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#f0dfc6'; g.fillRect(0, 0, W, H);
   // fleckige Struktur
   for (let i = 0; i < 900; i++) {
     const x = r() * W, y = r() * H, rad = 4 + r() * 26;
@@ -100,19 +100,11 @@ export function makePlasterTexture({ repeat = [1, 1] } = {}) {
     rg.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = rg; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
   }
-  // freiliegende Ziegel (zwei Stellen)
-  const bricks = (bx, by, cols, rows) => {
-    for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
-      if (r() < 0.25) continue;
-      const x = bx + col * 46 + (row % 2) * 23, y = by + row * 20;
-      g.fillStyle = ['#b9744f', '#a8643f', '#c4825a', '#9e5c3c'][(r() * 4) | 0];
-      g.globalAlpha = 0.55 + r() * 0.3;
-      g.fillRect(x, y, 42, 16);
-    }
-    g.globalAlpha = 1;
-  };
-  bricks(30, 340, 4, 5);
-  bricks(330, 60, 3, 4);
+  // feine Körnung
+  for (let i = 0; i < 9000; i++) {
+    g.fillStyle = r() < 0.5 ? `rgba(255,250,240,${r() * 0.16})` : `rgba(140,100,65,${r() * 0.12})`;
+    g.fillRect(r() * W, r() * H, 1 + r() * 2, 1 + r() * 2);
+  }
   return toTex(c, { repeat });
 }
 
@@ -178,4 +170,21 @@ export function makeShadeTexture() {
   g.fillStyle = lg; g.fillRect(0, 0, 4, 64);
   const t = new THREE.CanvasTexture(c);
   return t;
+}
+
+/** Brett mit Maserung entlang der Länge (für die Ablagen). */
+export function makeBoardTexture({ aniso = 1 } = {}) {
+  const src = makeWoodCanvas({ w: 128, h: 1024, planks: 1, seed: 4, tones: ['#94603a'] });
+  const [c, g] = canvas(1024, 128);
+  g.translate(1024, 0); g.rotate(Math.PI / 2); g.drawImage(src, 0, 0);
+  return toTex(c, { aniso });
+}
+
+/** Runder weicher Schatten (Kontaktschatten unter Dingen). */
+export function makeBlobTexture() {
+  const [c, g] = canvas(64, 64);
+  const rg = g.createRadialGradient(32, 32, 2, 32, 32, 32);
+  rg.addColorStop(0, 'rgba(60,32,15,0.45)'); rg.addColorStop(1, 'rgba(60,32,15,0)');
+  g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
 }

@@ -19,7 +19,7 @@ export const BOWL = {
   height: 0.62,     // Höhe des Randes
 };
 
-// Gitter, auf dem der Seifenblock über der Schale liegt
+// Höhe, auf der der Seifenblock über der Schale steht (früher auf einem Gitter, das ist weg)
 export const RACK_Y = BOWL.height + 0.03;
 export const BLOCK_BASE_Y = RACK_Y + 0.02;
 

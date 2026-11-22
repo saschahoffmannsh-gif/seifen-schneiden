@@ -1,5 +1,5 @@
 // Lose Würfel: ein vorab reservierter Pool in EINEM InstancedMesh (ein Draw Call).
-// Eigene, sehr billige Physik: Schwerkraft, Abprallen an Block, Schalenwand und Boden.
+// Eigene, sehr billige Physik: Würfel fallen senkrecht (kein Zug zur Mitte), Schalenwand, Boden.
 // Liegende Würfel werden "eingefroren" und nicht mehr berechnet. Kein Physik-Engine,
 // keine Allokationen im Frame (alle Vektoren/Matrizen werden wiederverwendet).
 import * as THREE from 'three';
@@ -60,14 +60,15 @@ export class LooseCubes {
     this.state[i] = 1;
     const o = i * 3;
     this.pos[o] = x; this.pos[o + 1] = y; this.pos[o + 2] = z;
-    // kleiner "Pop": leicht nach oben, nach vorne (weg vom Messer) und etwas zur Seite
-    this.vel[o] = x * 0.8 + (Math.random() - 0.5) * 0.5;
-    this.vel[o + 1] = 0.4 + Math.random() * 0.7;
-    this.vel[o + 2] = 0.55 + Math.random() * 0.6;
+    // Würfel fallen senkrecht genau dort runter, wo sie sich von der Seife lösen:
+    // kein Zug zur Mitte, nur ein winziger Zufall, damit es nicht wie ein Raster aussieht.
+    this.vel[o] = (Math.random() - 0.5) * 0.06;
+    this.vel[o + 1] = -Math.random() * 0.15;
+    this.vel[o + 2] = (Math.random() - 0.5) * 0.06;
     this.rot[o] = 0; this.rot[o + 1] = 0; this.rot[o + 2] = 0;
-    this.spin[o] = (Math.random() - 0.5) * 14;
-    this.spin[o + 1] = (Math.random() - 0.5) * 8;
-    this.spin[o + 2] = (Math.random() - 0.5) * 14;
+    this.spin[o] = (Math.random() - 0.5) * 5;
+    this.spin[o + 1] = (Math.random() - 0.5) * 3;
+    this.spin[o + 2] = (Math.random() - 0.5) * 5;
     this.mesh.setColorAt(i, _tmpColor.setRGB(r, g, b));
     if (i < this.colMin) this.colMin = i;
     if (i > this.colMax) this.colMax = i;
@@ -118,10 +119,11 @@ export class LooseCubes {
       const ground = this.heights[c];
       if (y - HALF <= ground && V[o + 1] < 0) {
         y = ground + HALF;
-        V[o + 1] = -V[o + 1] * 0.28;
-        V[o] *= 0.6; V[o + 2] *= 0.6;
-        S[o] *= 0.5; S[o + 1] *= 0.5; S[o + 2] *= 0.5;
-        if (V[o + 1] < 0.4 && V[o] * V[o] + V[o + 2] * V[o + 2] < 0.12) {
+        // kaum Abprallen, kein seitliches Wegrutschen: Würfel bleiben da liegen, wo sie landen
+        V[o + 1] = -V[o + 1] * 0.12;
+        V[o] *= 0.3; V[o + 2] *= 0.3;
+        S[o] *= 0.4; S[o + 1] *= 0.4; S[o + 2] *= 0.4;
+        if (V[o + 1] < 0.5) {
           P[o] = x; P[o + 1] = y; P[o + 2] = z;
           this.settle(i);
           continue;
@@ -139,15 +141,21 @@ export class LooseCubes {
     return cz * GRID + cx;
   }
 
-  /** Würfel zur Ruhe bringen: auf niedrigere Nachbarzelle rutschen lassen ("Lawine"), dann einfrieren. */
+  /**
+   * Würfel zur Ruhe bringen. Er bleibt auf seiner Zelle liegen; nur wenn der Turm dort deutlich
+   * höher ist als ein direkter Nachbar, kippt er eine Zelle zur Seite (natürliche Böschung des
+   * Haufens). Die Richtung ist zufällig und hängt NICHT von der Schalenmitte ab.
+   */
   settle(i) {
     const o = i * 3, P = this.pos;
     let c = this.cellAt(P[o], P[o + 2]);
     const limR = BOWL.floorR - HALF;
-    for (let it = 0; it < 6; it++) {
+    for (let it = 0; it < 3; it++) {
       const cx = c % GRID, cz = (c / GRID) | 0;
-      let best = c, bh = this.heights[c] - CUBE * 1.6; // erst ab 1,6 Würfeln Höhenunterschied rutschen -> Haufen
-      for (let d = 0; d < 4; d++) {
+      let best = c, bh = this.heights[c] - CUBE * 2.2; // erst ab 2,2 Würfeln Höhenunterschied kippen -> steiler Haufen an Ort und Stelle
+      const d0 = (Math.random() * 4) | 0;           // zufällige Startrichtung, keine Vorzugsrichtung
+      for (let dd = 0; dd < 4; dd++) {
+        const d = (d0 + dd) & 3;
         const nx = cx + (d === 0 ? 1 : d === 1 ? -1 : 0);
         const nz = cz + (d === 2 ? 1 : d === 3 ? -1 : 0);
         if (nx < 0 || nz < 0 || nx >= GRID || nz >= GRID) continue;
@@ -157,9 +165,10 @@ export class LooseCubes {
         if (this.heights[n] < bh) { bh = this.heights[n]; best = n; }
       }
       if (best === c) break;
+      // nur um den Zellversatz verschieben (nicht auf die Zellmitte ziehen)
+      P[o] += ((best % GRID) - cx) * CUBE;
+      P[o + 2] += (((best / GRID) | 0) - cz) * CUBE;
       c = best;
-      P[o] = ((c % GRID) + 0.5) * CUBE - GRID_OFF + (Math.random() - 0.5) * 0.03;
-      P[o + 2] = (((c / GRID) | 0) + 0.5) * CUBE - GRID_OFF + (Math.random() - 0.5) * 0.03;
     }
     P[o + 1] = this.heights[c] + HALF;
     this.heights[c] += CUBE * 0.92;
