@@ -10,6 +10,7 @@ export const BLOCK = { nx: 15, ny: 24, nz: 8 };
 export const SLICES = 4;
 export const SLICE_DEPTH = BLOCK.nz / SLICES;   // Würfel pro Scheibe in z
 export const SOAP_RADIUS = 0.12;    // Rundung der Kanten/Ecken des Seifenstücks
+export const SOAP_BULGE = 0.03;     // Kissen-Wölbung der Vorderseite (Mitte steht so weit vor)
 
 // Schale (Form): innerer Boden bei y = 0
 export const BOWL = {

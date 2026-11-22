@@ -21,6 +21,11 @@ export class SoapBlock {
     for (let n = 0; n < this.count; n++) this.mesh.setColorAt(n, _c.set(1, 1, 1));
     scene.add(this.mesh);
 
+    // Pro Würfel: Bitmaske der Seiten, vor denen direkt ein Nachbarwürfel liegt
+    // (+x 1, -x 2, +y 4, -y 8, +z 16, -z 32). Der Shader blendet diese Innenflächen aus.
+    this.hidden = new THREE.InstancedBufferAttribute(new Float32Array(this.count), 1);
+    this.hidden.setUsage(THREE.DynamicDrawUsage);
+    geometry.setAttribute('aHidden', this.hidden);
     this.released = new Uint8Array(this.count);
     this.colors = new Float32Array(this.count * 3); // lineare RGB pro Würfel
     this.slice = -1;          // aktuelle (vorderste) Scheibe in z, die geschnitten wird
@@ -53,6 +58,12 @@ export class SoapBlock {
       this.mesh.setColorAt(n, _c);
       this.colors[n * 3] = _c.r; this.colors[n * 3 + 1] = _c.g; this.colors[n * 3 + 2] = _c.b;
     }
+    const h = this.hidden.array;
+    for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
+      h[this.index(i, j, k)] = (i < nx - 1 ? 1 : 0) | (i > 0 ? 2 : 0) | (j < ny - 1 ? 4 : 0)
+        | (j > 0 ? 8 : 0) | (k < nz - 1 ? 16 : 0) | (k > 0 ? 32 : 0);
+    }
+    this.hidden.needsUpdate = true;
     this.mesh.instanceMatrix.needsUpdate = true;
     this.mesh.instanceColor.needsUpdate = true;
     this.slice = SLICES - 1;  // SLICES-1 = Kamera-Seite (vorne)
@@ -91,14 +102,26 @@ export class SoapBlock {
         this.released[idx] = 1;
         this.releasedCount++;
         this.mesh.setMatrixAt(idx, _zero);
+        this.uncover(i, j, k);
         onCube(this.cubeX(i), this.cubeY(j), this.cubeZ(k),
           this.colors[idx * 3], this.colors[idx * 3 + 1], this.colors[idx * 3 + 2], this.soap.id);
         n++;
       }
       this.rowsCut++;
     }
-    if (n) this.mesh.instanceMatrix.needsUpdate = true;
+    if (n) { this.mesh.instanceMatrix.needsUpdate = true; this.hidden.needsUpdate = true; }
     return n;
+  }
+
+  /** Würfel (i,j,k) ist weg: die zu ihm zeigenden Flächen der Nachbarn werden sichtbar. */
+  uncover(i, j, k) {
+    const { nx, ny, nz } = BLOCK, h = this.hidden.array;
+    if (i > 0) h[this.index(i - 1, j, k)] &= ~1;
+    if (i < nx - 1) h[this.index(i + 1, j, k)] &= ~2;
+    if (j > 0) h[this.index(i, j - 1, k)] &= ~4;
+    if (j < ny - 1) h[this.index(i, j + 1, k)] &= ~8;
+    if (k > 0) h[this.index(i, j, k - 1)] &= ~16;
+    if (k < nz - 1) h[this.index(i, j, k + 1)] &= ~32;
   }
 
   /** Rest der Scheibe lösen und zur nächsten Scheibe dahinter wechseln. true = Block ist weg. */
