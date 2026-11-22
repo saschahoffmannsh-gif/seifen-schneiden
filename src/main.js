@@ -11,6 +11,8 @@ import { createUI } from './ui.js';
 import { Game } from './game.js';
 import { unlockAudio, sndTick } from './audio.js';
 import { PHYS } from './config.js';
+import { createBlockMaterial, createLooseMaterial } from './soapMaterial.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 
 const canvas = document.getElementById('scene');
 const view = createScene(canvas);
@@ -18,11 +20,12 @@ const ui = createUI();
 const input = createInput(canvas, unlockAudio);
 document.addEventListener('pointerdown', unlockAudio, { once: true });
 
-// EINE Würfel-Geometrie und EIN Material für Block und lose Würfel (Farbe pro Instanz)
-const cubeGeo = new THREE.BoxGeometry(1, 1, 1);
-const cubeMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-const block = new SoapBlock(view.scene, cubeGeo, cubeMat);
-const loose = new LooseCubes(view.scene, cubeGeo, cubeMat);
+// Block: unterteilte Würfel (damit die Rundung im Shader weich wird), lose Würfel: leicht abgerundet.
+// Geometrien/Materialien werden genau einmal erzeugt.
+const blockGeo = new THREE.BoxGeometry(1, 1, 1, 3, 3, 3);
+const looseGeo = new RoundedBoxGeometry(1, 1, 1, 2, 0.14);
+const block = new SoapBlock(view.scene, blockGeo, createBlockMaterial());
+const loose = new LooseCubes(view.scene, looseGeo, createLooseMaterial());
 loose.onLand = sndTick;
 const confetti = new Confetti(view.scene);
 const game = new Game(view, ui, input, block, loose, createKnife(), confetti);

@@ -27,7 +27,7 @@ html, body {
 .pill.bump { transform: scale(1.25); }
 
 #hint {
-  position: fixed; left: 0; right: 0; top: 21%; text-align: center; color: #6b4436;
+  position: fixed; left: 0; right: 0; top: 27%; text-align: center; color: #6b4436;
   font-weight: 700; font-size: 17px; pointer-events: none; opacity: .85;
   text-shadow: 0 1px 0 #fff;
 }
@@ -87,3 +87,13 @@ html, body {
 #shelf.hidden, #oven.hidden { display: block; }
 body.shelf-open #actions { bottom: calc(env(safe-area-inset-bottom) + 150px); }
 body.oven-open #actions { bottom: calc(env(safe-area-inset-bottom) + 90px); }
+
+#cut-progress {
+  position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top) + 128px);
+  width: min(78vw, 360px); background: #fffdf7; border-radius: 14px; padding: 7px 12px 9px;
+  box-shadow: 0 4px 14px rgba(120, 70, 50, .18); color: #5b3a2e; pointer-events: none; text-align: center;
+}
+#cut-label { font-weight: 800; font-size: 15px; margin-bottom: 5px; font-variant-numeric: tabular-nums; }
+#cut-progress .bar { height: 12px; background: #f1e2d6; }
+#cut-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #ffb6c9, #e75480); border-radius: 999px;
+  transform-origin: left; transition: width .12s linear; }

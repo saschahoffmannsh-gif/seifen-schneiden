@@ -1,5 +1,4 @@
 // Seifensorten: Farben und Muster für das Innenleben der Würfel.
-import { BLOCK } from './config.js';
 
 // Kleiner deterministischer Zufall, damit jede Seife gleich aussieht
 function hash(i, j, k, s) {
@@ -37,19 +36,26 @@ export const SOAP_LIST = Object.values(SOAPS);
 export const SOAP_BY_ID = SOAP_LIST.slice().sort((a, b) => a.id - b.id);
 
 /**
- * Farbe eines Würfels im Block (i,j,k) für eine Sorte.
- * Schreibt RGB in out[0..2]. Muster: wellige Schichten + Sprenkel (Kerne/Vanillepunkte).
+ * Farbe eines Würfels im Block (i,j,k) für eine Sorte. Schreibt sRGB in out[0..2].
+ * Außen (outer=true): fast einfarbig mit ganz leichter Variation, wie die Oberfläche echter Seife.
+ * Innen: sanfte, wellige Schlieren + vereinzelte Sprenkel -> wird beim Schneiden sichtbar.
  */
-export function cubeColor(soap, i, j, k, out) {
+export function cubeColor(soap, i, j, k, out, outer = false) {
   const r = hash(i, j, k, soap.id);
-  // wellige helle Schicht durch den Block
-  const wave = Math.sin(i * 0.9 + k * 0.6 + soap.id) * 1.2;
-  const band = Math.abs(((j + wave) % 4 + 4) % 4 - 2) < 0.6;
-  let c = band ? soap.light : soap.base;
-  if (r < 0.06 && i > 0 && i < BLOCK.nx - 1) c = soap.accent; // Sprenkel im Inneren
-  // leichte Helligkeitsvariation, damit es "handgemacht" wirkt
-  const v = 0.94 + hash(k, i, j, 7) * 0.1;
-  out[0] = Math.min(1, c[0] * v);
-  out[1] = Math.min(1, c[1] * v);
-  out[2] = Math.min(1, c[2] * v);
+  const v = outer ? 0.985 + hash(k, i, j, 7) * 0.03 : 0.96 + hash(k, i, j, 7) * 0.08; // subtile Helligkeitsvariation
+  let mix = 0;
+  if (!outer) {
+    const wave = Math.sin(i * 0.8 + k * 1.3 + soap.id) * 1.1;
+    const t = Math.abs(((j + wave) % 3 + 3) % 3 - 1.5) / 1.5;      // 0..1 Schliere
+    mix = Math.max(0, 1 - t * 1.6) * 0.75;
+  } else {
+    mix = 0.1 + Math.sin(i * 0.5 + j * 0.4 + k * 0.3) * 0.03;
+  }
+  let c0 = soap.base[0] + (soap.light[0] - soap.base[0]) * mix;
+  let c1 = soap.base[1] + (soap.light[1] - soap.base[1]) * mix;
+  let c2 = soap.base[2] + (soap.light[2] - soap.base[2]) * mix;
+  if (!outer && r < 0.05) { // Sprenkel (Erdbeerkerne, Vanillepunkte …), mit Grundfarbe gemischt
+    c0 = c0 * 0.4 + soap.accent[0] * 0.6; c1 = c1 * 0.4 + soap.accent[1] * 0.6; c2 = c2 * 0.4 + soap.accent[2] * 0.6;
+  }
+  out[0] = Math.min(1, c0 * v); out[1] = Math.min(1, c1 * v); out[2] = Math.min(1, c2 * v);
 }

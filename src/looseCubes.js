@@ -59,11 +59,10 @@ export class LooseCubes {
     this.state[i] = 1;
     const o = i * 3;
     this.pos[o] = x; this.pos[o + 1] = y; this.pos[o + 2] = z;
-    // kleiner "Pop": nach oben + vom Blockzentrum weg + nach vorne
-    const out = x >= 0 ? 1 : -1;
-    this.vel[o] = out * (0.35 + Math.random() * 0.6) + (Math.random() - 0.5) * 0.4;
-    this.vel[o + 1] = 0.9 + Math.random() * 0.9;
-    this.vel[o + 2] = 0.25 + Math.random() * 0.5;
+    // kleiner "Pop": leicht nach oben, nach vorne (weg vom Messer) und etwas zur Seite
+    this.vel[o] = x * 0.8 + (Math.random() - 0.5) * 0.5;
+    this.vel[o + 1] = 0.4 + Math.random() * 0.7;
+    this.vel[o + 2] = 0.55 + Math.random() * 0.6;
     this.rot[o] = 0; this.rot[o + 1] = 0; this.rot[o + 2] = 0;
     this.spin[o] = (Math.random() - 0.5) * 14;
     this.spin[o + 1] = (Math.random() - 0.5) * 8;

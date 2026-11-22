@@ -29,9 +29,8 @@ export class Game {
 
     // Messer-Zustand
     this.knifeX = 0; this.knifeTargetX = 0; this.prevKnifeX = 0;
-    this.knifeY = 2; this.knifeTilt = 0;
-    this.strokeDir = 0; this.strokeDist = 0; this.layerProgress = 0; this.needTurn = false;
-    this.layersCut = 0;
+    this.knifeY = 2; this.knifeZ = 0; this.knifeTilt = 0;
+    this.sliceProgress = 0; this.returning = false; this.slicesCut = 0;
     knife.position.set(0, 2.2, BLOCK.nz * CUBE / 2 + 0.03);
     knife.visible = false;
     scene.add(knife);
@@ -66,6 +65,7 @@ export class Game {
   // ---------- Zustandswechsel ----------
   toShelf() {
     this.state = 'shelf';
+    this.ui.setCut(null);
     this.knife.visible = false;
     this.ui.showShelf(true, (s) => this.pickSoap(s));
     const missing = this.order.soaps.filter((s) => !this.cutIds.has(s.id));
@@ -80,14 +80,16 @@ export class Game {
     this.state = 'cutting';
     this.ui.showShelf(false);
     this.ui.actions([]);
-    this.ui.hint('Wisch hin und her, um zu schneiden ↔');
+    this.ui.hint('Wisch hin und her – das Messer sägt sich nach unten ↔');
     this.block.load(soap);
     this.loose.blockHalfX = this.block.halfX; this.loose.blockHalfZ = this.block.halfZ;
     this.loose.blockTop = this.block.topY;
     this.knife.visible = true;
     this.knifeY = this.block.topY + 0.6;
-    this.strokeDir = 0; this.strokeDist = 0; this.layerProgress = 0; this.needTurn = false;
-    this.layersCut = 0;
+    this.knifeZ = this.block.cutZ;
+    this.sliceProgress = 0; this.returning = false; this.slicesCut = 0;
+    this.ui.setCut(0, soap);
+    this.loose.blockTop = -1; // Würfel fallen vorne weg, keine Kollision mit der Blockoberseite nötig
     haptic(8);
   }
 
@@ -98,6 +100,7 @@ export class Game {
     this.loose.blockTop = -1;
     this.confetti.burst(0, BLOCK_BASE_Y + 0.2, 0.3, 110);
     sndPop(); haptic(30);
+    this.ui.setCut(1, soap);
     this.ui.popup(`${soap.emoji} Fertig!`);
     this.knife.visible = false;
     setTimeout(() => this.toShelf(), 700);
@@ -170,7 +173,11 @@ export class Game {
     else if (this.state === 'unmolded') this.updateBar(dt, time);
   }
 
-  /** Hin-und-her-Wischen: jeder Richtungswechsel (bzw. ein voller Wisch) schneidet eine Schicht. */
+  /**
+   * Schneiden wie Brot: Das Messer steht hinter der vordersten Scheibe. Hin-und-her-Wischen
+   * treibt es nach unten, die Würfel der Scheibe lösen sich dabei von oben nach unten.
+   * Unten angekommen ist die Scheibe fertig, das Messer fährt hoch zur nächsten Scheibe dahinter.
+   */
   updateCutting(dt) {
     const inp = this.input;
     if (inp.down) {
@@ -184,45 +191,41 @@ export class Game {
     this.prevKnifeX = this.knifeX;
     this.knifeX = damp(this.knifeX, this.knifeTargetX, 28, dt);
     const dx = this.knifeX - this.prevKnifeX;
+    const top = this.block.topY, height = top - this.block.bottomY;
 
-    if (inp.down && Math.abs(dx) > 1e-4 && this.block.active) {
-      const dir = dx > 0 ? 1 : -1;
-      if (dir !== this.strokeDir) {
-        // Richtungswechsel: hat der vorige Wisch genug Weg gemacht -> Schicht fertig
-        if (this.strokeDir !== 0 && this.strokeDist >= CUT.minStroke && !this.needTurn) this.completeLayer();
-        this.strokeDir = dir; this.strokeDist = 0; this.needTurn = false;
+    if (this.returning) {
+      // automatisch hochfahren und eine Scheibe nach hinten wechseln
+      this.knifeY = damp(this.knifeY, top + 0.06, CUT.returnSpeed, dt);
+      this.knifeZ = damp(this.knifeZ, this.block.cutZ, CUT.returnSpeed, dt);
+      if (top + 0.06 - this.knifeY < 0.02) { this.returning = false; this.sliceProgress = 0; }
+    } else if (this.block.active) {
+      if (inp.down && Math.abs(dx) > 1e-4) {
+        // Jeder Wischweg (egal welche Richtung) treibt das Messer tiefer
+        this.sliceProgress = Math.min(1, this.sliceProgress + Math.abs(dx) / CUT.strokePerSlice);
+        const n = this.block.cutTo(this.sliceProgress, this.onCube);
+        if (n) { sndCut(); haptic(5); }
+        if (this.sliceProgress >= 1) this.completeSlice();
       }
-      this.strokeDist += Math.abs(dx);
-      if (!this.needTurn) {
-        const p = Math.min(1, this.strokeDist / CUT.fullStroke);
-        if (p > this.layerProgress) {
-          this.layerProgress = p;
-          const n = this.block.cutTo(p, this.onCube);
-          if (n) sndCut();
-        }
-        if (this.layerProgress >= 1) { this.completeLayer(); this.needTurn = true; }
+      if (!this.returning) {
+        this.knifeY = damp(this.knifeY, top - height * this.sliceProgress, 16, dt);
+        this.knifeZ = damp(this.knifeZ, this.block.cutZ, 16, dt);
       }
     }
 
-    // Messerhöhe: Schneide sinkt mit dem Fortschritt durch die Schicht -> mit jedem Wisch tiefer
-    const top = this.block.active ? this.block.topY : BLOCK_BASE_Y;
-    const edgeY = top - CUBE * this.layerProgress;
-    this.knifeY = damp(this.knifeY, edgeY, 14, dt);
     this.knifeTilt = damp(this.knifeTilt, THREE.MathUtils.clamp(-dx / Math.max(dt, 1e-3) * 0.03, -0.12, 0.12), 10, dt);
-    this.knife.position.x = this.knifeX;
-    this.knife.position.y = this.knifeY;
+    this.ui.setCut(this.block.cutFraction, this.block.soap);
+    this.knife.position.set(this.knifeX, this.knifeY, this.knifeZ);
     this.knife.rotation.z = this.knifeTilt;
   }
 
-  completeLayer() {
-    const done = this.block.finishLayer(this.onCube);
-    this.layerProgress = 0;
-    this.layersCut++;
-    this.loose.blockTop = done ? -1 : this.block.topY;
-    sndCut(); haptic(8);
-    if (this.layersCut === 2) this.ui.hint('');
-    if (this.layersCut % 3 === 0 || done) this.ui.popup();
-    if (done) this.finishBlock();
+  completeSlice() {
+    const done = this.block.finishSlice(this.onCube);
+    this.slicesCut++;
+    sndCut(); haptic(12);
+    if (this.slicesCut === 1) this.ui.hint('');
+    if (this.slicesCut % 2 === 0 || done) this.ui.popup();
+    if (done) { this.finishBlock(); return; }
+    this.returning = true;
   }
 
   updateOven(dt) {

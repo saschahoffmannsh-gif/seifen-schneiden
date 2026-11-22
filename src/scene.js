@@ -2,6 +2,7 @@
 // Bewusst billig gehalten: keine Shadow-Maps, Lambert-Materialien, max. DPR 2.
 import * as THREE from 'three';
 import { BOWL, RACK_Y } from './config.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 export function createScene(canvas) {
   const renderer = new THREE.WebGLRenderer({
@@ -12,15 +13,20 @@ export function createScene(canvas) {
   const scene = new THREE.Scene();
   const bg = new THREE.Color('#f6e3d6');
   scene.background = bg;
+  // Weiche Umgebungs-Reflexion für den wachsigen Seifenglanz (einmalig beim Start vorberechnet)
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environmentIntensity = 0.35;
+  pmrem.dispose();
 
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 60);
   const target = new THREE.Vector3(0, 0.75, 0);
   // Blickrichtung (von vorne oben); Abstand wird beim Resize ans Seitenverhältnis angepasst
-  const viewDir = new THREE.Vector3(0, 0.62, 1).normalize();
+  const viewDir = new THREE.Vector3(0.18, 0.5, 1).normalize(); // leicht schräg von vorne: Vorderseite + Schnittfläche gut sichtbar
 
   // Licht: Himmel/Boden + eine Richtung. Keine Schatten-Maps.
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xc9a48c, 1.9));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xc9a48c, 1.25));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.35);
   sun.position.set(1.5, 4, 2.5);
   scene.add(sun);
   // warmes Ofenlicht (nur während des Schmelzens aktiv)

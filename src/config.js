@@ -1,10 +1,11 @@
 // Zentrale Konstanten für Welt, Seife, Schale und Physik.
 // Alle Maße in "Welt-Einheiten" (ca. 1 Einheit = 10 cm).
 
-export const CUBE = 0.1;            // Kantenlänge eines Seifenwürfels (Voxel)
+export const CUBE = 0.11;           // Kantenlänge eines Seifenwürfels (Voxel)
 
 // Seifenblock: Anzahl Würfel in x (Breite), y (Höhe), z (Tiefe)
-export const BLOCK = { nx: 8, ny: 10, nz: 6 };
+export const BLOCK = { nx: 9, ny: 7, nz: 4 };   // genau 4 Scheiben von vorne nach hinten
+export const SOAP_RADIUS = 0.13;    // Rundung der Kanten/Ecken des Seifenstücks
 
 // Schale (Form): innerer Boden bei y = 0
 export const BOWL = {
@@ -27,9 +28,10 @@ export const PHYS = {
 
 // Schneiden: wie weit (Welt-Einheiten) ein Wisch mindestens gehen muss, damit er zählt
 export const CUT = {
-  minStroke: 0.14,        // Mindestweg, bevor ein Richtungswechsel eine Schicht abschließt
-  fullStroke: 0.55,       // nach diesem Weg ist die Schicht auch ohne Richtungswechsel fertig
-  knifeRange: 0.5,        // Messer darf sich +- so weit seitlich bewegen
+  // Hin-und-her-Wischen treibt das Messer durch die vorderste Scheibe nach unten:
+  strokePerSlice: 1.5,    // so viel Wischweg (Welt-Einheiten) braucht eine ganze Scheibe (oben -> unten)
+  knifeRange: 0.32,       // Messer darf sich +- so weit seitlich bewegen
+  returnSpeed: 9,         // wie schnell das Messer nach einer Scheibe wieder hochfährt
 };
 
 export const OVEN_SECONDS = 5;

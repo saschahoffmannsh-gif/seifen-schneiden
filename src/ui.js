@@ -7,7 +7,7 @@ export function createUI() {
   const el = {
     orderText: $('order-text'), orderProgress: $('order-progress'), coins: $('coin-count'),
     coinPill: $('coins'), hint: $('hint'), shelf: $('shelf'), shelfGrid: $('shelf-grid'),
-    oven: $('oven'), ovenBar: $('oven-bar'), actions: $('actions'), popups: $('popups'), fps: $('fps'),
+    oven: $('oven'), cutBox: $('cut-progress'), cutLabel: $('cut-label'), cutBar: $('cut-bar'), ovenBar: $('oven-bar'), actions: $('actions'), popups: $('popups'), fps: $('fps'),
   };
   const soapButtons = new Map();
   let onPick = null;
@@ -57,6 +57,16 @@ export function createUI() {
       d.style.left = `${40 + Math.random() * 20}%`;
       el.popups.appendChild(d);
       setTimeout(() => d.remove(), 1150);
+    },
+    /** Schneide-Fortschritt der aktuellen Seife (0..1) oder null zum Ausblenden. Nur bei Änderung ins DOM schreiben. */
+    setCut(frac, soap) {
+      if (frac == null) { el.cutBox.classList.add('hidden'); this._cutPct = -1; return; }
+      el.cutBox.classList.remove('hidden');
+      const pct = Math.round(frac * 100);
+      if (pct === this._cutPct) return;
+      this._cutPct = pct;
+      el.cutLabel.textContent = `${soap ? soap.emoji + ' ' : ''}Geschnitten: ${pct} %`;
+      el.cutBar.style.width = `${pct}%`;
     },
     showFps(show) { el.fps.classList.toggle('hidden', !show); },
     setFps(text) { el.fps.textContent = text; },

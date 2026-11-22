@@ -12,10 +12,12 @@ Ein entspannendes Handy-Spiel im Browser: Seifen aus dem Schrank nehmen, in fein
 
 1. **Bestellung lesen** – oben steht, was die Kundschaft möchte, z. B. „Anna möchte: Erdbeere + Vanille“.
 2. **Seife aus dem Schrank nehmen** – unten im Schrank auf eine Sorte tippen (gewünschte Sorten sind gelb umrandet).
-3. **Schneiden** – den Finger einfach **hin und her (links ↔ rechts)** über die Seife wischen.
-   Das Messer folgt dem Finger, jeder Wisch (jeder Richtungswechsel) schneidet eine Schicht ab,
-   und das Messer geht mit jedem Zug ein Stück tiefer. Die Schicht zerfällt in kleine Würfel,
-   die in die Schale purzeln.
+3. **Schneiden** – den Finger einfach **hin und her (links ↔ rechts)** wischen. Das Messer sägt
+   sich wie beim Brotschneiden durch die **vorderste Scheibe** von oben nach unten. Die Seife
+   besteht aus kleinen Würfeln: Während das Messer tiefer geht, lösen sich die Würfel dieser
+   Scheibe von oben nach unten und purzeln in die Schale. Unten angekommen fährt das Messer
+   wieder hoch und schneidet die nächste Scheibe dahinter – Scheibe für Scheibe nach hinten.
+   Oben zeigt „Geschnitten: … %“ mit Balken live, wie viel von der aktuellen Seife schon geschnitten ist.
 4. **Zweite Seife** – nächste Sorte aus dem Schrank nehmen und in dieselbe Schale schneiden.
 5. **🔥 In den Ofen** – die Würfel schmelzen zusammen (Fortschrittsbalken).
 6. **✨ Aus der Form nehmen** – die fertige Seife ist marmoriert, die Farben und Anteile kommen
