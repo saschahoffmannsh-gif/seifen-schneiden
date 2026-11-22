@@ -26,10 +26,11 @@ const out = process.argv[3] || '/workspace/seifen-shots';
     }
     await p.mouse.up();
     if (s === 0) { await p.waitForTimeout(1500); await p.screenshot({ path: out + '/4-haufen.png' }); }
+    if (s === 1) { for (let k = 0; k < 120 && await p.evaluate(() => window.__game.loose.activeCount) > 0; k++) await p.waitForTimeout(1000); await p.screenshot({ path: out + '/6-haufen-beide.png' }); }
     await p.waitForTimeout(1200);
     console.log('soap', s, 'state', await g(), 'swipes', n);
   }
-  const spread = await p.evaluate(() => { const l = window.__game.loose; let mx = 0, mn = 9, zx = -9, zn = 9; for (let i = 0; i < l.used; i++) { if (l.state[i] !== 2) continue; const x = l.pos[i*3], z = l.pos[i*3+2]; mx = Math.max(mx, x); mn = Math.min(mn, x); zx = Math.max(zx, z); zn = Math.min(zn, z); } return { used: l.used, x: [mn, mx], z: [zn, zx], fps: document.getElementById('fps').textContent }; });
+  const spread = await p.evaluate(() => { const l = window.__game.loose; let mx = 0, mn = 9, zx = -9, zn = 9; for (let i = 0; i < l.used; i++) { if (l.state[i] !== 2) continue; const x = l.pos[i*3], z = l.pos[i*3+2]; mx = Math.max(mx, x); mn = Math.min(mn, x); zx = Math.max(zx, z); zn = Math.min(zn, z); } let hmax = 0; for (const v of l.heights) hmax = Math.max(hmax, v); let rmax = 0; for (let i = 0; i < l.used; i++) if (l.state[i] === 2) rmax = Math.max(rmax, Math.hypot(l.pos[i*3], l.pos[i*3+2])); return { used: l.used, active: l.activeCount, hmax, rmax, x: [mn, mx], z: [zn, zx], fps: document.getElementById('fps').textContent }; });
   console.log('pile', JSON.stringify(spread));
   await p.click('#actions button'); // Ofen
   for (let k = 0; k < 150 && (await g()) !== 'reveal'; k++) { await p.waitForTimeout(1000); if (k % 20 === 0) console.log('oven', await p.evaluate(() => [window.__game.state, window.__game.ovenT])); }

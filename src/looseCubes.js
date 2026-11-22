@@ -1,5 +1,6 @@
 // Lose Würfel: ein vorab reservierter Pool in EINEM InstancedMesh (ein Draw Call).
-// Eigene, sehr billige Physik: Würfel fallen senkrecht (kein Zug zur Mitte), Schalenwand, Boden.
+// Eigene, sehr billige Physik: Würfel fallen senkrecht, rutschen/rollen dann wie Schüttgut
+// hangabwärts (Höhenfeld), Schalenwand, Boden.
 // Liegende Würfel werden "eingefroren" und nicht mehr berechnet. Kein Physik-Engine,
 // keine Allokationen im Frame (alle Vektoren/Matrizen werden wiederverwendet).
 import * as THREE from 'three';
@@ -11,6 +12,17 @@ const HALF = CUBE / 2;
 // Höhenfeld über dem Schalenboden: so stapeln sich gelandete Würfel, ohne Würfel-Würfel-Kollision
 const GRID = Math.ceil((BOWL.rimR * 2) / CUBE) + 2;
 const GRID_OFF = (GRID * CUBE) / 2;
+
+// Schüttgut-Verhalten des Haufens
+const PILE = {
+  repose: 0.7,      // ab so vielen Würfelhöhen Unterschied zum Nachbarn rutscht ein Würfel weiter (flacher Böschungswinkel)
+  slideSpeed: 0.55, // Rutsch-/Rollgeschwindigkeit hangabwärts
+  outward: 0.25,    // leichter Zug nach außen beim Rutschen (füllt die Schale)
+  maxHops: 60,       // Sicherheitsgrenze: so oft darf ein Würfel weiterrutschen
+};
+const NB_X = [1, -1, 0, 0, 1, 1, -1, -1];
+const NB_Z = [0, 0, 1, -1, 1, -1, 1, -1];
+const NB_W = [1, 1, 1, 1, Math.SQRT1_2, Math.SQRT1_2, Math.SQRT1_2, Math.SQRT1_2];
 
 const _m = new THREE.Matrix4();
 const _p = new THREE.Vector3();
@@ -36,6 +48,9 @@ export class LooseCubes {
     this.state = new Uint8Array(MAX);       // 0 frei, 1 fliegt, 2 liegt (eingefroren)
     this.type = new Int8Array(MAX).fill(-1);
     this.cell = new Int16Array(MAX).fill(-1); // Höhenfeld-Zelle, auf der der Würfel liegt
+    this.hops = new Uint8Array(MAX);
+    this.lastCell = new Int16Array(MAX).fill(-1); // Zelle, auf der das Gefälle zuletzt geprüft wurde
+    this.sliding = new Uint8Array(MAX);           // 1 = rutscht gerade zur nächsten Zelle          // wie oft der Würfel schon hangabwärts weitergerutscht ist
     this.heights = new Float32Array(GRID * GRID);
     this.next = 0;
     this.used = 0;
@@ -58,6 +73,7 @@ export class LooseCubes {
     if (this.type[i] >= 0) this.typeCounts[this.type[i]]--;
     this.type[i] = typeId; this.typeCounts[typeId]++;
     this.state[i] = 1;
+    this.hops[i] = 0; this.lastCell[i] = -1; this.sliding[i] = 0;
     const o = i * 3;
     this.pos[o] = x; this.pos[o + 1] = y; this.pos[o + 2] = z;
     // Würfel fallen senkrecht genau dort runter, wo sie sich von der Seife lösen:
@@ -117,16 +133,45 @@ export class LooseCubes {
       // 3) Boden bzw. Höhenfeld der schon liegenden Würfel
       const c = this.cellAt(x, z);
       const ground = this.heights[c];
-      if (y - HALF <= ground && V[o + 1] < 0) {
+      if (y - HALF <= ground && V[o + 1] <= 0) {
         y = ground + HALF;
-        // kaum Abprallen, kein seitliches Wegrutschen: Würfel bleiben da liegen, wo sie landen
-        V[o + 1] = -V[o + 1] * 0.12;
-        V[o] *= 0.3; V[o + 2] *= 0.3;
-        S[o] *= 0.4; S[o + 1] *= 0.4; S[o + 2] *= 0.4;
-        if (V[o + 1] < 0.5) {
-          P[o] = x; P[o + 1] = y; P[o + 2] = z;
-          this.settle(i);
-          continue;
+        V[o + 1] = -V[o + 1] * 0.1;
+        // Schüttgut: Ist ein Nachbar deutlich tiefer, rollt/rutscht der Würfel dorthin (animiert,
+        // über die normale Physik), statt hier liegen zu bleiben. So entsteht ein flacher Hügel.
+        // Gefälle nur prüfen, wenn der Würfel eine neue Zelle erreicht (nicht in jedem Schritt)
+        let dn = -1;
+        if (c !== this.lastCell[i]) {
+          this.lastCell[i] = c;
+          dn = this.hops[i] < PILE.maxHops ? this.downhill(c, ground) : -1;
+          this.sliding[i] = dn >= 0 ? 1 : 0;
+        }
+        if (dn >= 0) {
+          this.hops[i]++;
+          const tx = ((dn % GRID) + 0.5) * CUBE - GRID_OFF, tz = (((dn / GRID) | 0) + 0.5) * CUBE - GRID_OFF;
+          let dx = tx - x, dz = tz - z;
+          const dl = Math.sqrt(dx * dx + dz * dz) || 1;
+          dx /= dl; dz /= dl;
+          // leicht nach außen rollen (weg von der Mitte), damit sich die Schale füllt
+          const rl = Math.sqrt(x * x + z * z);
+          if (rl > 1e-3) { dx += (x / rl) * PILE.outward; dz += (z / rl) * PILE.outward; }
+          const sp = PILE.slideSpeed + Math.random() * 0.25;
+          V[o] = V[o] * 0.3 + dx * sp; V[o + 2] = V[o + 2] * 0.3 + dz * sp;
+          S[o] = dz * 9; S[o + 2] = -dx * 9;      // kippt in Rutschrichtung
+        } else if (!this.sliding[i]) {
+          // Boden/Haufen bremst: Würfel rutscht noch kurz aus und bleibt dann liegen
+          V[o] *= 0.82; V[o + 2] *= 0.82;
+          S[o] *= 0.6; S[o + 1] *= 0.6; S[o + 2] *= 0.6;
+          if (V[o + 1] < 0.3 && V[o] * V[o] + V[o + 2] * V[o + 2] < 0.04) {
+            // vor dem Einfrieren nochmal prüfen: inzwischen können hier andere Würfel liegen
+            if (this.hops[i] < PILE.maxHops && this.downhill(c, ground) >= 0) { this.lastCell[i] = -1; P[o] = x; P[o + 1] = y; P[o + 2] = z; this.writeMatrix(i); continue; }
+            P[o] = x; P[o + 1] = y; P[o + 2] = z;
+            this.settle(i);
+            continue;
+          }
+        } else {
+          // rutscht gerade: kaum Reibung, bis die nächste Zelle erreicht ist (Notbremse, falls er hängt)
+          V[o] *= 0.995; V[o + 2] *= 0.995;
+          if (V[o] * V[o] + V[o + 2] * V[o + 2] < 0.01) this.sliding[i] = 0;
         }
       }
       P[o] = x; P[o + 1] = y; P[o + 2] = z;
@@ -141,35 +186,28 @@ export class LooseCubes {
     return cz * GRID + cx;
   }
 
-  /**
-   * Würfel zur Ruhe bringen. Er bleibt auf seiner Zelle liegen; nur wenn der Turm dort deutlich
-   * höher ist als ein direkter Nachbar, kippt er eine Zelle zur Seite (natürliche Böschung des
-   * Haufens). Die Richtung ist zufällig und hängt NICHT von der Schalenmitte ab.
-   */
+  /** Tiefste Nachbarzelle (8er-Nachbarschaft), die mehr als PILE.repose tiefer liegt, sonst -1. */
+  downhill(c, h) {
+    const cx = c % GRID, cz = (c / GRID) | 0;
+    const limR = BOWL.floorR - HALF;
+    let best = -1, bestDrop = PILE.repose * CUBE;
+    const d0 = (Math.random() * 8) | 0;             // zufällige Reihenfolge bei Gleichstand
+    for (let dd = 0; dd < 8; dd++) {
+      const d = (d0 + dd) & 7;
+      const nx = cx + NB_X[d], nz = cz + NB_Z[d];
+      if (nx < 0 || nz < 0 || nx >= GRID || nz >= GRID) continue;
+      const wx = (nx + 0.5) * CUBE - GRID_OFF, wz = (nz + 0.5) * CUBE - GRID_OFF;
+      if (wx * wx + wz * wz > limR * limR) continue;
+      const drop = (h - this.heights[nz * GRID + nx]) * NB_W[d]; // diagonal weiter weg -> Gefälle kleiner
+      if (drop > bestDrop) { bestDrop = drop; best = nz * GRID + nx; }
+    }
+    return best;
+  }
+
+  /** Würfel zur Ruhe bringen: auf seiner aktuellen Zelle einfrieren (kein Springen). */
   settle(i) {
     const o = i * 3, P = this.pos;
-    let c = this.cellAt(P[o], P[o + 2]);
-    const limR = BOWL.floorR - HALF;
-    for (let it = 0; it < 3; it++) {
-      const cx = c % GRID, cz = (c / GRID) | 0;
-      let best = c, bh = this.heights[c] - CUBE * 2.2; // erst ab 2,2 Würfeln Höhenunterschied kippen -> steiler Haufen an Ort und Stelle
-      const d0 = (Math.random() * 4) | 0;           // zufällige Startrichtung, keine Vorzugsrichtung
-      for (let dd = 0; dd < 4; dd++) {
-        const d = (d0 + dd) & 3;
-        const nx = cx + (d === 0 ? 1 : d === 1 ? -1 : 0);
-        const nz = cz + (d === 2 ? 1 : d === 3 ? -1 : 0);
-        if (nx < 0 || nz < 0 || nx >= GRID || nz >= GRID) continue;
-        const wx = (nx + 0.5) * CUBE - GRID_OFF, wz = (nz + 0.5) * CUBE - GRID_OFF;
-        if (wx * wx + wz * wz > limR * limR) continue;
-        const n = nz * GRID + nx;
-        if (this.heights[n] < bh) { bh = this.heights[n]; best = n; }
-      }
-      if (best === c) break;
-      // nur um den Zellversatz verschieben (nicht auf die Zellmitte ziehen)
-      P[o] += ((best % GRID) - cx) * CUBE;
-      P[o + 2] += (((best / GRID) | 0) - cz) * CUBE;
-      c = best;
-    }
+    const c = this.cellAt(P[o], P[o + 2]);
     P[o + 1] = this.heights[c] + HALF;
     this.heights[c] += CUBE * 0.92;
     this.cell[i] = c;
@@ -236,7 +274,7 @@ export class LooseCubes {
   /** Schale leeren (nach dem Herausnehmen der fertigen Seife). */
   clear() {
     for (let i = 0; i < MAX; i++) { this.mesh.setMatrixAt(i, _zero); }
-    this.state.fill(0); this.type.fill(-1); this.cell.fill(-1); this.heights.fill(0);
+    this.state.fill(0); this.type.fill(-1); this.cell.fill(-1); this.heights.fill(0); this.hops.fill(0); this.lastCell.fill(-1); this.sliding.fill(0);
     this.typeCounts.fill(0);
     this.next = 0; this.used = 0; this.activeCount = 0; this.mesh.count = 0;
     this.mesh.instanceMatrix.clearUpdateRanges();
