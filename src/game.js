@@ -403,8 +403,7 @@ export class Game {
     this.state = 'oven';
     this.ovenT = 0;
     this.ui.actions([]);
-    this.ui.showOven(true);
-    this.ui.hint('Die Seife schmilzt …');
+    this.ui.hint('');   // beim Schmelzen kein Fenster: nur Topf und Szene
     // Marmor aus den Anteilen der Würfel in der Schale
     const parts = [];
     const counts = this.loose.typeCounts;
@@ -432,7 +431,6 @@ export class Game {
 
   toReveal() {
     this.state = 'reveal';
-    this.ui.showOven(false);
     this.ovenLight.intensity = 0;
     this.bg.copy(this.bgBase);
     sndCeramic();
@@ -1002,7 +1000,6 @@ export class Game {
   updateOven(dt) {
     this.ovenT += dt / OVEN_SECONDS;
     const t = Math.min(1, this.ovenT);
-    this.ui.setOven(t);
     const e = t * t * (3 - 2 * t);
     this.loose.melt(e);
     // flüssige Seife steigt, Schalenwand ist kegelförmig -> Radius wächst mit der Höhe

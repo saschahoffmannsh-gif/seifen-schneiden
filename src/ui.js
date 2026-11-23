@@ -1,4 +1,4 @@
-// DOM-Oberfläche: Bestellung (unter der Schale), Münzen, Knöpfe, Ofen-Balken, schwebende Texte, FPS.
+// DOM-Oberfläche: Bestellung (unter der Schale), Münzen, Knöpfe, schwebende Texte, FPS.
 
 import { soapCss } from './cabinet.js';
 import { sndCoins } from './audio.js';
@@ -10,7 +10,7 @@ export function createUI() {
   const el = {
     orderText: $('order-text'), orderProgress: $('order-progress'), coins: $('coin-count'),
     coinPill: $('coins'), hint: $('hint'),
-    oven: $('oven'), cutBox: $('cut-progress'), cutLabel: $('cut-label'), cutBar: $('cut-bar'), ovenBar: $('oven-bar'), actions: $('actions'), popups: $('popups'), fps: $('fps'),
+    cutBox: $('cut-progress'), cutLabel: $('cut-label'), cutBar: $('cut-bar'), actions: $('actions'), popups: $('popups'), fps: $('fps'),
   };
 
   let covered = false, coverTimer = 0;   // Vollbild-Schrank verdeckt die Szene -> nicht rendern
@@ -275,8 +275,6 @@ export function createUI() {
       $('q-rows').innerHTML = q.rows.map((r) => `<div class="q-row"><span>${rich(r.label)}</span><b class="${r.cls || ''}">${rich(r.value)}</b></div>`).join('');
       root.classList.add('show');
     },
-    showOven(show) { el.oven.classList.toggle('hidden', !show); document.body.classList.toggle('oven-open', show); },
-    setOven(frac) { el.ovenBar.style.width = `${Math.round(frac * 100)}%`; },
     /** Knöpfe unten setzen: [{label, alt, onClick}] */
     actions(list) {
       el.actions.innerHTML = '';

@@ -231,29 +231,14 @@ body.landscape #hint { top: auto; bottom: calc(var(--sa-bottom) + 14px); }
 body.landscape #hint:not(:empty) { left: auto; right: 12px; transform: none; max-width: 34vw; }
 body.table-mode { --ui-shift: 48px; }
 
-/* ---------- Schmelzen ---------- */
+/* ---------- Panels + Fortschrittsbalken ---------- */
 .panel {
   position: fixed; left: 14px; right: 14px; bottom: calc(var(--sa-bottom) + 16px); max-width: 420px; margin: 0 auto;
   border-radius: var(--r-card); padding: 16px 20px 18px; text-align: center;
   transition: transform .5s var(--ease), opacity .3s var(--ease);
 }
 .panel.hidden { transform: translateY(140%); opacity: 0; pointer-events: none; }
-#oven.hidden { display: block; }
-#oven .panel-title { font-size: 20px; }
-.panel-sub { font-size: 12.5px; color: var(--ink-3); margin: 3px 0 12px; }
 .bar { position: relative; height: 8px; background: #ebe2d4; border-radius: 999px; overflow: hidden; }
-#oven-bar {
-  position: relative; height: 100%; width: 0%; border-radius: 999px; overflow: hidden;
-  background: linear-gradient(90deg, var(--honey), var(--rose));
-}
-#oven-bar::after { /* wandernder Glanz: nur transform, läuft nur während des Schmelzens */
-  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 60px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent);
-  animation: sheen 1.6s var(--ease) infinite;
-}
-#oven.hidden #oven-bar::after { animation: none; }
-@keyframes sheen { from { transform: translateX(-60px); } to { transform: translateX(420px); } }
-body.oven-open #actions { bottom: calc(var(--sa-bottom) + 110px); }
 
 #cut-progress {
   position: fixed; left: 50%; transform: translateX(-50%); top: calc(var(--sa-top) + 128px);
@@ -280,11 +265,10 @@ body.oven-open #actions { bottom: calc(var(--sa-bottom) + 110px); }
 }
 body.landscape #dock { display: contents; }
 body:not(.landscape) #dock > * { position: relative; top: auto; bottom: auto; left: auto; right: auto; transform: none; margin: 0; flex: none; }
-body:not(.landscape) #dock > #hint:empty, body:not(.landscape) #dock > #oven.hidden, body:not(.landscape) #dock > #actions:empty { display: none; }
+body:not(.landscape) #dock > #hint:empty, body:not(.landscape) #dock > #actions:empty { display: none; }
 body:not(.landscape) #dock > #hint:not(:empty) { animation: hintInDock .45s var(--ease); }
 @keyframes hintInDock { from { opacity: 0; transform: translateY(5px); } }
 body:not(.landscape) #dock > #actions { width: 100%; padding: 0; }
-body:not(.landscape) #dock > #oven { width: 100%; max-width: 420px; }
 /* Präsentation: die Ergebniskarte zeigt die Mischung schon -> Zettel ausblenden */
 body:has(#quality.show) #order { display: none; }
 
@@ -468,7 +452,6 @@ body:has(#quality.show) #order { display: none; }
   #quality #q-banner { font-size: 24px; margin: 2px 0 0; }
   #quality .q-row { padding-top: 3px; padding-bottom: 3px; }
 }
-body.landscape #oven { left: auto; right: calc(var(--sa-right) + 12px); bottom: calc(var(--sa-bottom) + 62px); width: min(40vw, 340px); margin: 0; padding: 12px 16px 14px; }
 #q-banner { font-style: italic; font-size: 30px; line-height: 1.1; margin: 6px 0 2px; }
 #q-stars { display: flex; justify-content: center; align-items: center; gap: 6px; margin: 6px 0 4px; }
 #q-stars .qs { display: block; width: 26px; height: 26px; }
