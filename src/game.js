@@ -1,5 +1,6 @@
 // Spielablauf (Zustandsmaschine):
-//   shelf   -> Seife aus dem Schrank wählen
+//   shelf   -> Seife im Regal (mittleres Wandbrett) antippen
+//   flying  -> Seife fliegt vom Regal über die Schale
 //   cutting -> Seife hin und her wischend in die Schale schneiden
 //   oven    -> Würfel schmelzen (Timer mit Fortschrittsbalken)
 //   reveal  -> fertige marmorierte Seife aus der Form nehmen und verkaufen
@@ -19,8 +20,19 @@ const _plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -(BLOCK.nz * CUBE / 2
 const damp = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
 
 export class Game {
-  constructor({ scene, camera, ovenLight, bg }, ui, input, block, loose, knife, confetti) {
-    Object.assign(this, { scene, camera, ovenLight, bg, ui, input, block, loose, knife, confetti });
+  constructor({ renderer, scene, camera, ovenLight, bg }, ui, input, block, loose, knife, confetti, shelf) {
+    Object.assign(this, { scene, camera, ovenLight, bg, ui, input, block, loose, knife, confetti, shelf });
+    // Seife im Regal antippen: Raycast NUR beim Tippen, nicht pro Frame
+    this.tapNdc = new THREE.Vector2();
+    const canvas = renderer.domElement;
+    this.isAvailable = (s) => !this.cutIds.has(s.id);
+    canvas.addEventListener('pointerdown', (e) => {
+      if (this.state !== 'shelf') return;
+      const r = canvas.getBoundingClientRect();
+      this.tapNdc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      const i = this.shelf.pick(this.tapNdc, this.camera, this.isAvailable);
+      if (i >= 0) this.pickSoap(i);
+    });
     this.coins = 0;
     this.state = 'shelf';
     this.cutIds = new Set();      // welche Sorten schon in der Schale sind
@@ -60,6 +72,7 @@ export class Game {
     this.order = { customer: CUSTOMERS[(Math.random() * CUSTOMERS.length) | 0], soaps };
     this.cutIds.clear();
     this.ui.setOrder(this.order, this.cutIds);
+    this.shelf.setSoaps(soaps);
   }
 
   // ---------- Zustandswechsel ----------
@@ -67,19 +80,26 @@ export class Game {
     this.state = 'shelf';
     this.ui.setCut(null);
     this.knife.visible = false;
-    this.ui.showShelf(true, (s) => this.pickSoap(s));
     const missing = this.order.soaps.filter((s) => !this.cutIds.has(s.id));
-    this.ui.hint(missing.length ? `Nimm ${missing[0].emoji} ${missing[0].name} aus dem Schrank` : 'Alles drin – ab in den Ofen!');
+    this.ui.hint(missing.length ? `Tippe im Regal auf ${missing[0].emoji} ${missing[0].name}` : '');
     const acts = [];
     if (this.loose.used > 0) acts.push({ label: '🔥 In den Ofen', onClick: () => this.toOven() });
     this.ui.actions(acts);
   }
 
-  pickSoap(soap) {
+  /** Seife im Regal angetippt: sie fliegt über die Schale, dann geht das Schneiden los. */
+  pickSoap(slot) {
     if (this.state !== 'shelf') return;
-    this.state = 'cutting';
-    this.ui.showShelf(false);
+    const soap = this.shelf.soaps[slot];
+    this.state = 'flying';
     this.ui.actions([]);
+    this.ui.hint('');
+    haptic(8);
+    this.shelf.launch(slot, () => this.startCutting(soap));
+  }
+
+  startCutting(soap) {
+    this.state = 'cutting';
     this.ui.hint('Wisch hin und her – das Messer sägt sich nach unten ↔');
     this.block.load(soap);
     this.loose.blockHalfX = this.block.halfX; this.loose.blockHalfZ = this.block.halfZ;
@@ -110,7 +130,6 @@ export class Game {
   toOven() {
     this.state = 'oven';
     this.ovenT = 0;
-    this.ui.showShelf(false);
     this.ui.actions([]);
     this.ui.showOven(true);
     this.ui.hint('Die Seife schmilzt im Ofen …');
@@ -167,6 +186,13 @@ export class Game {
 
   // ---------- pro Frame ----------
   update(dt, time) {
+    // nächste gewünschte Seife im Regal hüpft leicht (zeigt: hier antippen)
+    let bob = -1;
+    if (this.state === 'shelf') {
+      const list = this.shelf.soaps;
+      for (let i = 0; i < list.length; i++) if (!this.cutIds.has(list[i].id)) { bob = i; break; }
+    }
+    this.shelf.update(dt, time, bob);
     if (this.state === 'cutting') this.updateCutting(dt);
     else if (this.state === 'oven') this.updateOven(dt);
     else if (this.state === 'unmolded') this.updateBar(dt, time);

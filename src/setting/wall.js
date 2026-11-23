@@ -1,4 +1,4 @@
-// Wand direkt an der hinteren Tischkante mit zwei Holzbrettern als Ablagen und ein paar
+// Wand direkt an der hinteren Tischkante mit drei Holzbrettern als Ablagen und ein paar
 // rustikalen Sachen darauf (Seifenstücke, Gläser, kleine Pflanzen, Tuch).
 //
 // Alles ist echte 3D-Geometrie in der Hauptszene: gleiches Licht, gleiche Schärfe, gleiche
@@ -22,8 +22,11 @@ const SHELVES = [
   { y: 1.6, w: 9.0, x: -0.4 },
   { y: 2.5, w: 9.0, x: -0.4 },
 ];
+// mittleres Brett bleibt frei: dort stehen die Seifen fürs aktuelle Rezept (siehe shelfSoaps.js)
+export const MIDDLE_SHELF = SHELVES[1];
 const K = 1.3;                        // Größe der Deko-Sachen
 const SHELF_D = 0.36, SHELF_T = 0.07;
+export const SHELF_Z = WALL_Z + SHELF_D * 0.5;  // Mitte der Bretttiefe
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
@@ -166,7 +169,7 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
   const S = soapStack, J = jar, P = plant, C = cloth;
   const rows = [
     [[P, 1], [J, 1], [J, 0], [S, 3], [C], [J, 1], [P, 0], 'gap', [S, 2], [J, 0], [P, 1], [S, 3], [J, 1], [C]],
-    [[J, 0], [S, 2], [P, 1], [J, 1], [J, 1], [S, 3], [P, 0], [J, 0], [S, 2], [C], [J, 1], [P, 1], [S, 2]],
+    [],   // mittleres Brett: frei für die Rezept-Seifen
     [[S, 2], [J, 1], [P, 1], [C], [J, 0], [S, 3], [P, 0], [J, 1], [J, 0], [S, 2], [P, 1], [J, 0]],
   ];
   rows.forEach((row, ri) => {

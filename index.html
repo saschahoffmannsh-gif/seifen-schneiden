@@ -10,14 +10,15 @@
 <body>
   <canvas id="scene"></canvas>
 
-  <!-- Kopfzeile: Bestellung + Münzen -->
+  <!-- Kopfzeile: Münzen -->
   <div id="hud">
-    <div id="order" class="ticket">
-      <div class="ticket-title">Bestellung</div>
-      <div id="order-text">…</div>
-      <div id="order-progress"></div>
-    </div>
     <div id="coins" class="pill">🪙 <span id="coin-count">0</span></div>
+  </div>
+
+  <!-- Bestell-Zettel: schmal, unter der Schale (Position per JS: --bowl-bottom) -->
+  <div id="order" class="ticket">
+    <div id="order-text">…</div>
+    <div id="order-progress"></div>
   </div>
 
   <!-- Schneide-Fortschritt der aktuellen Seife -->
@@ -28,12 +29,6 @@
 
   <!-- Hinweistext / Statuszeile -->
   <div id="hint"></div>
-
-  <!-- Schrank mit den Seifen -->
-  <div id="shelf" class="panel hidden">
-    <div class="panel-title">Schrank</div>
-    <div id="shelf-grid"></div>
-  </div>
 
   <!-- Ofen-Fortschritt -->
   <div id="oven" class="panel hidden">

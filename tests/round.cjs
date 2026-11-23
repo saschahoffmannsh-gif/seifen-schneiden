@@ -9,12 +9,18 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
   await p.goto(url + '?fps=1');
   await p.waitForTimeout(1500);
-  await p.screenshot({ path: out + '/1-schrank.png' });
+  await p.screenshot({ path: out + '/1-regal.png' });
+  // Mitten auf den Tisch tippen darf nichts auswählen
+  await p.mouse.click(210, 700); await p.waitForTimeout(300);
+  console.log('tap on table ->', await p.evaluate(() => window.__game.state));
   const g = () => p.evaluate(() => window.__game.state);
   let midShot = false;
   for (let s = 0; s < 2; s++) {
-    await p.click('#shelf-grid button >> nth=' + s);
-    await p.waitForTimeout(800);
+    // Seife im Regal antippen (Bildschirmposition aus der 3D-Position)
+    const pt = await p.evaluate((i) => { const g = window.__game; const v = g.shelf.home[i].clone().project(g.camera); return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight }; }, s);
+    await p.mouse.click(pt.x, pt.y);
+    await p.waitForFunction(() => window.__game.state === 'cutting', null, { timeout: 30000 });
+    await p.waitForTimeout(500);
     if (s === 0) await p.screenshot({ path: out + '/2-seife-intakt.png' });
     await p.mouse.move(210, 520); await p.mouse.down();
     let n = 0;

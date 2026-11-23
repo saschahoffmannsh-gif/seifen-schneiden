@@ -91,18 +91,20 @@ export function createScene(canvas) {
   scene.add(bowl);
 
   // Kamera so weit weg, dass Breite UND Höhe der Szene ins Bild passen (Hoch- und Querformat)
-  const FIT_W = 2.95, FIT_H = 3.1;
+  const FIT_W = 2.95;
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
+    // Querformat: etwas mehr Höhe zeigen, damit das mittlere Regalbrett (Rezept-Seifen) ins Bild passt
+    const land = camera.aspect > 1.15;
+    const FIT_H = land ? 3.9 : 3.1, lift = land ? 0.3 : 0;
     const vf = THREE.MathUtils.degToRad(camera.fov);
     const hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
     const dist = Math.max(FIT_W / 2 / Math.tan(hf / 2), FIT_H / 2 / Math.tan(vf / 2));
     camera.position.copy(target).addScaledVector(viewDir, dist);
-    // im Hochformat Szene etwas nach unten schieben, damit oben Platz für die Bestellung ist
-    camera.position.y += 0.05;
-    camera.lookAt(target.x, target.y - 0.12, target.z);
+    camera.position.y += 0.05 + lift;
+    camera.lookAt(target.x, target.y - 0.12 + lift, target.z);
     camera.updateProjectionMatrix();
   }
   resize();

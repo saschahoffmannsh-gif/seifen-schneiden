@@ -1,6 +1,6 @@
 # 🧼 Seifen-Schneiden
 
-Ein entspannendes Handy-Spiel im Browser: Seifen aus dem Schrank nehmen, in feine Würfel schneiden
+Ein entspannendes Handy-Spiel im Browser: Seifen aus dem Regal nehmen, in feine Würfel schneiden
 (wie bei „Seifenschneidespaß“), im Ofen zusammenschmelzen und die fertige marmorierte Seife verkaufen.
 
 **Direkt spielen:** https://saschahoffmannsh-gif.github.io/seifen-schneiden/
@@ -11,7 +11,7 @@ Ein entspannendes Handy-Spiel im Browser: Seifen aus dem Schrank nehmen, in fein
 ## So wird gespielt
 
 1. **Bestellung lesen** – oben steht, was die Kundschaft möchte, z. B. „Anna möchte: Erdbeere + Vanille“.
-2. **Seife aus dem Schrank nehmen** – unten im Schrank auf eine Sorte tippen (gewünschte Sorten sind gelb umrandet).
+2. **Seife aus dem Regal nehmen** – auf dem mittleren Wandbrett stehen die Seifen fürs Rezept; antippen, dann fliegt sie über die Schale (die nächste gewünschte hüpft leicht).
 3. **Schneiden** – die Seife steht aufrecht in einer Halterung über der Schale und hat genau eine Farbe.
    Sie besteht aus 2880 feinen Würfeln (15 × 24 × 8), aufgeteilt in 4 Scheiben. Den Finger einfach **hin und her (links ↔ rechts)** wischen. Das Messer sägt
    sich wie beim Brotschneiden durch die **vorderste Scheibe** von oben nach unten. Die Seife
@@ -19,7 +19,7 @@ Ein entspannendes Handy-Spiel im Browser: Seifen aus dem Schrank nehmen, in fein
    Scheibe von oben nach unten und purzeln in die Schale. Unten angekommen fährt das Messer
    wieder hoch und schneidet die nächste Scheibe dahinter – Scheibe für Scheibe nach hinten.
    Oben zeigt „Geschnitten: … %“ mit Balken live, wie viel von der aktuellen Seife schon geschnitten ist.
-4. **Zweite Seife** – nächste Sorte aus dem Schrank nehmen und in dieselbe Schale schneiden.
+4. **Zweite Seife** – nächste Seife im Regal antippen und in dieselbe Schale schneiden.
 5. **🔥 In den Ofen** – die Würfel schmelzen zusammen (Fortschrittsbalken).
 6. **✨ Aus der Form nehmen** – die fertige Seife ist marmoriert, die Farben und Anteile kommen
    aus den Würfeln, die du hineingeschnitten hast.
@@ -45,7 +45,7 @@ Bei jedem Push auf `main` baut eine GitHub Action das Spiel und veröffentlicht 
 | Datei | Aufgabe |
 | --- | --- |
 | `src/main.js` | Startet alles, Hauptschleife (Delta-Time + fester Physik-Zeitschritt), FPS-Anzeige |
-| `src/game.js` | Spielablauf: Schrank → Schneiden → Ofen → Herausnehmen → Verkaufen, Messer-Steuerung |
+| `src/game.js` | Spielablauf: Regal → Schneiden → Ofen → Herausnehmen → Verkaufen, Messer-Steuerung |
 | `src/soapBlock.js` | Intakter Seifenblock aus Voxeln (ein `InstancedMesh`) |
 | `src/looseCubes.js` | Lose Würfel: Pool, eigene Mini-Physik, Höhenfeld zum Stapeln |
 | `src/soaps.js` | Seifensorten, Farben und Innenmuster |
@@ -55,7 +55,8 @@ Bei jedem Push auf `main` baut eine GitHub Action das Spiel und veröffentlicht 
 | `src/marble.js` | Marmor-Textur für die fertige Seife |
 | `src/confetti.js` | Konfetti-Partikel |
 | `src/input.js` | Touch-/Maus-Eingabe |
-| `src/ui.js` | Bestellung, Münzen, Schrank, Knöpfe, „So satisfying!“-Texte |
+| `src/shelfSoaps.js` | Rezept-Seifen auf dem mittleren Wandbrett (InstancedMesh), Antippen per Raycast, Flug zur Schale |
+| `src/ui.js` | Bestell-Zettel unter der Schale, Münzen, Knöpfe, „So satisfying!“-Texte |
 | `src/audio.js` | Generierte Geräusche (WebAudio) und Vibration |
 | `src/config.js` | Alle Zahlen zum Feintuning an einer Stelle |
 
