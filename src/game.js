@@ -36,7 +36,7 @@ const _dragPos = new THREE.Vector3(), _dragTarget = new THREE.Vector3();
 
 const BAR_TABLE_SCALE = 0.85;                       // Seife auf dem Tisch / im Päckchen
 const BAR_HALF_H = 0.18 * BAR_TABLE_SCALE;          // halbe Höhe der liegenden Seife
-const PRESENT_LIFT = 0.3;                          // Präsentation: so weit steigt die Seife (unter der Ergebniskarte)
+const PRESENT_LIFT = 0.2;                          // Präsentation: so weit steigt die Seife (unter der Ergebniskarte)
 const easeInOut = (t) => t * t * (3 - 2 * t);
 const easeOut = (t) => 1 - (1 - t) * (1 - t) * (1 - t);
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _t = new THREE.Vector3();
@@ -1037,8 +1037,34 @@ export class Game {
   }
 
   // ---------- pro Frame ----------
+  /**
+   * Bühne freihalten: Ist die Bestell-/Hinweis-Leiste unten so hoch, dass sie in die Schale ragen würde,
+   * rutscht das Bild (Kamera-Ausschnitt) sanft nach oben. DOM wird nur alle 0,25 s gelesen.
+   */
+  updateViewShift(dt) {
+    const st = this.state;
+    this.vsT = (this.vsT || 0) - dt;
+    if (this.vsT <= 0) {
+      this.vsT = 0.25;
+      let need = 0;
+      const H = window.innerHeight;
+      if ((st === 'shelf' || st === 'cutting' || st === 'oven' || st === 'flying' || st === 'between' || st === 'stocking') && this.bowl.visible) {
+        const dockTop = document.getElementById('dock').getBoundingClientRect().top;
+        _t.set(BOWL.floorR, 0, BOWL.floorR).project(this.camera);
+        const py = (1 - _t.y) / 2 * H + (this.viewShift || 0);   // Lage ohne Verschiebung
+        need = Math.max(0, py + 10 - dockTop);
+      }
+      this.viewShiftTarget = Math.min(need, H * 0.1);
+    }
+    const prev = this.viewShift || 0;
+    this.viewShift = damp(prev, this.viewShiftTarget || 0, 6, dt);
+    if (this.viewShift >= 0.3) this.camera.setViewOffset(window.innerWidth, window.innerHeight, 0, this.viewShift, window.innerWidth, window.innerHeight);
+    else if (this.camera.view && this.camera.view.enabled) this.camera.clearViewOffset();
+  }
+
   update(dt, time) {
     this.now = time;
+    this.updateViewShift(dt);
     // nächste gewünschte Seife im Regal hüpft leicht (zeigt: hier antippen)
     let bob = -1;
     if (this.state === 'shelf') {
