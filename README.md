@@ -10,7 +10,7 @@ Ein entspannendes Handy-Spiel im Browser: Seifen aus dem Regal nehmen, in feine 
 
 ## So wird gespielt
 
-1. **Bestellung lesen** – oben steht, was die Kundschaft möchte, z. B. „Anna möchte: Erdbeere + Vanille“.
+1. **Bestellung lesen** – unter der Schale steht, was die Kundschaft möchte, z. B. „Anna möchte: Erdbeere + Vanille“.
 2. **Seife aus dem Regal nehmen** – auf dem mittleren Wandbrett stehen die Seifen fürs Rezept; antippen, dann fliegt sie über die Schale (die nächste gewünschte hüpft leicht).
 3. **Schneiden** – die Seife steht aufrecht in einer Halterung über der Schale und hat genau eine Farbe.
    Sie besteht aus 2880 feinen Würfeln (15 × 24 × 8), aufgeteilt in 4 Scheiben. Den Finger einfach **hin und her (links ↔ rechts)** wischen. Das Messer sägt
@@ -23,7 +23,9 @@ Ein entspannendes Handy-Spiel im Browser: Seifen aus dem Regal nehmen, in feine 
 5. **🔥 In den Ofen** – die Würfel schmelzen zusammen (Fortschrittsbalken).
 6. **✨ Aus der Form nehmen** – die fertige Seife ist marmoriert, die Farben und Anteile kommen
    aus den Würfeln, die du hineingeschnitten hast.
-7. **🪙 Verkaufen** – passt die Seife zur Bestellung, gibt es mehr Münzen.
+7. **🪙 Verkaufen** – die Schale verschwindet, die Seife legt sich auf den Tisch.
+8. **Verpacken** – ein Päckchen im Regal antippen (fliegt auf den Tisch, Deckel geht ab), dann die Seife antippen (fliegt hinein, Deckel drauf).
+9. **Verschicken** – das Päckchen zur Seite wischen: Geld wird gutgeschrieben (passt die Seife zur Bestellung, gibt es mehr Münzen), dann kommt die nächste Bestellung.
 
 Funktioniert mit Touch (Handy, Hochformat) und mit der Maus.
 
@@ -45,7 +47,7 @@ Bei jedem Push auf `main` baut eine GitHub Action das Spiel und veröffentlicht 
 | Datei | Aufgabe |
 | --- | --- |
 | `src/main.js` | Startet alles, Hauptschleife (Delta-Time + fester Physik-Zeitschritt), FPS-Anzeige |
-| `src/game.js` | Spielablauf: Regal → Schneiden → Ofen → Herausnehmen → Verkaufen, Messer-Steuerung |
+| `src/game.js` | Spielablauf: Regal → Schneiden → Ofen → Herausnehmen → Verpacken → Verschicken (Wischen), Messer-Steuerung |
 | `src/soapBlock.js` | Intakter Seifenblock aus Voxeln (ein `InstancedMesh`) |
 | `src/looseCubes.js` | Lose Würfel: Pool, eigene Mini-Physik, Höhenfeld zum Stapeln |
 | `src/soaps.js` | Seifensorten, Farben und Innenmuster |
@@ -55,6 +57,8 @@ Bei jedem Push auf `main` baut eine GitHub Action das Spiel und veröffentlicht 
 | `src/marble.js` | Marmor-Textur für die fertige Seife |
 | `src/confetti.js` | Konfetti-Partikel |
 | `src/input.js` | Touch-/Maus-Eingabe |
+| `src/packages.js` | Päckchen aus Kraftpapier (InstancedMesh): Regal, Tisch, Deckel, Schatten |
+| `src/decor.js` | Verpackungs-Deko für später (freischaltbar, Preisbonus; noch ohne Oberfläche) |
 | `src/shelfSoaps.js` | Rezept-Seifen auf dem mittleren Wandbrett (InstancedMesh), Antippen per Raycast, Flug zur Schale |
 | `src/ui.js` | Bestell-Zettel unter der Schale, Münzen, Knöpfe, „So satisfying!“-Texte |
 | `src/audio.js` | Generierte Geräusche (WebAudio) und Vibration |

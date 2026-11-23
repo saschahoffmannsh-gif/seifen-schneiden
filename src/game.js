@@ -3,13 +3,25 @@
 //   flying  -> Seife fliegt vom Regal über die Schale
 //   cutting -> Seife hin und her wischend in die Schale schneiden
 //   oven    -> Würfel schmelzen (Timer mit Fortschrittsbalken)
-//   reveal  -> fertige marmorierte Seife aus der Form nehmen und verkaufen
+//   reveal  -> fertige marmorierte Seife aus der Form nehmen
+//   unmolded -> "Verkaufen": Schale verschwindet, Seife legt sich auf den Tisch
+//   pickPkg -> Päckchen im Regal antippen -> fliegt auf den Tisch, Deckel geht ab
+//   pickSoap -> Seife antippen -> fliegt ins Päckchen, Deckel drauf
+//   packed  -> Päckchen zur Seite wischen -> verschickt, Geld gutgeschrieben, neue Bestellung
 import * as THREE from 'three';
 import { BLOCK, BOWL, CUBE, CUT, OVEN_SECONDS, BLOCK_BASE_Y } from './config.js';
 import { SOAP_LIST, SOAP_BY_ID } from './soaps.js';
 import { makeMarbleTexture } from './marble.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { sndCut, sndPop, sndCoin, sndDing, haptic } from './audio.js';
+import { PKG, TABLE_SPOT, PKG_SHELF_SCALE, SHADOW_SOAP } from './packages.js';
+import { TABLE_Y } from './setting/wall.js';
+
+const BAR_TABLE_SCALE = 0.85;                       // Seife auf dem Tisch / im Päckchen
+const BAR_HALF_H = 0.18 * BAR_TABLE_SCALE;          // halbe Höhe der liegenden Seife
+const easeInOut = (t) => t * t * (3 - 2 * t);
+const easeOut = (t) => 1 - (1 - t) * (1 - t) * (1 - t);
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _t = new THREE.Vector3();
 
 const CUSTOMERS = ['Anna', 'Ben', 'Clara', 'Emil', 'Frieda', 'Jonas', 'Lea', 'Mila', 'Paul', 'Sophie'];
 const _ray = new THREE.Raycaster();
@@ -20,19 +32,32 @@ const _plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -(BLOCK.nz * CUBE / 2
 const damp = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
 
 export class Game {
-  constructor({ renderer, scene, camera, ovenLight, bg }, ui, input, block, loose, knife, confetti, shelf) {
-    Object.assign(this, { scene, camera, ovenLight, bg, ui, input, block, loose, knife, confetti, shelf });
+  constructor({ renderer, scene, camera, ovenLight, bg, bowl, bowlShadow }, ui, input, block, loose, knife, confetti, shelf, packages) {
+    Object.assign(this, { scene, camera, ovenLight, bg, bowl, bowlShadow, ui, input, block, loose, knife, confetti, shelf, packages });
+    this.anims = [];             // laufende Animationen (werden nur bei Ereignissen angelegt)
+    this.pkgSlot = -1;
+    this.swipe = { active: false, x0: 0, y0: 0, t0: 0, dx: 0 };
     // Seife im Regal antippen: Raycast NUR beim Tippen, nicht pro Frame
     this.tapNdc = new THREE.Vector2();
     const canvas = renderer.domElement;
     this.isAvailable = (s) => !this.cutIds.has(s.id);
     canvas.addEventListener('pointerdown', (e) => {
-      if (this.state !== 'shelf') return;
+      const st = this.state;
+      if (st === 'packed') { this.swipeStart(e); return; }
+      if (st !== 'shelf' && st !== 'pickPkg' && st !== 'pickSoap') return;
       const r = canvas.getBoundingClientRect();
       this.tapNdc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-      const i = this.shelf.pick(this.tapNdc, this.camera, this.isAvailable);
-      if (i >= 0) this.pickSoap(i);
+      if (st === 'shelf') {
+        const i = this.shelf.pick(this.tapNdc, this.camera, this.isAvailable);
+        if (i >= 0) this.pickSoap(i);
+      } else if (st === 'pickPkg') {
+        const i = this.packages.pick(this.tapNdc, this.camera);
+        if (i >= 0) this.flyPackage(i);
+      } else if (this.hitBar()) this.soapIntoPackage();
     });
+    window.addEventListener('pointermove', (e) => this.swipeMove(e));
+    window.addEventListener('pointerup', (e) => this.swipeEnd(e));
+    window.addEventListener('pointercancel', (e) => this.swipeEnd(e, true));
     this.coins = 0;
     this.state = 'shelf';
     this.cutIds = new Set();      // welche Sorten schon in der Schale sind
@@ -172,16 +197,181 @@ export class Game {
     this.price = match ? 40 - extra * 10 : 15;
     this.ui.hint(match ? `${this.order.customer} ist begeistert!` : `Nicht ganz die Bestellung …`);
     this.ui.actions([{ label: `🪙 Verkaufen für ${this.price}`, alt: true, onClick: () => this.sell() }]);
+    this.bar.scale.set(0.6, 0.6, 0.6); this.bar.rotation.set(0, 0, 0);
     this.state = 'unmolded';
   }
 
+  /** Kleine Animations-Hilfe: step(e, t) pro Frame mit e = geglättetes t, danach done(). */
+  play(dur, step, done, ease = easeInOut) {
+    this.anims.push({ t: 0, dur, step, done, ease });
+  }
+
+  runAnims(dt) {
+    for (let i = this.anims.length - 1; i >= 0; i--) {
+      const a = this.anims[i];
+      a.t = Math.min(1, a.t + dt / a.dur);
+      a.step(a.ease(a.t), a.t);
+      if (a.t >= 1) {
+        this.anims[i] = this.anims[this.anims.length - 1]; this.anims.pop();
+        if (a.done) a.done();
+      }
+    }
+  }
+
+  /** "Verkaufen": Schale verschwindet, die fertige Seife legt sich auf den Tisch. */
   sell() {
-    this.coins += this.price;
-    this.ui.setCoins(this.coins, true);
-    sndCoin(); haptic(15);
-    this.bar.visible = false;
-    this.newOrder();
-    this.toShelf();
+    if (this.state !== 'unmolded') return;
+    this.state = 'toTable';
+    this.ui.actions([]);
+    this.ui.hint('');
+    const bar = this.bar;
+    const p0 = bar.position.clone(), s0 = bar.scale.x, rx0 = bar.rotation.x;
+    const ry0 = ((bar.rotation.y % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const ry1 = Math.round(ry0 / Math.PI) * Math.PI;
+    const spot = TABLE_SPOT.soap;
+    this.play(0.75, (e, t) => {
+      const k = Math.max(0.001, 1 - e);
+      this.bowl.scale.set(k, k, k); this.bowl.position.y = -0.25 * e;
+      this.bowlShadow.scale.set(k, k, k);
+      bar.position.set(p0.x + (spot.x - p0.x) * e, p0.y + (TABLE_Y + BAR_HALF_H - p0.y) * e + Math.sin(t * Math.PI) * 0.35, p0.z + (spot.z - p0.z) * e);
+      bar.rotation.set(rx0 * (1 - e), ry0 + (ry1 - ry0) * e, 0);
+      const sc = s0 + (BAR_TABLE_SCALE - s0) * e; bar.scale.set(sc, sc, sc);
+    }, () => {
+      this.bowl.visible = false; this.bowlShadow.visible = false;
+      this.packages.setBlob(SHADOW_SOAP, spot.x, TABLE_Y + 0.003, spot.z, 1.35, 0.95);
+      sndPop(); haptic(10);
+      this.state = 'pickPkg';
+      this.ui.hint('Tippe auf ein Päckchen im Regal');
+    });
+  }
+
+  /** Päckchen fliegt vom Regal auf den Tisch, der Deckel geht ab und landet dahinter. */
+  flyPackage(i) {
+    this.state = 'packing';
+    this.pkgSlot = i;
+    this.ui.hint('');
+    this.packages.onShelf[i] = 0;
+    this.packages.update(0, -1);
+    this.packages.setBlob(i, 0, 0, 0, 0, 0);
+    const from = this.packages.home[i], to = TABLE_SPOT.pkg, lidTo = TABLE_SPOT.lid;
+    haptic(8);
+    this.play(0.6, (e, t) => {
+      _a.lerpVectors(from, to, e); _a.y += Math.sin(t * Math.PI) * 0.6;
+      this.packages.setClosed(i, _a, 0, PKG_SHELF_SCALE + (1 - PKG_SHELF_SCALE) * e);
+    }, () => {
+      this.packages.setBlob(i, to.x, TABLE_Y + 0.003, to.z, PKG.w * 1.45, PKG.d * 1.6);
+      sndPop();
+      // Deckel abheben und hinter das Päckchen legen
+      _b.copy(to); _b.y += PKG.h - PKG.lidOver;
+      const lid0 = _b.clone();
+      this.play(0.5, (e, t) => {
+        _a.lerpVectors(lid0, lidTo, e); _a.y += Math.sin(t * Math.PI) * 0.45;
+        this.packages.setLid(i, _a, -Math.sin(t * Math.PI) * 0.5, 0, 0, 1);
+      }, () => {
+        this.state = 'pickSoap';
+        this.barBaseY = this.bar.position.y;
+        this.ui.hint('Tippe auf die Seife');
+      });
+    });
+  }
+
+  /** Antippen der Seife auf dem Tisch (nur beim Tippen). */
+  hitBar() {
+    _ray.setFromCamera(this.tapNdc, this.camera);
+    if (_ray.intersectObject(this.bar, false).length) return true;
+    _t.copy(this.bar.position).project(this.camera);
+    const dx = _t.x - this.tapNdc.x, dy = (_t.y - this.tapNdc.y) * 0.6;
+    return dx * dx + dy * dy < 0.2 * 0.2;
+  }
+
+  /** Seife fliegt ins offene Päckchen, dann kommt der Deckel drauf. */
+  soapIntoPackage() {
+    this.state = 'packing';
+    this.ui.hint('');
+    const bar = this.bar, i = this.pkgSlot;
+    const p0 = TABLE_SPOT.soap, to = TABLE_SPOT.pkg;
+    const ry0 = bar.rotation.y, ry1 = Math.round(ry0 / Math.PI) * Math.PI;
+    this.packages.setBlob(SHADOW_SOAP, 0, 0, 0, 0, 0);
+    haptic(8);
+    this.play(0.6, (e, t) => {
+      bar.position.set(p0.x + (to.x - p0.x) * e, TABLE_Y + BAR_HALF_H + PKG.wall * e + Math.sin(t * Math.PI) * 0.7, p0.z + (to.z - p0.z) * e);
+      bar.rotation.set(Math.sin(t * Math.PI) * 0.25, ry0 + (ry1 - ry0) * e, 0);
+    }, () => {
+      sndPop();
+      const lidFrom = TABLE_SPOT.lid;
+      _b.copy(to); _b.y += PKG.h - PKG.lidOver;
+      const lidTo = _b.clone();
+      this.play(0.45, (e, t) => {
+        _a.lerpVectors(lidFrom, lidTo, e); _a.y += Math.sin(t * Math.PI) * 0.5;
+        this.packages.setLid(i, _a, -Math.sin(t * Math.PI) * 0.5, 0, 0, 1);
+      }, () => {
+        bar.visible = false;
+        sndPop(); haptic(15);
+        this.state = 'packed';
+        this.ui.hint('Wische das Paket zur Seite');
+      });
+    });
+  }
+
+  // ---------- Wischen zum Verschicken (Touch + Maus über Pointer Events) ----------
+  swipeStart(e) {
+    const sw = this.swipe;
+    sw.active = true; sw.id = e.pointerId; sw.x0 = e.clientX; sw.y0 = e.clientY; sw.t0 = performance.now(); sw.dx = 0;
+  }
+  swipeMove(e) {
+    const sw = this.swipe;
+    if (!sw.active || e.pointerId !== sw.id || this.state !== 'packed') return;
+    sw.dx = e.clientX - sw.x0;
+    // Päckchen folgt dem Finger (Bildschirmbreite ~ 3,2 Welt-Einheiten)
+    _a.copy(TABLE_SPOT.pkg); _a.x += sw.dx / window.innerWidth * 3.2;
+    this.packages.setClosed(this.pkgSlot, _a, -sw.dx / window.innerWidth * 0.3, 1);
+    this.packages.setBlob(this.pkgSlot, _a.x, TABLE_Y + 0.003, _a.z, PKG.w * 1.45, PKG.d * 1.6);
+  }
+  swipeEnd(e, cancel) {
+    const sw = this.swipe;
+    if (!sw.active || e.pointerId !== sw.id) return;
+    sw.active = false;
+    if (this.state !== 'packed') return;
+    const dx = e.clientX - sw.x0, dy = e.clientY - sw.y0;
+    const dt = Math.max(1, performance.now() - sw.t0);
+    const W = window.innerWidth, adx = Math.abs(dx);
+    const ok = !cancel && adx >= Math.max(50, W * 0.12) && adx > Math.abs(dy) * 1.3 && (adx / dt > 0.25 || adx >= W * 0.3);
+    const x0 = TABLE_SPOT.pkg.x + dx / W * 3.2;
+    if (ok) { this.sendPackage(dx > 0 ? 1 : -1, x0); return; }
+    // zu kurz: zurückfedern
+    this.play(0.25, (k) => {
+      _a.copy(TABLE_SPOT.pkg); _a.x = x0 + (TABLE_SPOT.pkg.x - x0) * k;
+      this.packages.setClosed(this.pkgSlot, _a, 0, 1);
+      this.packages.setBlob(this.pkgSlot, _a.x, TABLE_Y + 0.003, _a.z, PKG.w * 1.45, PKG.d * 1.6);
+    }, null, easeOut);
+  }
+
+  /** Päckchen rutscht aus dem Bild, Geld wird gutgeschrieben, neue Bestellung. */
+  sendPackage(dir, x0) {
+    this.state = 'sending';
+    this.ui.hint('');
+    const i = this.pkgSlot, x1 = dir * 5;
+    this.play(0.45, (e) => {
+      _a.copy(TABLE_SPOT.pkg); _a.x = x0 + (x1 - x0) * e;
+      this.packages.setClosed(i, _a, -dir * 0.15 * e, 1);
+      this.packages.setBlob(i, _a.x, TABLE_Y + 0.003, _a.z, PKG.w * 1.45, PKG.d * 1.6);
+    }, () => {
+      this.packages.hide(i);
+      this.coins += this.price;
+      this.ui.setCoins(this.coins, true);
+      sndCoin(); haptic(20);
+      this.ui.popup(`+${this.price} 🪙`);
+      // Schale kommt zurück, Päckchen wieder ins Regal, neue Bestellung
+      this.bowl.visible = true; this.bowlShadow.visible = true;
+      this.play(0.45, (e) => {
+        const k = Math.max(0.001, e);
+        this.bowl.scale.set(k, k, k); this.bowl.position.y = -0.25 * (1 - e);
+        this.bowlShadow.scale.set(k, k, k);
+      }, null, easeOut);
+      this.packages.reset();
+      this.newOrder();
+      this.toShelf();
+    }, (t) => t * t);
   }
 
   // ---------- pro Frame ----------
@@ -193,6 +383,12 @@ export class Game {
       for (let i = 0; i < list.length; i++) if (!this.cutIds.has(list[i].id)) { bob = i; break; }
     }
     this.shelf.update(dt, time, bob);
+    let pb = -1;
+    if (this.state === 'pickPkg') for (let i = 0; i < this.packages.count; i++) if (this.packages.onShelf[i]) { pb = i; break; }
+    this.packages.update(time, pb);
+    // Seife auf dem Tisch hüpft leicht, solange man sie antippen soll
+    if (this.state === 'pickSoap') this.bar.position.y = this.barBaseY + Math.max(0, Math.sin(time * 5)) * 0.05 * (Math.sin(time * 2.5) > 0 ? 1 : 0);
+    if (this.anims.length) this.runAnims(dt);
     if (this.state === 'cutting') this.updateCutting(dt);
     else if (this.state === 'oven') this.updateOven(dt);
     else if (this.state === 'unmolded') this.updateBar(dt, time);

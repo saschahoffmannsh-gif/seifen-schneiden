@@ -43,8 +43,36 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   console.log('state', await g());
   await p.click('#actions button'); await p.waitForTimeout(1200);
   await p.screenshot({ path: out + '/5-fertig.png' });
-  await p.click('#actions button'); await p.waitForTimeout(500);
-  console.log('after sell', await g(), 'coins', await p.evaluate(() => window.__game.coins));
+  // Verkaufen -> Schale weg, Seife auf den Tisch
+  const waitState = (st) => p.waitForFunction((st) => window.__game.state === st, st, { timeout: 60000 });
+  const screenOf = (expr) => p.evaluate((expr) => { const g = window.__game; const v = eval(expr).clone().project(g.camera); return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight }; }, expr);
+  await p.click('#actions button');
+  await waitState('pickPkg'); await p.waitForTimeout(400);
+  console.log('bowl visible', await p.evaluate(() => window.__game.bowl.visible), 'coins', await p.evaluate(() => window.__game.coins));
+  await p.screenshot({ path: out + '/7-seife-auf-tisch.png' });
+  // Päckchen im Regal antippen
+  let pt = await screenOf('g.packages.home[0]');
+  await p.mouse.click(pt.x, pt.y);
+  await waitState('pickSoap'); await p.waitForTimeout(300);
+  await p.screenshot({ path: out + '/8-paeckchen-offen.png' });
+  // Seife antippen -> ins Päckchen, Deckel drauf
+  pt = await screenOf('g.bar.position');
+  await p.mouse.click(pt.x, pt.y);
+  await waitState('packed'); await p.waitForTimeout(300);
+  await p.screenshot({ path: out + '/9-paeckchen-zu.png' });
+  // zu kurzer Wisch: federt zurück, nichts passiert
+  pt = await screenOf('g.packages.body.position.clone().set(0.74, 0.1, 0.2)');
+  await p.mouse.move(pt.x, pt.y); await p.mouse.down(); await p.mouse.move(pt.x + 20, pt.y, { steps: 2 }); await p.mouse.up();
+  await p.waitForTimeout(600);
+  console.log('after short swipe', await g());
+  // richtiger Wisch nach rechts, Screenshot mittendrin
+  await p.mouse.move(pt.x, pt.y); await p.mouse.down();
+  await p.mouse.move(pt.x - 60, pt.y, { steps: 4 });
+  await p.screenshot({ path: out + '/10-wischen-mitte.png' });
+  await p.mouse.move(pt.x - 200, pt.y + 10, { steps: 4 }); await p.mouse.up();
+  await waitState('shelf'); await p.waitForTimeout(700);
+  console.log('after send', await g(), 'coins', await p.evaluate(() => window.__game.coins), 'pkgs on shelf', await p.evaluate(() => [...window.__game.packages.onShelf]));
+  await p.screenshot({ path: out + '/11-naechste-bestellung.png' });
   console.log('errors', errs);
   await b.close();
 })();

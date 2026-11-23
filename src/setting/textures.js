@@ -188,3 +188,25 @@ export function makeBlobTexture() {
   g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
   return new THREE.CanvasTexture(c);
 }
+
+/** Kraftpapier (Päckchen): braun mit feinen Fasern. withString = rot-weiße Schnur über Kreuz (Deckel). */
+export function makeKraftTexture({ withString = false, seed = 31 } = {}) {
+  const S = 256;
+  const [c, g] = canvas(S, S);
+  const r = rng(seed);
+  g.fillStyle = '#b88a5a'; g.fillRect(0, 0, S, S);
+  for (let i = 0; i < 1400; i++) {
+    const x = r() * S, y = r() * S, l = 3 + r() * 10, a = r() * Math.PI;
+    g.strokeStyle = r() < 0.5 ? 'rgba(90,55,25,0.18)' : 'rgba(235,200,150,0.18)';
+    g.lineWidth = 0.6 + r();
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
+  }
+  if (withString) {
+    for (const [x, y, w, h] of [[S / 2 - 7, 0, 14, S], [0, S / 2 - 7, S, 14]]) {
+      g.fillStyle = '#f4eee4'; g.fillRect(x, y, w, h);
+      g.fillStyle = '#c0392b';
+      if (w < h) for (let k = 0; k < S; k += 12) g.fillRect(x, k, w, 6); else for (let k = 0; k < S; k += 12) g.fillRect(k, y, 6, h);
+    }
+  }
+  return toTex(c);
+}

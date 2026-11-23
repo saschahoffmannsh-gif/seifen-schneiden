@@ -110,5 +110,5 @@ export function createScene(canvas) {
   resize();
   window.addEventListener('resize', resize);
 
-  return { renderer, scene, camera, bowl, ovenLight, bg };
+  return { renderer, scene, camera, bowl, bowlShadow: shadow, ovenLight, bg, env };
 }

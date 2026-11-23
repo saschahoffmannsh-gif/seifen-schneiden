@@ -10,6 +10,7 @@ import { createInput } from './input.js';
 import { createUI } from './ui.js';
 import { Game } from './game.js';
 import { ShelfSoaps } from './shelfSoaps.js';
+import { Packages } from './packages.js';
 import { BOWL } from './config.js';
 import { unlockAudio, sndTick } from './audio.js';
 import { PHYS } from './config.js';
@@ -31,7 +32,8 @@ const loose = new LooseCubes(view.scene, looseGeo, createLooseMaterial());
 loose.onLand = sndTick;
 const confetti = new Confetti(view.scene);
 const shelfSoaps = new ShelfSoaps(view.scene);
-const game = new Game(view, ui, input, block, loose, createKnife(), confetti, shelfSoaps);
+const packages = new Packages(view.scene);
+const game = new Game(view, ui, input, block, loose, createKnife(), confetti, shelfSoaps, packages);
 
 // Bestell-Zettel unter die Schale legen: Unterkante der Schale auf den Bildschirm projizieren
 // (nur beim Start und bei Größenänderung, nicht pro Frame)
