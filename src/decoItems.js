@@ -1,5 +1,5 @@
 // Deko für die Päckchen (Recherche: Knisterpapier/Holzwolle als Füllung, Perlen, Seifenflocken,
-// Rosenblätter, Lavendel, Trockenblumen, Baumwollblüte; obendrauf Satin-/Samtband, Bäckerschnur,
+// echte Blüten (Margerite, Kirschblüte, Rose, Pfingstrose …); obendrauf Satin-/Samtband, Bäckerschnur,
 // Bast, Spitze, Wachssiegel, Sticker, Washi-Tape, Anhänger mit Namen, Geschenkkarte, getrocknete
 // Orangenscheibe, Zimtstangen, Eukalyptus, Mini-Tannenzapfen).
 //
@@ -19,7 +19,8 @@ export const DECO_GROUPS = [
 
 const F = (id, group, name, cost, bonus, look) => ({ id, group, name, cost, bonus, look, unlocked: cost === 0 });
 
-// Füllungen: geo 'pearl' (perlmutt, schillernd), 'metal' (Gold/Silber), 'heart', 'flower', 'rose', 'sprig', 'petal'.
+// Füllungen: geo 'pearl' (perlmutt, schillernd), 'metal' (Gold/Silber), 'heart' und echte Blüten
+// ('daisy', 'forget', 'cherry', 'hydrangea', 'gerbera', 'rose', 'ranunculus', 'peony').
 export const DECO_ITEMS = [
   F('perlen-weiss', 'perlen', 'Perlmutt-Perlen', 0, 3, { geo: 'pearl', colors: ['#fbf7f0', '#f6efe6', '#fffaf4'], size: [0.016, 0.026], n: 9 }),
   F('perlen-rosa', 'perlen', 'Rosé-Perlen', 60, 4, { geo: 'pearl', colors: ['#f6d2dc', '#f2c0ce', '#fbe0e7'], size: [0.016, 0.026], n: 9 }),
@@ -28,12 +29,16 @@ export const DECO_ITEMS = [
   F('perlen-silber', 'perlen', 'Silberperlen', 140, 7, { geo: 'metal', colors: ['#e8eaee', '#cfd3da', '#f5f6f8'], size: [0.014, 0.022], n: 9 }),
   F('mini-herzen', 'perlen', 'Mini-Herzen', 120, 6, { geo: 'heart', colors: ['#e2304d', '#f06a86', '#ffffff'], size: [0.03, 0.04], n: 8 }),
 
-  F('margeriten', 'blueten', 'Margeriten', 0, 3, { geo: 'flower', colors: ['#ffffff', '#fffaf2', '#fff4f6'], size: [0.07, 0.09], n: 6 }),
-  F('vergissmeinnicht', 'blueten', 'Vergissmeinnicht', 70, 4, { geo: 'flower', colors: ['#8fb8f0', '#a9c8f6', '#7fa8e6'], size: [0.06, 0.075], n: 8 }),
-  F('rosenblaetter', 'blueten', 'Rosenblätter', 80, 5, { geo: 'petal', colors: ['#c8203f', '#e0425e', '#b51a37'], size: [0.05, 0.065], n: 8 }),
-  F('lavendel', 'blueten', 'Lavendelzweige', 100, 6, { geo: 'sprig', colors: ['#ffffff', '#f4f0ff'], size: [0.17, 0.21], n: 5 }),
+  // nur echte Blüten (keine Zweige, Rispen oder Lavendel); Farbe steckt in der Blüte, colors = leichte Variation
+  F('margeriten', 'blueten', 'Margeriten', 0, 3, { geo: 'daisy', colors: ['#ffffff', '#fffaf2', '#fbf8f0'], size: [0.07, 0.09], n: 6 }),
+  F('vergissmeinnicht', 'blueten', 'Vergissmeinnicht', 70, 4, { geo: 'forget', colors: ['#ffffff', '#f1f5ff', '#f6f3ff'], size: [0.05, 0.065], n: 8 }),
+  F('kirschblueten', 'blueten', 'Kirschblüten', 80, 5, { geo: 'cherry', colors: ['#ffffff', '#fff4f7', '#fbf2f4'], size: [0.06, 0.075], n: 7 }),
+  F('hortensien', 'blueten', 'Hortensienblüten', 100, 6, { geo: 'hydrangea', colors: ['#ffffff', '#f2f4ff', '#fbf0ff'], size: [0.055, 0.07], n: 9 }),
+  F('gerbera', 'blueten', 'Gerbera', 120, 6, { geo: 'gerbera', colors: ['#ffffff', '#fff2e0', '#ffe8ee'], size: [0.08, 0.095], n: 4 }),
   F('rosen-getrocknet', 'blueten', 'Getrocknete Rosen', 150, 8, { geo: 'rose', colors: ['#c45a6e', '#d98a9a', '#b8485e'], size: [0.04, 0.05], n: 5 }),
   F('rosen-creme', 'blueten', 'Rosenknospen creme', 180, 9, { geo: 'rose', colors: ['#f6e7d6', '#f1dcc4', '#fbf0e4'], size: [0.04, 0.05], n: 5 }),
+  F('ranunkeln', 'blueten', 'Ranunkeln', 200, 10, { geo: 'ranunculus', colors: ['#ffffff', '#fff0f0', '#fff6ea'], size: [0.065, 0.075], n: 4 }),
+  F('pfingstrosen', 'blueten', 'Pfingstrosen', 240, 12, { geo: 'peony', colors: ['#ffffff', '#fff2f6', '#fbefff'], size: [0.08, 0.09], n: 3 }),
 
   F('schnur', 'baender', 'Bäckerschnur', 0, 2, { type: 'ribbon', color: '#f4eee6', tex: 'twine', w: 0.025, rough: 0.9 }),
   F('satin-rosa', 'baender', 'Satinschleife rosa', 50, 4, { type: 'ribbon', color: '#f3a5bb', w: 0.06, rough: 0.28, sheen: true }),

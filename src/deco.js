@@ -1,4 +1,4 @@
-// Deko am Päckchen in 3D: Füllungen (Perlmutt-/Metallperlen, Blüten, Rosen, Lavendel …) als wenige
+// Deko am Päckchen in 3D: Füllungen (Perlmutt-/Metallperlen, echte Blüten, Rosen …) als wenige
 // InstancedMeshes im Päckchen, Deckel-Deko (Bänder, Siegel, Sticker, Anhänger, Naturdeko) als
 // kleine Gruppen aus gemeinsam genutzten Geometrien/Materialien.
 // Ziehen mit dem Finger: eine Handvoll Teile (bzw. ein Stück) schwebt über dem Finger
@@ -9,19 +9,21 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { PKG } from './packages.js';
 import { makeBlobTexture, rng } from './setting/textures.js';
 import { TABLE_Y } from './setting/wall.js';
-import { flowerGeometry, roseGeometry, sprigGeometry, petalGeometry, bowGeometry } from './decoGeo.js';
+import { daisyGeometry, forgetMeNotGeometry, cherryGeometry, gerberaGeometry, hydrangeaGeometry, peonyGeometry, ranunculusGeometry, roseGeometry, bowGeometry } from './decoGeo.js';
 
 // in der Hand etwas größer (gut sichtbar unter dem Finger), beim Hineinfallen auf Normalgröße
 const HAND_BOOST = 2;
-const KINDS = ['pearl', 'metal', 'heart', 'flower', 'rose', 'sprig', 'petal'];
+const BLOOMS = ['daisy', 'forget', 'cherry', 'gerbera', 'hydrangea', 'peony', 'ranunculus', 'rose'];
+const KINDS = ['pearl', 'metal', 'heart', ...BLOOMS];
 const CAP = 260, HAND = 24;
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color(), _v = new THREE.Vector3();
 const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
 const kindOf = (look) => look.geo;
 // halbe Höhe je Form (bezogen auf die Skalierung): zum Auflegen auf die Seife und gegen Durchstechen des Deckels
-const HALF = { pearl: 1, metal: 1, heart: 0.2, flower: 0.12, rose: 0.5, sprig: 0.07, petal: 0.1 };
-const ON_SOAP = { sprig: 1, rose: 1 };   // lange/hohe Teile immer auf die Seife (nicht an die Wand)
+const HALF = { pearl: 1, metal: 1, heart: 0.2, daisy: 0.1, forget: 0.1, cherry: 0.12, gerbera: 0.1, hydrangea: 0.1, peony: 0.3, ranunculus: 0.32, rose: 0.5 };
+const ON_SOAP = { rose: 1, peony: 1, ranunculus: 1 };   // hohe Blüten immer auf die Seife (nicht an die Wand)
+const UPRIGHT = { daisy: 1, forget: 1, cherry: 1, gerbera: 1, hydrangea: 1, peony: 1, ranunculus: 1 };  // Blüte zeigt nach oben
 
 function heartShape(k = 1) {
   const s = new THREE.Shape();
@@ -54,10 +56,9 @@ export class Deco {
       pearl: new THREE.SphereGeometry(1, 20, 14),
       metal: new THREE.SphereGeometry(1, 16, 12),
       heart: new THREE.ExtrudeGeometry(heartShape(1), { depth: 0.35, bevelEnabled: true, bevelSize: 0.06, bevelThickness: 0.06, bevelSegments: 3 }).center().rotateX(-Math.PI / 2),
-      flower: flowerGeometry(),
+      daisy: daisyGeometry(), forget: forgetMeNotGeometry(), cherry: cherryGeometry(), gerbera: gerberaGeometry(),
+      hydrangea: hydrangeaGeometry(), peony: peonyGeometry(), ranunculus: ranunculusGeometry(),
       rose: roseGeometry(),
-      sprig: sprigGeometry(),
-      petal: petalGeometry(),
     };
     const veg = { vertexColors: true, side: THREE.DoubleSide };
     this.mat = {
@@ -66,11 +67,11 @@ export class Deco {
         iridescence: 1, iridescenceIOR: 1.6, iridescenceThicknessRange: [180, 520], sheen: 0.6, sheenRoughness: 0.35, sheenColor: 0xfff2f6, envMapIntensity: 1.6 }),
       metal: new THREE.MeshStandardMaterial({ roughness: 0.16, metalness: 1, envMapIntensity: 1.8 }),
       heart: new THREE.MeshPhysicalMaterial({ roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.15 }),
-      flower: new THREE.MeshStandardMaterial({ ...veg, roughness: 0.65 }),
       rose: new THREE.MeshStandardMaterial({ ...veg, roughness: 0.75 }),
-      sprig: new THREE.MeshStandardMaterial({ ...veg, roughness: 0.8 }),
-      petal: new THREE.MeshPhysicalMaterial({ ...veg, roughness: 0.45, sheen: 0.8, sheenRoughness: 0.4, sheenColor: 0xffffff }),
     };
+    // Blütenblätter: samtiger Schimmer (Sheen), eine geteilte Materialinstanz für alle Blüten
+    const petal = new THREE.MeshPhysicalMaterial({ ...veg, roughness: 0.55, sheen: 0.7, sheenRoughness: 0.45, sheenColor: 0xffffff, envMapIntensity: 0.7 });
+    for (const k of BLOOMS) if (!this.mat[k]) this.mat[k] = petal;
     // Inhalt (im Päckchen-Raum) und Hand (Welt-Raum)
     this.content = {}; this.hand = {};
     for (const k of KINDS) {
@@ -330,7 +331,7 @@ export class Deco {
       const n = Math.min(HAND, L.n), k = kindOf(L), r = this.r;
       this.handN = n;
       for (let i = 0; i < n; i++) {
-        const a = r() * 6.283, d = Math.sqrt(r()) * (L.geo === 'sprig' ? 0.1 : 0.085);
+        const a = r() * 6.283, d = Math.sqrt(r()) * 0.085;
         this.handOff[i].set(Math.cos(a) * d, (r() - 0.5) * 0.05, Math.sin(a) * d);
         this.handRot[i].set((r() - 0.5) * 1.2, r() * 6.283, (r() - 0.5) * 1.2);
         this.partScale(L, this.handScale[i]);
@@ -419,7 +420,8 @@ export class Deco {
         const o = this.handOff[i];
         this.from[i].set(this.handPos.x + o.x, this.handPos.y + o.y, this.handPos.z + o.z);
         this.restSpot(L, _v, this.handScale[i]);
-        _q.setFromEuler(_e.set((this.r() - 0.5) * 0.5, this.r() * 6.283, (this.r() - 0.5) * 0.5));
+        const tl = UPRIGHT[L.geo] ? 0.3 : 0.5;   // Blüten liegen mit dem Gesicht nach oben
+        _q.setFromEuler(_e.set((this.r() - 0.5) * tl, this.r() * 6.283, (this.r() - 0.5) * tl));
         this.toLocal[i].compose(_v, _q, this.handScale[i]);
         this.to[i].copy(_v).applyMatrix4(pk.content.matrix);
       }
@@ -532,7 +534,7 @@ export class Deco {
         const k = kindOf(L), n = Math.min(26, L.n * 2), m = new THREE.InstancedMesh(this.geo[k], this.mat[k], n);
         for (let i = 0; i < n; i++) {
           const a = r() * 6.283, d = Math.sqrt(r()) * 0.12;
-          this.partScale(L, _s); _s.multiplyScalar(L.geo === 'sprig' ? 1.0 : 1.4);
+          this.partScale(L, _s); _s.multiplyScalar(1.4);
           _q.setFromEuler(_e.set((r() - 0.5) * 0.6, r() * 6.3, (r() - 0.5) * 0.6));
           m.setMatrixAt(i, _m.compose(_p.set(Math.cos(a) * d, 0.02 + r() * 0.03, Math.sin(a) * d), _q, _s));
           m.setColorAt(i, _c.set(L.colors[i % L.colors.length]));

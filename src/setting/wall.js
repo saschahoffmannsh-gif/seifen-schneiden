@@ -11,7 +11,7 @@
 //  * keine Shadow-Maps, nur weiche Fake-Schatten (Verlaufs-Texturen)
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { flowerGeometry, roseGeometry, sprigGeometry } from '../decoGeo.js';
+import { daisyGeometry, cherryGeometry, peonyGeometry, gerberaGeometry, roseGeometry } from '../decoGeo.js';
 import { makeTileTextures, makeBoardTexture, makeShadeTexture, makeBlobTexture, rng } from './textures.js';
 
 export const WALL_Z = -1.75;          // Wand steht direkt hinter der Schale an der Tischkante
@@ -170,9 +170,12 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
   const tins = batch(cyl, new THREE.MeshStandardMaterial({ roughness: 0.32, metalness: 0.85, envMap: env, envMapIntensity: 1.1 }), { colors: true });
   const metalPearls = batch(new THREE.SphereGeometry(1, 12, 10), new THREE.MeshStandardMaterial({ roughness: 0.15, metalness: 1, envMap: env, envMapIntensity: 1.4 }), { colors: true });
   const vc = { vertexColors: true, side: THREE.DoubleSide };
-  const flowers = batch(flowerGeometry(), new THREE.MeshStandardMaterial({ ...vc, roughness: 0.65 }), { colors: true });
-  const roses = batch(roseGeometry(), new THREE.MeshStandardMaterial({ ...vc, roughness: 0.75 }), { colors: true });
-  const sprigs = batch(sprigGeometry(), new THREE.MeshStandardMaterial({ ...vc, roughness: 0.8 }), { colors: true });
+  const petalMat = new THREE.MeshStandardMaterial({ ...vc, roughness: 0.6, envMap: env, envMapIntensity: 0.5 });
+  const daisies = batch(daisyGeometry(), petalMat, { colors: true });
+  const cherries = batch(cherryGeometry(), petalMat, { colors: true });
+  const peonies = batch(peonyGeometry(), petalMat, { colors: true });
+  const gerberas = batch(gerberaGeometry(), petalMat, { colors: true });
+  const roses = batch(roseGeometry(), new THREE.MeshStandardMaterial({ ...vc, roughness: 0.75, envMap: env, envMapIntensity: 0.4 }), { colors: true });
 
   /** Schälchen (Keramik) mit Perlmutt-, Gold- und Silberperlen. */
   function dish(x, y) {
@@ -186,15 +189,15 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
     }
     shelfBlobs.add(x, y + 0.002, zMid, R * 3, R * 3, 1, -Math.PI / 2, 0, 0);
   }
-  /** Blüten: Margeriten, getrocknete Rosen und Lavendelzweige liegen locker auf dem Brett. */
+  /** Blüten: lose, echte Blütenköpfe (Pfingstrose, Margeriten, Kirschblüten, Gerbera, Rosen) auf dem Brett. */
   function blossoms(x, y) {
-    sprigs.add(x - 0.02, y + 0.014, zMid - 0.06, 0.4, 0.4, 0.4, 0, 0.3, 0.05, '#ffffff');
-    sprigs.add(x + 0.01, y + 0.024, zMid - 0.03, 0.36, 0.36, 0.36, 0.3, 0.05, 0.05, '#ffffff');
-    flowers.add(x - 0.12, y + 0.04, zMid + 0.05, 0.17, 0.17, 0.17, 0.45, 0.4, 0, '#ffffff');
-    flowers.add(x + 0.13, y + 0.035, zMid + 0.07, 0.14, 0.14, 0.14, 0.35, 1.2, 0.1, '#a9c8f6');
-    roses.add(x + 0.01, y + 0.05, zMid + 0.09, 0.1, 0.1, 0.1, 1.25, 0.3, 0, '#c45a6e');
-    roses.add(x + 0.15, y + 0.045, zMid - 0.04, 0.09, 0.09, 0.09, 0.2, 0.3, 0, '#f1dcc4');
-    shelfBlobs.add(x, y + 0.002, zMid, 0.5, 0.36, 1, -Math.PI / 2, 0, 0);
+    peonies.add(x - 0.02, y + 0.045, zMid - 0.03, 0.2, 0.2, 0.2, 0.25, 0.4, 0.05, '#ffffff');
+    daisies.add(x - 0.15, y + 0.02, zMid + 0.06, 0.17, 0.17, 0.17, 0.35, 0.4, 0, '#ffffff');
+    cherries.add(x + 0.12, y + 0.02, zMid + 0.08, 0.14, 0.14, 0.14, 0.3, 1.2, 0.1, '#ffffff');
+    gerberas.add(x + 0.16, y + 0.025, zMid - 0.06, 0.16, 0.16, 0.16, 0.45, 2.2, -0.15, '#ffffff');
+    roses.add(x + 0.03, y + 0.05, zMid + 0.1, 0.095, 0.095, 0.095, 1.25, 0.3, 0, '#c45a6e');
+    roses.add(x - 0.13, y + 0.045, zMid - 0.07, 0.085, 0.085, 0.085, 0.2, 0.3, 0, '#f1dcc4');
+    shelfBlobs.add(x, y + 0.002, zMid, 0.52, 0.38, 1, -Math.PI / 2, 0, 0);
   }
   /** Rolle Schleifenband (Achse zur Kamera) mit kurzem Ende. */
   function ribbon(x, y, color) {
@@ -272,6 +275,6 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
     else ribbon(x, deco.y, RIBBONS[(k / 3 | 0) % RIBBONS.length]);
   }
 
-  for (const b of [shades, blobs, brackets, fillings, corks, tins, leaves, dishes, pearls, metalPearls, flowers, roses, sprigs, blocks]) b.build(group);
+  for (const b of [shades, blobs, brackets, fillings, corks, tins, leaves, dishes, pearls, metalPearls, daisies, cherries, peonies, gerberas, roses, blocks]) b.build(group);
   return group;
 }
