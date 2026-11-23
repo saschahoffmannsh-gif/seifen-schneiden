@@ -188,7 +188,7 @@ export function createUI() {
         + order.mix.map((m) => {
           const st = stock(m.soap.id), need = m.pct / 10, low = st != null && st < need;
           return `<div class="note-row"><i class="sw" style="background:${soapCss(m.soap)}"></i><span class="nr-name">${rich(m.soap.name)}</span><b>${m.pct} %</b>`
-            + (st != null ? `<small class="${low ? 'low' : ''}">${low ? 'nur ' : ''}${st} auf Vorrat</small>` : '') + '</div>';
+            + (st != null ? `<small class="${low ? 'low' : ''}">Vorrat ${st}</small>` : '') + '</div>';
         }).join('')
         + (order.additive ? `<div class="note-row add">${ICON.drop}mit ${rich(order.additive.name)}</div>` : '') + '</div>';
       $('note-reward').innerHTML = `<span class="reward-chip">Belohnung bis ${ICON.coin}<b>${Math.round(order.reward * 1.25)}</b></span>`;
