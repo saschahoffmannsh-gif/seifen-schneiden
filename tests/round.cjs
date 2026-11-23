@@ -9,7 +9,12 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   const p = await b.newPage({ viewport: { width: VW, height: VH }, deviceScaleFactor: 2 });
   const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
   await p.goto(url + '?fps=1');
-  await p.waitForTimeout(1500);
+  await p.waitForTimeout(2500);
+  // Startbildschirm: sichtbar, Spielen-Button, dann ins Spiel
+  console.log('start screen ->', await p.evaluate(() => document.getElementById('start').classList.contains('open')), await p.textContent('#start-play'));
+  await p.screenshot({ path: out + '/0-start.png' });
+  await p.click('#start-play'); await p.waitForTimeout(800);
+  console.log('start hidden ->', await p.evaluate(() => !document.getElementById('start').classList.contains('open')));
   await p.screenshot({ path: out + '/1-regal.png' });
   // Mitten auf den Tisch tippen darf nichts auswählen
   await p.mouse.click(VW / 2, VH * 0.8); await p.waitForTimeout(300);
