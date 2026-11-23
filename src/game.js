@@ -290,10 +290,10 @@ export class Game {
     else if (missing.length) {
       const m = this.order.mix.find((x) => x.soap === missing[0]);
       this.ui.hint(`Tippe auf ${m.soap.emoji} ${m.soap.name}: ${m.pct} % = ${m.pct / PCT_PER_SLICE} Scheiben`);
-    } else this.ui.hint(this.order.additive && !this.additives.includes(this.order.additive) ? `Passt! Noch ${this.order.additive.emoji} ${this.order.additive.name} dazu` : 'Mischung passt! Ab in den Ofen');
+    } else this.ui.hint(this.order.additive && !this.additives.includes(this.order.additive) ? `Passt! Noch ${this.order.additive.emoji} ${this.order.additive.name} dazu` : 'Mischung passt! Jetzt schmelzen');
     const acts = [];
     if (this.stocked) acts.push({ label: '✨ Zusätze', onClick: () => this.openAdditives() });
-    if (this.loose.used > 0) acts.push({ label: '🔥 In den Ofen', alt: true, onClick: () => this.toOven() });
+    if (this.loose.used > 0) acts.push({ label: '🔥 Schmelzen', alt: true, onClick: () => this.toOven() });
     this.ui.actions(acts);
   }
 
@@ -389,7 +389,7 @@ export class Game {
     const need = this.order && this.order.additive;
     if (need && !this.additives.includes(need) && !this.warnedAdd && this.state === 'shelf') {
       this.warnedAdd = true;
-      this.ui.hint(`${this.order.customer} wünscht sich ${need.name} – oder einfach nochmal „In den Ofen“`);
+      this.ui.hint(`${this.order.customer} wünscht sich ${need.name} – oder einfach nochmal „Schmelzen“`);
       this.openAdditives();
       return;
     }
@@ -399,7 +399,7 @@ export class Game {
     this.ovenT = 0;
     this.ui.actions([]);
     this.ui.showOven(true);
-    this.ui.hint('Die Seife schmilzt im Ofen …');
+    this.ui.hint('Die Seife schmilzt …');
     // Marmor aus den Anteilen der Würfel in der Schale
     const parts = [];
     const counts = this.loose.typeCounts;

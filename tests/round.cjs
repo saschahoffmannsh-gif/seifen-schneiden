@@ -115,8 +115,8 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await p.locator('#actions button', { hasText: 'Zusätze' }).click(); await p.waitForTimeout(900);
   await addCard('Lavendelöl').scrollIntoViewIfNeeded(); await addCard('Lavendelöl').click(); await p.waitForTimeout(500);
   console.log('additives', await p.evaluate(() => window.__game.additives.map((a) => a.id)), 'coins', await p.evaluate(() => window.__game.coins));
-  await p.locator('#actions button', { hasText: 'Ofen' }).click(); await p.waitForTimeout(400);
-  if (await g() === 'addSheet') { await p.click('#pkg-close'); await p.waitForTimeout(300); await p.locator('#actions button', { hasText: 'Ofen' }).click(); }
+  await p.locator('#actions button', { hasText: 'Schmelzen' }).click(); await p.waitForTimeout(400);
+  if (await g() === 'addSheet') { await p.click('#pkg-close'); await p.waitForTimeout(300); await p.locator('#actions button', { hasText: 'Schmelzen' }).click(); }
   for (let k = 0; k < 150 && (await g()) !== 'reveal'; k++) await p.waitForTimeout(1000);
   console.log('state', await g());
   await p.click('#actions button'); await p.waitForTimeout(1500);

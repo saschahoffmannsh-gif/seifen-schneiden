@@ -1,4 +1,4 @@
-// Hochwertige Zusätze für die Seifenmasse: kommen vor dem Ofen in die Schale.
+// Hochwertige Zusätze für die Seifenmasse: kommen vor dem Schmelzen in die Schale.
 // Wirkung auf die fertige Seife: Glanz (sheen), Sprenkel in der Textur (specks), Tönung (tint),
 // eingebettete Perlen bzw. Goldflocken (instanzierte Teilchen auf der Oberfläche).
 // Freischalten mit Münzen wie Päckchen/Deko (Spielstand-Präfix 'add:').
