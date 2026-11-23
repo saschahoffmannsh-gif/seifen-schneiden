@@ -215,13 +215,14 @@ export class Game {
     const c = document.createElement('canvas'); c.width = c.height = 120;
     const g = c.getContext('2d'); g.fillStyle = `rgb(${soap.base.map((v) => Math.round(v * 255)).join(',')})`;
     g.beginPath(); g.roundRect(20, 30, 80, 60, 14); g.fill(); g.fillStyle = 'rgba(255,255,255,.45)'; g.beginPath(); g.roundRect(28, 38, 64, 10, 5); g.fill();
-    this.ui.openUnlock({ thumb: c.toDataURL(), name: `${soap.emoji} ${soap.name} – neues Stück`, cost: BAR_PRICE, bonus: 0 }, this.coins, () => {
-      if (this.coins < BAR_PRICE) return false;
-      this.coins -= BAR_PRICE; save.coins = this.coins; this.ui.setCoins(this.coins, true);
+    // nie festsitzen: wer kein Geld hat, bekommt das Stück geschenkt
+    const cost = this.coins >= BAR_PRICE ? BAR_PRICE : 0;
+    this.ui.openUnlock({ thumb: c.toDataURL(), name: `${soap.emoji} ${soap.name} – neues Stück`, cost, bonus: 0 }, this.coins, () => {
+      this.coins -= cost; save.coins = this.coins; this.ui.setCoins(this.coins, true);
       save.setStock(soap.id, S + BAR_SLICES);
       if (after) after();
       return true;
-    }, { line: `+${BAR_SLICES} Scheiben (Vorrat jetzt ${S}▮)`, verb: 'Kaufen' });
+    }, { line: `+${BAR_SLICES} Scheiben (Vorrat jetzt ${S}▮)` + (cost ? '' : ' – geschenkt!'), verb: cost ? 'Kaufen' : 'Mitnehmen' });
   }
 
   /** Vollbild-Schrank: alle Seifen der Bestellung in den Schubladen finden. */
@@ -357,7 +358,7 @@ export class Game {
     if (this.state !== 'shelf') return;
     this.state = 'addSheet';
     const need = this.order && this.order.additive;
-    const items = ADDITIVES.map((a) => ({
+    const items = ADDITIVES.slice().sort((a, b) => ADD_CATS.indexOf(a.cat) - ADD_CATS.indexOf(b.cat)).map((a) => ({
       id: a.id, name: a.name, cat: a.cat, thumb: additiveThumb(a), unlocked: a.unlocked, cost: a.cost, bonus: a.bonus,
       sub: (this.additives.includes(a) ? '✔ drin' : `+${a.bonus} 🪙`) + (need === a ? ' · gewünscht' : ''),
       disabled: !this.additives.includes(a) && this.additives.length >= MAX_ADDITIVES ? `Höchstens ${MAX_ADDITIVES} Zusätze` : null,
@@ -533,6 +534,7 @@ export class Game {
   sell() {
     if (this.state !== 'unmolded') return;
     this.ui.showQuality(null);
+    if (this.quality) this.ui.setMixSummary(this.quality);
     this.state = 'toTable';
     document.body.classList.add('table-mode');
     this.ui.actions([]);
@@ -854,6 +856,7 @@ export class Game {
       const earned = this.price + (this.pkgType ? this.pkgType.bonus : 0) + this.deco.bonus;
       this.lastEarned = earned;
       this.deco.reset(); this.ui.setDeco(0);
+      this.additives = []; this.quality = null;
       this.coins += earned; save.coins = this.coins;
       this.ui.setCoins(this.coins, true);
       sndCoin(); haptic(20);

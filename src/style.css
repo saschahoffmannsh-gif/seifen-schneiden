@@ -36,7 +36,7 @@ body.landscape #order { left: 12px; transform: none; top: auto; bottom: calc(env
 
 /* Hinweis: kleine Pille unter dem Bestell-Zettel (oben bleibt das Päckchen-Brett frei) */
 #hint {
-  position: fixed; left: 0; right: 0; top: calc(var(--bowl-bottom, 70vh) + 64px + var(--ui-shift, 0px)); text-align: center; color: #6b4436;
+  position: fixed; left: 0; right: 0; top: calc(var(--bowl-bottom, 70vh) + 14px + var(--order-h, 50px) + var(--ui-shift, 0px)); text-align: center; color: #6b4436;
   font-weight: 700; font-size: 16px; pointer-events: none;
   text-shadow: 0 1px 0 rgba(255,255,255,.6);
 }
@@ -312,7 +312,7 @@ body.table-mode { --ui-shift: 48px; }
 #unlock-buy:disabled { background: #cdbba5; color: #6d5848; box-shadow: none; }
 
 /* ---------- Mischung (im Bestell-Zettel) ---------- */
-#order-progress .mx { display: grid; grid-template-columns: 92px 1fr 52px; align-items: center; gap: 6px; font-size: 12px; margin: 2px 0; white-space: nowrap; text-align: left; }
+#order-progress .mx { display: grid; grid-template-columns: 88px 1fr 50px; align-items: center; gap: 6px; font-size: 12px; margin: 1px 0; line-height: 15px; white-space: nowrap; text-align: left; }
 #order-progress .mx-n { overflow: hidden; text-overflow: ellipsis; }
 #order-progress .mx-n small.stk-n { font-size: 9px; opacity: .6; margin-left: 3px; }
 #order-progress .mx-bar { position: relative; height: 10px; border-radius: 5px; background: #efe3d3; box-shadow: inset 0 1px 2px rgba(0,0,0,.15); min-width: 90px; }
@@ -355,3 +355,7 @@ body.table-mode #order-progress .mx { font-size: 11px; }
 #q-title { font: bold 18px Georgia, serif; margin: 2px 0 6px; }
 .q-row { display: flex; justify-content: space-between; gap: 14px; font-size: 13px; font-weight: 700; }
 .q-row b.good { color: #2e9b5f; } .q-row b.bad { color: #c0392b; }
+#order-progress .mx-sum { font-size: 14px; font-weight: 800; color: #8a5a00; }
+#order-progress .mx-sum { letter-spacing: .3px; }
+.note-row { white-space: nowrap; }
+.note-pie { width: 64px; height: 64px; }

@@ -19,7 +19,7 @@ export function createUI() {
     setOrder(order) {
       $('order').classList.toggle('hidden', !order);
       this._mixKey = '';
-      if (!order) return;
+      if (!order) { this.layoutOrder(); return; }
       el.orderText.textContent = `${order.customer} möchte:` + (order.additive ? ` mit ${order.additive.name}` : '');
       this.setMix(order, null, 0, []);
     },
@@ -39,13 +39,25 @@ export function createUI() {
         return `<div class="mx${cls}${near}"><span class="mx-n">${label}</span><span class="mx-bar"><i style="width:${w}%;background:${col}"></i><b style="left:${t}%"></b></span>`
           + `<span class="mx-v">${Math.round(val)}<small>/${target} %</small></span></div>`;
       };
-      let h = order.mix.map((m) => row(`${m.soap.emoji} ${m.soap.name}` + (stockOf ? `<small class="stk-n">${stockOf(m.soap.id)}▮</small>` : ''), soapCss(m.soap), pcts ? pcts[m.soap.id] || 0 : 0, m.pct, 100)).join('');
+      let h = order.mix.map((m) => row(`${m.soap.emoji} ${m.soap.name}`, soapCss(m.soap), pcts ? pcts[m.soap.id] || 0 : 0, m.pct, 100)).join('');
       h += row('🫙 Form', '#c9a27a', fill, 100, 125, ' total');
       if (adds.length || order.additive) {
         const need = order.additive;
         h += `<div class="mx-add">${need ? (adds.includes(need) ? '✔ ' : '○ ') + need.emoji + ' ' + need.name : ''}${adds.filter((a) => a !== need).map((a) => ` · ${a.emoji} ${a.name}`).join('')}</div>`;
       }
       el.orderProgress.innerHTML = h;
+      this.layoutOrder();
+    },
+    /** Hinweis-Zeile rutscht unter den (unterschiedlich hohen) Bestell-Zettel. */
+    layoutOrder() {
+      const o = $('order');
+      document.documentElement.style.setProperty('--order-h', o.classList.contains('hidden') ? '50px' : `${o.offsetHeight}px`);
+    },
+    /** Nach dem Ausformen: statt der Balken nur noch eine Zeile mit dem Ergebnis. */
+    setMixSummary(q) {
+      el.orderProgress.innerHTML = `<div class="mx-sum">${'★'.repeat(q.stars)}${'☆'.repeat(3 - q.stars)} Mischung ${q.accuracy} % genau</div>`;
+      this._mixKey = '';
+      this.layoutOrder();
     },
     setCoins(n, bump) {
       el.coins.textContent = n;
@@ -149,7 +161,7 @@ export function createUI() {
       $('unlock-have').textContent = `Du hast ${coins} 🪙`;
       const enough = coins >= it.cost;
       btn.disabled = !enough;
-      btn.textContent = enough ? `${o.verb || 'Freischalten'} für ${it.cost} 🪙` : `Zu wenig Münzen (${it.cost} 🪙)`;
+      btn.textContent = !it.cost ? (o.verb || 'Nehmen') : enough ? `${o.verb || 'Freischalten'} für ${it.cost} 🪙` : `Zu wenig Münzen (${it.cost} 🪙)`;
       const close = () => { root.classList.remove('open'); btn.onclick = null; root.onclick = null; };
       btn.onclick = () => { if (buy()) { sndOk(); close(); } };
       $('unlock-close').onclick = close;
