@@ -46,9 +46,10 @@ export class SoapBlock {
     this.soap = soap;
     this.released.fill(0);
     this.releasedCount = 0;
-    // minimal überlappend: außen eine geschlossene, glatte Seifenoberfläche ohne Pixel-Ritzen;
-    // die feinen Fugen zeichnet der Shader nur auf Schnitt-/Innenflächen
-    const s = CUBE * 1.015;
+    // exakt Kantenlänge 1 (keine Überlappung -> kein Z-Fighting doppelter Außenflächen); der Shader
+    // rastet die Ecken auf das Würfelraster ein, damit die Außenhaut wasserdicht ist.
+    // Die feinen Fugen zeichnet der Shader nur auf Schnitt-/Innenflächen.
+    const s = CUBE;
     for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
       const n = this.index(i, j, k);
       _m.makeScale(s, s, s).setPosition(this.cubeX(i), this.cubeY(j), this.cubeZ(k));
