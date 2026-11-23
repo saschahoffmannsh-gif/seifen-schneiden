@@ -11,7 +11,7 @@ import { makeBlobTexture, rng } from './setting/textures.js';
 import { TABLE_Y } from './setting/wall.js';
 
 // in der Hand etwas größer (gut sichtbar unter dem Finger), beim Hineinfallen auf Normalgröße
-const HAND_BOOST = 1.5;
+const HAND_BOOST = 2;
 const KINDS = ['sphere', 'metal', 'flat', 'strand', 'heart'];
 const CAP = 260, HAND = 24;
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
@@ -142,7 +142,7 @@ export class Deco {
   // ---------- Deckel-Deko bauen ----------
   lidMat(key, make) { if (!this.lidMats.has(key)) this.lidMats.set(key, make()); return this.lidMats.get(key); }
 
-  buildLidItem(item, foot, lidTop) {
+  buildLidItem(item, foot, lidTop, heart = false) {
     const L = item.look, g = new THREE.Group(), box = this.lidMat('boxGeo', () => new THREE.BoxGeometry(1, 1, 1));
     const add = (geo, mat, x, y, z, sx, sy, sz, rx = 0, ry = 0, rz = 0) => {
       const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.set(rx, ry, rz); g.add(m); return m;
@@ -158,12 +158,15 @@ export class Deco {
         t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 6); return t;
       }) : null;
       const mat = this.lidMat('rib' + item.id, () => new THREE.MeshStandardMaterial({ color: L.color, roughness: L.rough, metalness: L.metal || 0, map: tex, alphaTest: L.tex === 'lace' ? 0.5 : 0, side: THREE.DoubleSide }));
-      const lx = foot[0] + 2 * PKG.lidPad + 0.012, lz = foot[1] + 2 * PKG.lidPad + 0.012, y = lidTop + 0.004;
-      add(box, mat, 0, y, 0, lx, 0.008, L.w);
-      add(box, mat, 0, y + 0.001, 0, L.w, 0.008, lz);
+      // Herz: Quer-Band durch die beiden Bögen, Längs-Band von der Kerbe bis zur Spitze (nicht über den Rand hinaus)
+      let lx = foot[0] + 2 * PKG.lidPad + 0.012, lz = foot[1] + 2 * PKG.lidPad + 0.012, zx = 0, zc = 0;
+      if (heart) { lx *= 0.9; zx = -lz * 0.17; zc = lz * 0.09; lz *= 0.8; }
+      const y = lidTop + 0.004;
+      add(box, mat, 0, y, zx, lx, 0.008, L.w);
+      add(box, mat, 0, y + 0.001, zc, L.w, 0.008, lz);
       for (const s of [-1, 1]) {
-        add(box, mat, s * lx / 2, y - PKG.lidH / 2, 0, 0.006, PKG.lidH, L.w);
-        add(box, mat, 0, y - PKG.lidH / 2, s * lz / 2, L.w, PKG.lidH, 0.006);
+        add(box, mat, s * lx / 2, y - PKG.lidH / 2, zx, 0.006, PKG.lidH, L.w);
+        add(box, mat, 0, y - PKG.lidH / 2, zc + s * lz / 2, L.w, PKG.lidH, 0.006);
       }
       const bow = new THREE.Mesh(this.packages.bowGeo, mat);
       const k = L.w < 0.04 ? 0.8 : 1.25;
@@ -239,10 +242,11 @@ export class Deco {
 
   /** Platz der Deckel-Deko je Gruppe (Deckel-Koordinaten). */
   lidSlot(group, foot, out) {
-    const hz = foot[1] / 2 + PKG.lidPad;
+    const hz = foot[1] / 2 + PKG.lidPad, shape = this.packages.types[this.packages.active].shape;
     if (group === 'baender') return out.set(0, 0, 0);
-    if (group === 'siegel') return this.lidItems.baender ? out.set(0, 0.03, 0) : out.set(-0.24, 0, 0.12);
-    if (group === 'anhaenger') return this.handItem?.look.type === 'card' ? out.set(0.22, 0, 0.12) : out.set(0.3, 0, hz - 0.02);
+    // Siegel/Sticker neben die Schleife (auf dem Knoten wäre es verdeckt)
+    if (group === 'siegel') return shape === 'heart' ? out.set(-0.27, 0, -0.02) : out.set(-0.24, 0, 0.12);
+    if (group === 'anhaenger') return this.handItem?.look.type === 'card' || shape === 'heart' ? out.set(0.22, 0, 0.12) : out.set(0.3, 0, hz - 0.02);
     return out.set(0.24, 0, -0.13);
   }
 
@@ -268,7 +272,7 @@ export class Deco {
       this.hand[k].instanceColor.needsUpdate = true;
     } else {
       const pk = this.packages, i = pk.active;
-      this.handObj = this.buildLidItem(item, pk.footprint(i), pk.lidTop(i));
+      this.handObj = this.buildLidItem(item, pk.footprint(i), pk.lidTop(i), pk.types[i].shape === 'heart');
       this.scene.add(this.handObj);
     }
     this.shadow.visible = true;

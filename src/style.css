@@ -23,7 +23,7 @@ html, body {
 #order-text { font-weight: 700; font-size: 13px; opacity: .8; }
 #order-progress { font-size: 14px; font-weight: 700; margin-top: 1px; white-space: nowrap; }
 #order-progress span { margin: 0 4px; }
-#order-deco { font-size: 13px; font-weight: 800; color: #a86a12; margin-top: 2px; }
+#order-deco { position: absolute; top: -12px; right: -10px; font-size: 13px; font-weight: 800; color: #6b3f06; background: #ffd76a; border-radius: 12px; padding: 3px 8px; transform: rotate(6deg); box-shadow: 0 2px 6px rgba(0,0,0,.2); white-space: nowrap; pointer-events: none; }
 #order-deco.hidden { display: none; }
 /* Querformat: unter der Schale ist kein Platz -> Zettel unten links neben die Schale */
 body.landscape #order { left: 12px; transform: none; top: auto; bottom: calc(env(safe-area-inset-bottom) + 12px); }
