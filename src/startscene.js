@@ -183,7 +183,7 @@ export function createStartScene(canvas) {
   for (const [x, y, z, r] of BUB) { const m = new THREE.Mesh(bubGeo, bubMat); m.scale.setScalar(r); m.position.set(x, y, z); m.userData = { x, y, z, r, s: 0.06 + Math.random() * 0.05, p: Math.random() * 6 }; world.add(m); bubbles.push(m); }
 
   // Größe / Bildausschnitt: Komposition passt in die Breite und sitzt zwischen Wortmarke und Menü
-  let W = 0, H = 0;
+  let W = 0, H = 0, cy = 0.5, band = 1;
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight;
     if (!w || !h || (w === W && h === H)) return;
@@ -191,10 +191,9 @@ export function createStartScene(canvas) {
     renderer.setSize(w, h, false);
     camera.aspect = w / h; camera.updateProjectionMatrix();
     const visH = 2 * camera.position.z * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), visW = visH * camera.aspect;
-    const s = Math.min(1.1, visW / 3.3, visH / 4.6);
+    // Platz zwischen Wortmarke und Menü (vom Menü gemessen, Anteil der Höhe)
+    const s = Math.min(1.1, visW / 3.3, visH / 4.6, (band * visH) / 2.35);
     world.scale.setScalar(s);
-    // Mitte der Komposition bei ~50 % der Höhe (CSS-Variable --st-soap-y überschreibt)
-    const cy = parseFloat(getComputedStyle(canvas).getPropertyValue('--st-soap-y')) || 0.5;
     world.position.y = (0.5 - cy) * visH;
   }
 
@@ -234,5 +233,7 @@ export function createStartScene(canvas) {
   return {
     start() { if (running) return; running = true; W = H = 0; raf = requestAnimationFrame(frame); },
     stop() { running = false; cancelAnimationFrame(raf); },
+    /** Mitte (0..1 der Höhe) und verfügbare Höhe (Anteil) für die Seifen setzen. */
+    layout(centerY, bandH) { cy = centerY; band = bandH; W = H = 0; },
   };
 }

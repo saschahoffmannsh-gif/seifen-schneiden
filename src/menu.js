@@ -38,12 +38,22 @@ export function createMenu({ getCoins }) {
       p.innerHTML = `<span class="chip">${ICON.coin}<b>${getCoins()}</b></span><span class="chip-sep"></span><span class="chip">${ICON.sparkle}<b>${n}</b>&nbsp;freigeschaltet</span>`;
       p.style.display = '';
     } else p.style.display = 'none';
+    placeSoaps();
   }
+  // 3D-Seifen mittig in den freien Raum zwischen Wortmarke und Menü setzen
+  function placeSoaps() {
+    const lg = start.querySelector('.tagline').getBoundingClientRect(), mn = start.querySelector('.st-menu > :not([style*="none"])').getBoundingClientRect();
+    const h = window.innerHeight || 1;
+    if (!lg.height || !mn.height) return;
+    scene3d.layout(((lg.bottom + mn.top) / 2) / h, Math.max(0.12, (mn.top - lg.bottom) / h));
+  }
+  window.addEventListener('resize', () => { if (start.classList.contains('open')) placeSoaps(); });
 
   function show() {
     refreshStart();
     document.body.classList.add('menu-open');
     start.classList.remove('gone');
+    placeSoaps();
     clearTimeout(stopT); scene3d.start();
     requestAnimationFrame(() => { start.classList.add('open'); openedAt = performance.now(); });
   }
