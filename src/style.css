@@ -198,6 +198,7 @@ body.has-actions #hint:not(:empty) { padding: 4px 12px 5px; font-size: 13px; }
 body.table-mode.has-actions:not(.landscape) { --ui-shift: 26px; }
 @media (max-width: 380px) { body.table-mode.has-actions:not(.landscape) { --ui-shift: 12px; } }
 body.table-mode.has-actions #hint:not(:empty) { max-width: 96vw; font-size: 12.5px; }
+body.has-actions:has(#quality.show) #order-progress .mx-add { display: none; } /* steht schon auf der Qualitätskarte */
 body.has-actions #actions .btn { min-height: 50px; padding-top: 10px; padding-bottom: 12px; }
 body.landscape #hint { top: auto; bottom: calc(env(safe-area-inset-bottom) + 14px); }
 body.landscape #hint:not(:empty) { left: auto; right: 12px; transform: none; max-width: 34vw; }
