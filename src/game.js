@@ -473,11 +473,14 @@ export class Game {
     const items = SOAP_SHAPES.map((s) => ({ id: s.id, name: s.name, cat: 'Seifenformen', thumb: shapeIconURL(s.id), unlocked: s.unlocked, cost: s.cost, bonus: s.bonus,
       sub: s === want ? '✔ gewünscht' : (s.bonus ? `+${s.bonus} 🪙` : 'Standard'), shape: s }));
     this.ui.openSheet(items, {
-      title: want ? `Seifenform – gewünscht: ${want.name}` : 'Seifenform', cats: ['Seifenformen'], startCat: 'Seifenformen', coins: () => this.coins,
+      title: 'Seifenform wählen', cats: ['Seifenformen'], startCat: 'Seifenformen', coins: () => this.coins,
       onBuy: (x) => this.buy(x.cost, 'shape:' + x.id, () => { x.shape.unlocked = true; }),
       onSelect: (x) => { this.state = 'reveal'; this.unmold(x.shape); },
       onClose: () => { if (this.state === 'shapeSheet') this.state = 'reveal'; },
     });
+    // gewünschte Form gleich sichtbar machen
+    const k = SOAP_SHAPES.indexOf(want);
+    if (k > 1) requestAnimationFrame(() => { const c = document.querySelectorAll('#pkg-list .pkg-card')[k]; if (c) c.scrollIntoView({ inline: 'center', block: 'nearest' }); });
   }
 
   unmold(shape = (this.order && this.order.shape) || DEFAULT_SHAPE) {
