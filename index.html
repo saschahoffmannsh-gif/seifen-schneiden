@@ -21,27 +21,10 @@
     <div id="coins" class="pill"><i class="coin big" aria-hidden="true"></i><span id="coin-count">0</span></div>
   </div>
 
-  <!-- Bestell-Zettel: schmal, unter der Schale (Position per JS: --bowl-bottom) -->
-  <div id="order" class="ticket">
-    <div id="order-text">…</div>
-    <div id="order-progress"></div>
-    <div id="order-deco" class="hidden"></div>
-  </div>
-
   <!-- Schneide-Fortschritt der aktuellen Seife -->
   <div id="cut-progress" class="hidden">
     <div id="cut-label">0 % geschnitten</div>
     <div class="bar"><div id="cut-bar"></div></div>
-  </div>
-
-  <!-- Hinweistext / Statuszeile -->
-  <div id="hint"></div>
-
-  <!-- Ofen-Fortschritt -->
-  <div id="oven" class="panel hidden">
-    <div class="panel-title">Im Schmelztopf</div>
-    <div class="panel-sub">Die Seife wird langsam flüssig</div>
-    <div class="bar"><div id="oven-bar"></div></div>
   </div>
 
   <!-- Päckchen-Auswahl (öffnet sich beim Antippen eines Päckchens im Regal) -->
@@ -105,8 +88,25 @@
     </div>
   </div>
 
-  <!-- Aktions-Knöpfe -->
-  <div id="actions"></div>
+  <!-- Untere Zone (Hochformat): Zettel, Ofen, Hinweis und Knöpfe als eine Spalte von unten,
+       damit sich nie etwas überlappt. Im Querformat liegen die Teile frei (display: contents). -->
+  <div id="dock">
+    <!-- Bestell-Zettel -->
+    <div id="order" class="ticket">
+      <div id="order-text">…</div>
+      <div id="order-progress"></div>
+      <div id="order-deco" class="hidden"></div>
+    </div>
+    <!-- Ofen-Fortschritt -->
+    <div id="oven" class="panel hidden">
+      <div class="panel-title">Im Schmelztopf</div>
+      <div class="panel-sub">Die Seife wird langsam flüssig</div>
+      <div class="bar"><div id="oven-bar"></div></div>
+    </div>
+    <!-- Hinweistext / Statuszeile -->
+    <div id="hint"></div>
+    <div id="actions"></div>
+  </div>
 
   <!-- schwebende Texte ("So satisfying!") -->
   <div id="popups"></div>

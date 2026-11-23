@@ -273,6 +273,21 @@ body.oven-open #actions { bottom: calc(var(--sa-bottom) + 110px); }
 #actions .btn:nth-child(2) { animation-delay: .07s; }
 @keyframes btnIn { from { transform: translateY(16px); opacity: 0; } }
 
+/* ---------- Untere Zone (Hochformat): eine Spalte von unten, nichts überlappt ---------- */
+#dock {
+  position: fixed; left: 0; right: 0; bottom: calc(var(--sa-bottom) + 12px); z-index: 7; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 12px;
+}
+body.landscape #dock { display: contents; }
+body:not(.landscape) #dock > * { position: relative; top: auto; bottom: auto; left: auto; right: auto; transform: none; margin: 0; flex: none; }
+body:not(.landscape) #dock > #hint:empty, body:not(.landscape) #dock > #oven.hidden, body:not(.landscape) #dock > #actions:empty { display: none; }
+body:not(.landscape) #dock > #hint:not(:empty) { animation: hintInDock .45s var(--ease); }
+@keyframes hintInDock { from { opacity: 0; transform: translateY(5px); } }
+body:not(.landscape) #dock > #actions { width: 100%; padding: 0; }
+body:not(.landscape) #dock > #oven { width: 100%; max-width: 420px; }
+/* Präsentation: die Ergebniskarte zeigt die Mischung schon -> Zettel ausblenden */
+body:has(#quality.show) #order { display: none; }
+
 /* ---------- schwebende Texte ---------- */
 #popups { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 9; }
 .popup {
