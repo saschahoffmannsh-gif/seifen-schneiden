@@ -6,7 +6,7 @@
 //  * Alle Würfel-Ecken werden auf die Form eines abgerundeten Seifenstücks projiziert
 //    -> die Silhouette ist rund wie ein echtes Stück Seife.
 //  * Außenflächen bekommen glatte Normalen (wirkt wie eine durchgehende Seifenoberfläche).
-//  * Innen-/Schnittflächen behalten flache Würfel-Normalen, ohne Fugen (kein sichtbares Raster).
+//  * Innen-/Schnittflächen behalten flache Würfel-Normalen; Würfelkanten nur ganz leicht abgedunkelt.
 //  * Alle Ecken rasten auf das Halbwürfel-Raster ein und werden direkt in Weltkoordinaten
 //    projiziert -> wasserdichte Haut ohne Ritzen; Würfel exakt Kantenlänge 1 (kein Z-Fighting).
 //  * Vorderseite: leicht gewölbt ("Kissen"-Form, echte Geometrie) und mit eingepresster
@@ -91,8 +91,11 @@ export function createBlockMaterial() {
         if (vFront > 0.5) rel = texture2D(uRelief, vFaceUv);
         // ganz leichte Licht-Verdeckung tief in der Mulde (Umgebungslicht kommt schlechter hinein)
         diffuseColor.rgb *= 1.0 - 0.05 * rel.b;
-        // keine Fugen: auch Schnittflächen des noch stehenden Blocks wirken wie eine glatte Fläche
-        // (Würfelkanten sieht man nur an den herausgefallenen Würfeln)`)
+        // ganz feine Fugen: Würfelkanten nur minimal abgedunkelt (Raster ahnt man, sieht es aber kaum)
+        vec2 ce = min(vCubeUv, 1.0 - vCubeUv);
+        float ed = min(ce.x, ce.y);
+        float aw = max(fwidth(ed) * 1.5, 0.03);
+        diffuseColor.rgb *= 1.0 - 0.075 * (1.0 - smoothstep(0.0, aw, ed)) - 0.025 * (1.0 - smoothstep(0.0, aw * 3.0, ed));`)
       .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
         if (vFront > 0.5) {
           // Steigungen der Prägung (Welt-Einheiten) -> Normale kippen (Vorderseite liegt in der xy-Ebene)
