@@ -16,6 +16,13 @@ export function createUI() {
   let covered = false, coverTimer = 0;   // Vollbild-Schrank verdeckt die Szene -> nicht rendern
   const WORDS = ['So satisfying!', 'Entspannend!', 'Wow!', 'Herrlich!', 'Perfekt!', 'Weiter so!', 'Mmmh!'];
 
+  // Hinweis-Zeile folgt dem Zettel auch bei Höhenänderungen durch reine CSS-Zustände
+  if (window.ResizeObserver) {
+    new ResizeObserver(() => {
+      const o = $('order');
+      document.documentElement.style.setProperty('--order-h', o.classList.contains('hidden') ? '50px' : `${o.offsetHeight}px`);
+    }).observe($('order'));
+  }
   return {
     setOrder(order) {
       $('order').classList.toggle('hidden', !order);
