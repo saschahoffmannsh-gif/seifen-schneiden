@@ -461,6 +461,14 @@ body:has(#quality.show) #order { display: none; }
   transform: translate(-50%, -12px); opacity: 0; transition: opacity .4s var(--ease), transform .6s var(--ease);
 }
 #quality.show { opacity: 1; transform: translate(-50%, 0); }
+/* Querformat: Karte links neben die Seife, kompakter, damit Seife und Knopf frei bleiben */
+@media (orientation: landscape) and (max-height: 520px) {
+  #quality { left: calc(var(--sa-left) + 14px); top: calc(var(--sa-top) + 62px); width: 260px; padding: 12px 16px 8px; transform: translate(0, -12px); }
+  #quality.show { transform: none; }
+  #quality #q-banner { font-size: 24px; margin: 2px 0 0; }
+  #quality .q-row { padding-top: 3px; padding-bottom: 3px; }
+}
+body.landscape #oven { left: auto; right: calc(var(--sa-right) + 12px); bottom: calc(var(--sa-bottom) + 62px); width: min(40vw, 340px); margin: 0; padding: 12px 16px 14px; }
 #q-banner { font-style: italic; font-size: 30px; line-height: 1.1; margin: 6px 0 2px; }
 #q-stars { display: flex; justify-content: center; align-items: center; gap: 6px; margin: 6px 0 4px; }
 #q-stars .qs { display: block; width: 26px; height: 26px; }
