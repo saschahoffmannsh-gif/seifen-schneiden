@@ -24,7 +24,7 @@ Ein entspannendes Handy-Spiel im Browser: Seifen aus dem Regal nehmen, in feine 
 6. **✨ Aus der Form nehmen** – die fertige Seife ist marmoriert, die Farben und Anteile kommen
    aus den Würfeln, die du hineingeschnitten hast.
 7. **🪙 Verkaufen** – die Schale verschwindet, die Seife legt sich auf den Tisch.
-8. **Verpacken** – ein Päckchen im Regal antippen (fliegt auf den Tisch, Deckel geht ab), dann die Seife antippen (fliegt hinein, Deckel drauf).
+8. **Verpacken** – ein Päckchen im Regal antippen: ein Fenster mit allen Päckchen-Sorten geht auf (waagerecht scrollbar, nur „Kraftpapier“ ist freigeschaltet, die anderen haben ein Schloss). Gewähltes Päckchen fliegt auf den Tisch, Deckel geht ab; dann die Seife antippen (fliegt hinein, Deckel drauf).
 9. **Verschicken** – das Päckchen zur Seite wischen: Geld wird gutgeschrieben (passt die Seife zur Bestellung, gibt es mehr Münzen), dann kommt die nächste Bestellung.
 
 Funktioniert mit Touch (Handy, Hochformat) und mit der Maus.
@@ -58,7 +58,7 @@ Bei jedem Push auf `main` baut eine GitHub Action das Spiel und veröffentlicht 
 | `src/confetti.js` | Konfetti-Partikel |
 | `src/input.js` | Touch-/Maus-Eingabe |
 | `src/packages.js` | Päckchen aus Kraftpapier (InstancedMesh): Regal, Tisch, Deckel, Schatten |
-| `src/decor.js` | Verpackungs-Deko für später (freischaltbar, Preisbonus; noch ohne Oberfläche) |
+| `src/decor.js` | Päckchen-Sorten und Verpackungs-Deko (`unlocked`, Preis, Bonus; Kauf-Logik folgt später) |
 | `src/shelfSoaps.js` | Rezept-Seifen auf dem mittleren Wandbrett (InstancedMesh), Antippen per Raycast, Flug zur Schale |
 | `src/ui.js` | Bestell-Zettel unter der Schale, Münzen, Knöpfe, „So satisfying!“-Texte |
 | `src/audio.js` | Generierte Geräusche (WebAudio) und Vibration |

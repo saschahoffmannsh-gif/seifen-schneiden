@@ -189,15 +189,16 @@ export function makeBlobTexture() {
   return new THREE.CanvasTexture(c);
 }
 
-/** Kraftpapier (Päckchen): braun mit feinen Fasern. withString = rot-weiße Schnur über Kreuz (Deckel). */
+/** Pappe (Päckchen): hell mit feinen Fasern, wird pro Sorte eingefärbt. withString = rot-weiße Schnur über Kreuz (Deckel). */
 export function makeKraftTexture({ withString = false, seed = 31 } = {}) {
   const S = 256;
   const [c, g] = canvas(S, S);
   const r = rng(seed);
-  g.fillStyle = '#b88a5a'; g.fillRect(0, 0, S, S);
+  // helle, neutrale Pappe: die Farbe je Päckchen-Sorte kommt per instanceColor dazu
+  g.fillStyle = '#f2ece4'; g.fillRect(0, 0, S, S);
   for (let i = 0; i < 1400; i++) {
     const x = r() * S, y = r() * S, l = 3 + r() * 10, a = r() * Math.PI;
-    g.strokeStyle = r() < 0.5 ? 'rgba(90,55,25,0.18)' : 'rgba(235,200,150,0.18)';
+    g.strokeStyle = r() < 0.5 ? 'rgba(90,60,35,0.16)' : 'rgba(255,255,255,0.3)';
     g.lineWidth = 0.6 + r();
     g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
   }

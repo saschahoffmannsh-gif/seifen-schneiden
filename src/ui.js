@@ -23,6 +23,40 @@ export function createUI() {
       if (bump) { el.coinPill.classList.add('bump'); setTimeout(() => el.coinPill.classList.remove('bump'), 200); }
     },
     hint(text) { el.hint.textContent = text || ''; },
+    /**
+     * Päckchen-Auswahl (Bottom-Sheet, waagerecht scrollbar). types: [{id,name,unlocked,cost}],
+     * thumbs: Vorschaubilder (data-URLs). onSelect(type) bei freigeschalteter Sorte, onClose beim Schließen.
+     */
+    openPicker(types, thumbs, onSelect, onClose) {
+      const root = $('pkg-picker'), list = $('pkg-list');
+      list.innerHTML = '';
+      types.forEach((t, i) => {
+        const b = document.createElement('button');
+        b.className = 'pkg-card' + (t.unlocked ? '' : ' locked');
+        b.innerHTML = `<img alt="" src="${thumbs[i]}"><span class="pkg-name">${t.name}</span>`
+          + (t.unlocked ? '<span class="pkg-sub">Standard</span>' : `<span class="pkg-sub">🔒 ${t.cost} 🪙</span><span class="lock">🔒</span>`);
+        b.addEventListener('click', () => {
+          if (!t.unlocked) {
+            b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake');
+            note.textContent = 'Noch gesperrt'; note.classList.add('show');
+            clearTimeout(note._t); note._t = setTimeout(() => note.classList.remove('show'), 1200);
+            return;
+          }
+          close(false); onSelect(t);
+        });
+        list.appendChild(b);
+      });
+      const note = $('pkg-note');
+      const close = (cancelled) => {
+        root.classList.remove('open');
+        root.onclick = null; $('pkg-close').onclick = null;
+        if (cancelled && onClose) onClose();
+      };
+      $('pkg-close').onclick = () => close(true);
+      root.onclick = (e) => { if (e.target === root) close(true); }; // Tipp neben das Fenster
+      list.scrollLeft = 0;
+      root.classList.add('open');
+    },
     showOven(show) { el.oven.classList.toggle('hidden', !show); document.body.classList.toggle('oven-open', show); },
     setOven(frac) { el.ovenBar.style.width = `${Math.round(frac * 100)}%`; },
     /** Knöpfe unten setzen: [{label, alt, onClick}] */

@@ -53,6 +53,23 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   // Päckchen im Regal antippen
   let pt = await screenOf('g.packages.home[0]');
   await p.mouse.click(pt.x, pt.y);
+  await waitState('picker'); await p.waitForTimeout(500);
+  // Spiel-Taps sind pausiert, Schließen per X
+  await p.click('#pkg-close'); await p.waitForTimeout(400);
+  console.log('after X', await g());
+  // gestapelte (schicke) Päckchen öffnen das Fenster auch
+  pt = await screenOf('g.packages.home[3]');
+  await p.mouse.click(pt.x, pt.y);
+  await waitState('picker'); await p.waitForTimeout(600);
+  await p.screenshot({ path: out + '/12-paeckchen-auswahl.png' });
+  await p.click('#pkg-list .pkg-card >> nth=1'); await p.waitForTimeout(250);
+  console.log('locked tap ->', await g(), await p.$eval('#pkg-note', (e) => e.classList.contains('show')));
+  await p.screenshot({ path: out + '/13-auswahl-gesperrt.png' });
+  await p.$eval('#pkg-list', (e) => { e.scrollLeft = 400; });
+  await p.waitForTimeout(300);
+  console.log('scrolled', await p.$eval('#pkg-list', (e) => [e.scrollLeft, e.scrollWidth, e.clientWidth]));
+  await p.$eval('#pkg-list', (e) => { e.scrollLeft = 0; });
+  await p.click('#pkg-list .pkg-card >> nth=0');
   await waitState('pickSoap'); await p.waitForTimeout(300);
   await p.screenshot({ path: out + '/8-paeckchen-offen.png' });
   // Seife antippen -> ins Päckchen, Deckel drauf

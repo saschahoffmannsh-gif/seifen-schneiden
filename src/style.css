@@ -107,3 +107,51 @@ body.oven-open #actions { bottom: calc(env(safe-area-inset-bottom) + 90px); }
 #cut-progress .bar { height: 12px; background: #f1e2d6; }
 #cut-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #ffb6c9, #e75480); border-radius: 999px;
   transform-origin: left; transition: width .12s linear; }
+
+/* ---------- Päckchen-Auswahl: Bottom-Sheet im Holz-Look, waagerecht scrollbar ---------- */
+#pkg-picker {
+  position: fixed; inset: 0; z-index: 20; background: rgba(40, 20, 8, 0); pointer-events: none;
+  transition: background .25s;
+}
+#pkg-picker.open { background: rgba(40, 20, 8, .35); pointer-events: auto; }
+#pkg-picker .sheet {
+  left: 10px; right: 10px; bottom: calc(env(safe-area-inset-bottom) + 12px); max-width: 640px; margin: 0 auto;
+  transform: translateY(130%); opacity: 0;
+}
+#pkg-picker.open .sheet { transform: none; opacity: 1; }
+#pkg-close {
+  position: absolute; top: 6px; right: 8px; width: 34px; height: 34px; border: 0; border-radius: 50%;
+  background: #e8d2a8; color: #5b3a22; font-size: 18px; font-weight: 900; cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,.35);
+}
+#pkg-list {
+  display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 4px 2px 10px;
+  scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain;
+  touch-action: pan-x; scrollbar-width: none;
+}
+#pkg-list::-webkit-scrollbar { display: none; }
+.pkg-card {
+  position: relative; flex: 0 0 auto; width: 118px; scroll-snap-align: start;
+  border: 0; border-radius: 12px; padding: 6px 6px 8px; cursor: pointer;
+  background: linear-gradient(#f7ecd8, #e9d6b4); color: #5b3a22;
+  box-shadow: 0 4px 0 rgba(30,12,4,.35), inset 0 1px 0 rgba(255,255,255,.6);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.pkg-card img { width: 96px; height: 96px; display: block; pointer-events: none; }
+.pkg-name { font-weight: 800; font-size: 13px; line-height: 1.15; text-align: center; }
+.pkg-sub { font-size: 11px; font-weight: 700; opacity: .75; }
+.pkg-card:not(.locked) { outline: 3px solid #ffe27a; outline-offset: -3px; }
+.pkg-card.locked img { filter: grayscale(.45) brightness(.8); opacity: .75; }
+.pkg-card.locked .pkg-name { opacity: .6; }
+.pkg-card .lock {
+  position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 50%;
+  background: rgba(60, 35, 15, .8); font-size: 14px; line-height: 26px; text-align: center;
+}
+.pkg-card:active { transform: translateY(2px); }
+.pkg-card.shake { animation: shake .4s; }
+@keyframes shake { 20%, 60% { transform: translateX(-5px) rotate(-2deg); } 40%, 80% { transform: translateX(5px) rotate(2deg); } }
+#pkg-note {
+  position: absolute; left: 50%; top: 10px; transform: translateX(-50%); background: #5b3a22; color: #fff;
+  font-weight: 800; font-size: 13px; padding: 4px 12px; border-radius: 999px; opacity: 0; transition: opacity .2s; pointer-events: none;
+}
+#pkg-note.show { opacity: 1; }

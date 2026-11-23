@@ -33,7 +33,7 @@ const damp = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-ra
 
 export class Game {
   constructor({ renderer, scene, camera, ovenLight, bg, bowl, bowlShadow }, ui, input, block, loose, knife, confetti, shelf, packages) {
-    Object.assign(this, { scene, camera, ovenLight, bg, bowl, bowlShadow, ui, input, block, loose, knife, confetti, shelf, packages });
+    Object.assign(this, { renderer, scene, camera, ovenLight, bg, bowl, bowlShadow, ui, input, block, loose, knife, confetti, shelf, packages });
     this.anims = [];             // laufende Animationen (werden nur bei Ereignissen angelegt)
     this.pkgSlot = -1;
     this.swipe = { active: false, x0: 0, y0: 0, t0: 0, dx: 0 };
@@ -51,8 +51,7 @@ export class Game {
         const i = this.shelf.pick(this.tapNdc, this.camera, this.isAvailable);
         if (i >= 0) this.pickSoap(i);
       } else if (st === 'pickPkg') {
-        const i = this.packages.pick(this.tapNdc, this.camera);
-        if (i >= 0) this.flyPackage(i);
+        if (this.packages.pick(this.tapNdc, this.camera) >= 0) this.openPicker();
       } else if (this.hitBar()) this.soapIntoPackage();
     });
     window.addEventListener('pointermove', (e) => this.swipeMove(e));
@@ -245,6 +244,17 @@ export class Game {
     });
   }
 
+  /** Auswahlfenster mit allen Päckchen-Sorten (Spiel-Taps sind solange pausiert). */
+  openPicker() {
+    this.state = 'picker';
+    const thumbs = this.packages.makeThumbs(this.renderer);
+    this.ui.openPicker(this.packages.types, thumbs, (type) => {
+      this.state = 'pickPkg';
+      this.pkgType = type;
+      this.flyPackage(this.packages.slotOf(type.id));
+    }, () => { if (this.state === 'picker') this.state = 'pickPkg'; });
+  }
+
   /** Päckchen fliegt vom Regal auf den Tisch, der Deckel geht ab und landet dahinter. */
   flyPackage(i) {
     this.state = 'packing';
@@ -357,10 +367,11 @@ export class Game {
       this.packages.setBlob(i, _a.x, TABLE_Y + 0.003, _a.z, PKG.w * 1.45, PKG.d * 1.6);
     }, () => {
       this.packages.hide(i);
-      this.coins += this.price;
+      const earned = this.price + (this.pkgType ? this.pkgType.bonus : 0);
+      this.coins += earned;
       this.ui.setCoins(this.coins, true);
       sndCoin(); haptic(20);
-      this.ui.popup(`+${this.price} 🪙`);
+      this.ui.popup(`+${earned} 🪙`);
       // Schale kommt zurück, Päckchen wieder ins Regal, neue Bestellung
       this.bowl.visible = true; this.bowlShadow.visible = true;
       this.play(0.45, (e) => {
@@ -384,7 +395,7 @@ export class Game {
     }
     this.shelf.update(dt, time, bob);
     let pb = -1;
-    if (this.state === 'pickPkg') for (let i = 0; i < this.packages.count; i++) if (this.packages.onShelf[i]) { pb = i; break; }
+    if (this.state === 'pickPkg') pb = 0;   // Standard-Päckchen hüpft
     this.packages.update(time, pb);
     // Seife auf dem Tisch hüpft leicht, solange man sie antippen soll
     if (this.state === 'pickSoap') this.bar.position.y = this.barBaseY + Math.max(0, Math.sin(time * 5)) * 0.05 * (Math.sin(time * 2.5) > 0 ? 1 : 0);
