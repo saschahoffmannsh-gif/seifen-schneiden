@@ -126,7 +126,8 @@ export class Game {
     this.liquid.visible = false;
     scene.add(this.liquid);
     // eingebettete Perlen / Goldflocken auf der fertigen Seife (Kinder der Seife -> wandern mit ins Päckchen)
-    this.pearlMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 9), new THREE.MeshStandardMaterial({ color: '#fbf6ee', roughness: 0.22, metalness: 0.15 }), 48);
+    this.pearlMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 18, 12), new THREE.MeshPhysicalMaterial({ color: '#fbf6ee', roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.08,
+      iridescence: 1, iridescenceIOR: 1.6, iridescenceThicknessRange: [180, 520], sheen: 0.6, sheenColor: 0xfff2f6, envMapIntensity: 1.6 }), 48);
     this.flakeMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 6), new THREE.MeshStandardMaterial({ color: '#e5c25c', roughness: 0.28, metalness: 1 }), 48);
     for (const m of [this.pearlMesh, this.flakeMesh]) { m.count = 0; m.frustumCulled = false; this.bar.add(m); }
 
@@ -666,6 +667,7 @@ export class Game {
   /** Seife liegt im offenen Päckchen: Füllungen/Perlen/Blüten aus dem unteren Regal hineinziehen. */
   toDecorFill() {
     this.state = 'decorFill';
+    this.deco.customer = this.order ? this.order.customer : '';
     this.armed = null;
     this.ui.hint('Dekoriere dein Paket – tippe auf die Deko im Regal');
     this.decoActions();
@@ -687,7 +689,7 @@ export class Game {
     this.decoActions();
   }
 
-  closeLid() {
+  closeLid(then) {
     if (this.state !== 'decorFill' || this.drag || this.deco.busy) return;
     this.state = 'packing';
     this.armed = null;
@@ -705,8 +707,9 @@ export class Game {
       this.bar.visible = false;
       sndPop(); haptic(15);
       this.state = 'packed';
-      this.ui.hint('Schleife & Co. aus dem Regal – oder wegwischen');
+      this.ui.hint('Jetzt Schleife oder Anhänger drauf 🎀🏷️ – tippe unten aufs Regal');
       this.decoActions();
+      if (then) then();
     });
   }
 
@@ -732,7 +735,6 @@ export class Game {
   /** Warum diese Deko gerade nicht geht (oder null). */
   decoBlocked(it) {
     const ph = phaseOf(it);
-    if (ph === 'lid' && this.state === 'decorFill') return 'Erst Deckel drauf';
     if (ph === 'fill' && this.state === 'packed') return 'Der Deckel ist schon zu';
     if (ph === 'fill') {
       if (this.deco.countOf(it) >= FILL_CAP) return 'Davon ist genug drin';
@@ -757,10 +759,25 @@ export class Game {
       title: groupOf(groupId).name, cats: DECO_GROUPS.filter((g) => g.phase === phase).map((g) => g.name), startCat: groupOf(groupId).name,
       coins: () => this.coins,
       onBuy: (x) => this.buy(x.cost, 'deco:' + x.id, () => { x.item.unlocked = true; }),
-      onSelect: (x) => { this.state = back; this.arm(x.item); },
+      onSelect: (x) => { this.state = back; this.autoPlace(x.item); },
       onHold: (x, ev) => { this.state = back; this.startDrag(x.item, ev); },
       onClose: () => { this.state = back; },
     });
+  }
+
+  /**
+   * Deko angetippt: fliegt von selbst aufs Paket (Ziehen mit gehaltenem Finger geht weiterhin).
+   * Schleife/Anhänger bei offenem Paket: erst Deckel automatisch drauf, dann draufsetzen.
+   */
+  autoPlace(item) {
+    if (this.drag || this.deco.busy) return;
+    if (phaseOf(item) === 'lid' && this.state === 'decorFill') { this.closeLid(() => this.autoPlace(item)); return; }
+    const why = this.decoBlocked(item);
+    if (why) { this.ui.hint(why); return; }
+    _dragPos.copy(TABLE_SPOT.pkg); _dragPos.y = TABLE_Y + 0.75; _dragPos.z += 0.15;
+    this.deco.beginHand(item, _dragPos);
+    this.deco.drop(() => { sndPop(); haptic(10); this.ui.popup(`+${item.bonus} 🪙 ${item.name}`); this.decoActions(); });
+    this.ui.hint(this.state === 'decorFill' ? 'Mehr Deko aus dem Regal – oder „Deckel drauf“' : 'Noch mehr Deko – oder zum Verschicken zur Seite wischen');
   }
 
   /** Deko gewählt (angetippt): beim nächsten Drücken schwebt sie unter dem Finger. */
@@ -799,6 +816,9 @@ export class Game {
     this.drag = null;
     const P = TABLE_SPOT.pkg, [fw, fd] = this.packages.footprint(this.pkgSlot), hp = this.deco.handPos;
     const over = !cancel && Math.abs(hp.x - P.x) < fw / 2 + 0.22 && Math.abs(hp.z - P.z) < fd / 2 + 0.3;
+    if (over && phaseOf(d.item) === 'lid' && this.state === 'decorFill') {
+      this.deco.endHand(); this.closeLid(() => this.autoPlace(d.item)); return;
+    }
     const why = this.decoBlocked(d.item);
     if (over && !why) {
       this.deco.drop(() => { sndPop(); haptic(10); this.ui.popup(`+${d.item.bonus} 🪙 ${d.item.name}`); this.decoActions(); });

@@ -1,4 +1,4 @@
-// Deko am Päckchen in 3D: Füllungen (Perlen, Flocken, Blüten, Knisterpapier …) als wenige
+// Deko am Päckchen in 3D: Füllungen (Perlmutt-/Metallperlen, Blüten, Rosen, Lavendel …) als wenige
 // InstancedMeshes im Päckchen, Deckel-Deko (Bänder, Siegel, Sticker, Anhänger, Naturdeko) als
 // kleine Gruppen aus gemeinsam genutzten Geometrien/Materialien.
 // Ziehen mit dem Finger: eine Handvoll Teile (bzw. ein Stück) schwebt über dem Finger
@@ -9,15 +9,17 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { PKG } from './packages.js';
 import { makeBlobTexture, rng } from './setting/textures.js';
 import { TABLE_Y } from './setting/wall.js';
+import { flowerGeometry, roseGeometry, sprigGeometry, petalGeometry, bowGeometry } from './decoGeo.js';
 
 // in der Hand etwas größer (gut sichtbar unter dem Finger), beim Hineinfallen auf Normalgröße
 const HAND_BOOST = 2;
-const KINDS = ['sphere', 'metal', 'flat', 'strand', 'heart'];
+const KINDS = ['pearl', 'metal', 'heart', 'flower', 'rose', 'sprig', 'petal'];
 const CAP = 260, HAND = 24;
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color(), _v = new THREE.Vector3();
 const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
-const kindOf = (look) => (look.geo === 'sphere' ? (look.metal ? 'metal' : 'sphere') : look.geo);
+const kindOf = (look) => look.geo;
+const ROUND = { pearl: 1, metal: 1 };
 
 function heartShape(k = 1) {
   const s = new THREE.Shape();
@@ -29,15 +31,11 @@ function heartShape(k = 1) {
   return s;
 }
 
-/** Knisterpapier-Streifen: flaches Zickzack, Länge 1 entlang x (wird gleichmäßig skaliert). */
-function strandGeometry() {
-  const parts = [];
-  for (let k = 0; k < 4; k++) {
-    const g = new THREE.BoxGeometry(0.27, 0.03, 0.09);
-    g.rotateZ(k % 2 ? 0.35 : -0.35).translate(-0.375 + k * 0.25, k % 2 ? 0.045 : 0, 0);
-    parts.push(g);
-  }
-  return mergeGeometries(parts);
+/** Text mittig, verkleinert bis er in maxW passt. */
+function fitText(c, text, x, y, maxW, style, family, size, color) {
+  c.fillStyle = color; c.textAlign = 'center';
+  let s = size; do { c.font = `${style} ${s}px ${family}`; s -= 2; } while (c.measureText(text).width > maxW && s > 12);
+  c.fillText(text, x, y);
 }
 
 function canvasTex(w, h, draw) {
@@ -51,18 +49,25 @@ export class Deco {
   constructor(scene, packages) {
     this.scene = scene; this.packages = packages;
     this.geo = {
-      sphere: new THREE.SphereGeometry(1, 10, 8),
-      metal: new THREE.SphereGeometry(1, 8, 6),
-      flat: new THREE.CylinderGeometry(1, 1, 1, 10),
-      strand: strandGeometry(),
-      heart: new THREE.ExtrudeGeometry(heartShape(1), { depth: 0.35, bevelEnabled: false }).center().rotateX(-Math.PI / 2),
+      pearl: new THREE.SphereGeometry(1, 20, 14),
+      metal: new THREE.SphereGeometry(1, 16, 12),
+      heart: new THREE.ExtrudeGeometry(heartShape(1), { depth: 0.35, bevelEnabled: true, bevelSize: 0.06, bevelThickness: 0.06, bevelSegments: 3 }).center().rotateX(-Math.PI / 2),
+      flower: flowerGeometry(),
+      rose: roseGeometry(),
+      sprig: sprigGeometry(),
+      petal: petalGeometry(),
     };
+    const veg = { vertexColors: true, side: THREE.DoubleSide };
     this.mat = {
-      sphere: new THREE.MeshStandardMaterial({ roughness: 0.22, metalness: 0.12 }),
-      metal: new THREE.MeshStandardMaterial({ roughness: 0.3, metalness: 0.8 }),
-      flat: new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }),
-      strand: new THREE.MeshLambertMaterial({ side: THREE.DoubleSide }),
-      heart: new THREE.MeshLambertMaterial(),
+      // Perlmutt: schillernd (Iridescence), weicher Glanz (Sheen), Klarlack-Reflexe aus der Umgebung
+      pearl: new THREE.MeshPhysicalMaterial({ roughness: 0.22, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.08,
+        iridescence: 1, iridescenceIOR: 1.6, iridescenceThicknessRange: [180, 520], sheen: 0.6, sheenRoughness: 0.35, sheenColor: 0xfff2f6, envMapIntensity: 1.6 }),
+      metal: new THREE.MeshStandardMaterial({ roughness: 0.16, metalness: 1, envMapIntensity: 1.8 }),
+      heart: new THREE.MeshPhysicalMaterial({ roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.15 }),
+      flower: new THREE.MeshStandardMaterial({ ...veg, roughness: 0.65 }),
+      rose: new THREE.MeshStandardMaterial({ ...veg, roughness: 0.75 }),
+      sprig: new THREE.MeshStandardMaterial({ ...veg, roughness: 0.8 }),
+      petal: new THREE.MeshPhysicalMaterial({ ...veg, roughness: 0.45, sheen: 0.8, sheenRoughness: 0.4, sheenColor: 0xffffff }),
     };
     // Inhalt (im Päckchen-Raum) und Hand (Welt-Raum)
     this.content = {}; this.hand = {};
@@ -82,7 +87,7 @@ export class Deco {
     this.handOff = Array.from({ length: HAND }, () => new THREE.Vector3());
     this.handRot = Array.from({ length: HAND }, () => new THREE.Euler());
     this.handScale = Array.from({ length: HAND }, () => new THREE.Vector3());
-    this.handKind = new Array(HAND).fill('sphere');
+    this.handKind = new Array(HAND).fill('pearl');
     this.handN = 0;
     this.handPos = new THREE.Vector3();
     this.from = Array.from({ length: HAND }, () => new THREE.Vector3());
@@ -135,6 +140,7 @@ export class Deco {
     const e = this.lidItems[group];
     if (!e) return;
     this.packages.lidContent.remove(e.obj);
+    e.obj.traverse((m) => { if (m.userData.own) m.geometry.dispose(); });
     delete this.lidItems[group];
     if (group === 'baender') this.packages.setBowHidden(false);
   }
@@ -153,24 +159,89 @@ export class Deco {
           c.fillStyle = '#ffffff'; c.fillRect(0, 0, w, h);
           if (L.tex === 'twine') { c.strokeStyle = '#c62f2f'; c.lineWidth = 5; for (let k = -64; k < 128; k += 12) { c.beginPath(); c.moveTo(k, 0); c.lineTo(k + 20, h); c.stroke(); } }
           if (L.tex === 'raffia') { for (let k = 0; k < w; k += 3) { c.fillStyle = `rgba(150,110,50,${0.15 + (k % 7) * 0.04})`; c.fillRect(k, 0, 1.5, h); } }
+          if (L.tex === 'gingham') { c.fillStyle = 'rgba(200,40,60,0.45)'; for (let k = 0; k < 64; k += 16) { c.fillRect(k, 0, 8, h); c.fillRect(0, k, w, 8); } }
           if (L.tex === 'lace') { c.clearRect(0, 0, w, h); c.fillStyle = '#fff'; c.fillRect(0, 0, w, 8); c.fillRect(0, h - 8, w, 8); for (let x = 8; x < w; x += 16) for (let y = 16; y < h - 8; y += 16) { c.beginPath(); c.arc(x, y, 6, 0, 6.283); c.lineWidth = 2.5; c.strokeStyle = '#fff'; c.stroke(); } }
         });
         t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 6); return t;
       }) : null;
-      const mat = this.lidMat('rib' + item.id, () => new THREE.MeshStandardMaterial({ color: L.color, roughness: L.rough, metalness: L.metal || 0, map: tex, alphaTest: L.tex === 'lace' ? 0.5 : 0, side: THREE.DoubleSide }));
+      const mat = this.lidMat('rib' + item.id, () => {
+        const o = { color: L.color, roughness: L.rough, metalness: L.metal || 0, map: tex, alphaTest: L.tex === 'lace' ? 0.5 : 0, side: THREE.DoubleSide };
+        if (L.opacity) Object.assign(o, { transparent: true, opacity: L.opacity, depthWrite: false });
+        // Satin: weicher Glanz an den Kanten; Gold: Metall mit Umgebungsreflexen
+        return L.sheen ? new THREE.MeshPhysicalMaterial({ ...o, sheen: 1, sheenRoughness: 0.25, sheenColor: 0xffffff, clearcoat: 0.4, clearcoatRoughness: 0.2 })
+          : new THREE.MeshStandardMaterial({ ...o, envMapIntensity: L.metal ? 3 : 1 });
+      });
       // Herz: Quer-Band durch die beiden Bögen, Längs-Band von der Kerbe bis zur Spitze (nicht über den Rand hinaus)
       let lx = foot[0] + 2 * PKG.lidPad + 0.012, lz = foot[1] + 2 * PKG.lidPad + 0.012, zx = 0, zc = 0;
       if (heart) { lx *= 0.9; zx = -lz * 0.17; zc = lz * 0.09; lz *= 0.8; }
       const y = lidTop + 0.004;
-      add(box, mat, 0, y, zx, lx, 0.008, L.w);
-      add(box, mat, 0, y + 0.001, zc, L.w, 0.008, lz);
-      for (const s of [-1, 1]) {
-        add(box, mat, s * lx / 2, y - PKG.lidH / 2, zx, 0.006, PKG.lidH, L.w);
-        add(box, mat, 0, y - PKG.lidH / 2, zc + s * lz / 2, L.w, PKG.lidH, 0.006);
-      }
-      const bow = new THREE.Mesh(this.packages.bowGeo, mat);
-      const k = L.w < 0.04 ? 0.8 : 1.25;
-      bow.scale.setScalar(k); bow.position.y = y; g.add(bow);
+      // Band läuft einmal ums Paket: oben über Kreuz, an den Seiten bis zur Unterkante (Herz: nur oben).
+      // Sechseck: beide Bänder laufen über flache Seiten (90° und 30°), nicht über die Ecken.
+      const lh = lidTop + 0.004, bh = this.packages.lidY, pad = 2 * PKG.lidPad;
+      const hex = this.packages.types[this.packages.active]?.shape === 'hex' && !heart;
+      const straps = heart ? [[0, lx / 2, 0, zx], [Math.PI / 2, lz / 2, 0, zc]]
+        : hex ? [[Math.PI / 2, lz / 2, 0, 0], [Math.PI / 6, lz / 2, 0, 0]]
+          : [[0, lx / 2, 0, 0], [Math.PI / 2, lz / 2, 0, 0]];
+      straps.forEach(([ang, half, ox, oz], k) => {
+        const dx = Math.cos(ang), dz = -Math.sin(ang);
+        add(box, mat, ox, y + k * 0.001, oz, half * 2, 0.006, L.w, 0, ang, 0);
+        if (heart) return;
+        for (const s of [-1, 1]) {
+          add(box, mat, ox + s * dx * half, y - lh / 2, oz + s * dz * half, 0.006, lh, L.w, 0, ang, 0);
+          const hb = half - pad / 2;
+          add(box, mat, ox + s * dx * hb, -bh / 2, oz + s * dz * hb, 0.006, bh, L.w, 0, ang, 0);
+        }
+      });
+      // echte Schleife: zwei Schlaufen, Knoten, zwei Enden
+      const k = L.w < 0.04 ? 0.75 : 1;
+      const bg = this.lidMat('bow' + L.w, () => bowGeometry(L.w * (L.w < 0.04 ? 1.4 : 1), 0.2));
+      const bow = new THREE.Mesh(bg, mat);
+      bow.scale.setScalar(k * 1.15); bow.position.set(0, y + 0.004, zc * 0 + zx); g.add(bow);
+    } else if (L.type === 'woodtag') {
+      // Holzscheibe mit Jahresringen, eingebranntem Namen und Rinde am Rand, an Schnur
+      const name = this.customer || '';
+      const top = this.lidMat('wood' + name, () => new THREE.MeshStandardMaterial({ roughness: 0.8, map: canvasTex(256, 256, (c) => {
+        const gr = c.createRadialGradient(128, 128, 10, 128, 128, 128); gr.addColorStop(0, '#e9cf9f'); gr.addColorStop(1, '#d1aa72');
+        c.fillStyle = gr; c.beginPath(); c.arc(128, 128, 127, 0, 6.283); c.fill();
+        c.strokeStyle = 'rgba(140,96,50,0.35)'; for (let r = 14; r < 120; r += 9 + (r % 5)) { c.lineWidth = 1.5; c.beginPath(); c.ellipse(132, 126, r, r * 0.94, 0.2, 0, 6.283); c.stroke(); }
+        c.fillStyle = '#4a2a12'; c.beginPath(); c.arc(128, 40, 10, 0, 6.283); c.fill();
+        fitText(c, name || 'Für dich', 128, 150, 190, 'bold', 'Georgia, serif', 64, 'rgba(70,35,12,0.92)');
+      }) }));
+      const bark = this.lidMat('bark', () => new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 1 }));
+      // Scheibe mit Rinde; die bemalte Holzfläche ist eine eigene Kreisfläche (richtige Leserichtung)
+      const disc = new THREE.Group(); disc.position.y = lidTop + 0.01; disc.rotation.set(-0.08, 0.15, 0.06); g.add(disc);
+      disc.add(new THREE.Mesh(this.lidMat('woodG', () => new THREE.CylinderGeometry(0.1, 0.1, 0.018, 36)), bark));
+      const face = new THREE.Mesh(this.lidMat('woodF', () => new THREE.CircleGeometry(0.094, 36).rotateX(-Math.PI / 2)), top);
+      face.position.y = 0.0095; disc.add(face);
+    } else if (L.type === 'tag') {
+      // Hänge-Anhänger (Kraftpapier o. ä.) mit Loch, Öse und dem Namen der Kundin/des Kunden
+      const name = this.customer || '';
+      const mat = this.lidMat('tag' + item.id + name, () => new THREE.MeshStandardMaterial({ roughness: 0.85, side: THREE.DoubleSide, alphaTest: 0.5, map: canvasTex(256, 128, (c, w, h) => {
+        c.beginPath(); c.moveTo(40, 4); c.lineTo(w - 6, 4); c.lineTo(w - 6, h - 4); c.lineTo(40, h - 4); c.lineTo(6, h - 38); c.lineTo(6, 38); c.closePath();
+        c.fillStyle = L.paper; c.fill();
+        // Papierfasern
+        for (let k = 0; k < 160; k++) { c.fillStyle = `rgba(80,50,20,${Math.random() * 0.06})`; c.fillRect(Math.random() * w, Math.random() * h, 2, 1); }
+        c.strokeStyle = L.edge; c.lineWidth = 3; c.setLineDash([6, 4]);
+        c.beginPath(); c.moveTo(44, 12); c.lineTo(w - 14, 12); c.lineTo(w - 14, h - 12); c.lineTo(44, h - 12); c.lineTo(14, h - 40); c.lineTo(14, 40); c.closePath(); c.stroke(); c.setLineDash([]);
+        // Öse
+        c.fillStyle = L.edge; c.beginPath(); c.arc(34, 64, 13, 0, 6.283); c.fill();
+        c.globalCompositeOperation = 'destination-out'; c.beginPath(); c.arc(34, 64, 7, 0, 6.283); c.fill(); c.globalCompositeOperation = 'source-over';
+        c.fillStyle = L.ink; c.textAlign = 'center'; c.font = 'italic 22px Georgia, serif'; c.fillText(name ? 'Für' : 'Für dich', 150, 44);
+        if (name) fitText(c, name, 150, 96, 170, 'italic bold', 'Georgia, serif', 50, L.ink);
+      }) }));
+      const geo = this.lidMat('tagG', () => new THREE.PlaneGeometry(0.34, 0.17).rotateX(-Math.PI / 2));
+      const t = new THREE.Mesh(geo, mat); t.position.set(0, lidTop + 0.006, 0); t.rotation.set(0.05, 0.28, 0.02); g.add(t);
+      t.name = 'tag';
+    } else if (L.type === 'card') {
+      const name = this.customer || '';
+      const mat = this.lidMat('card' + name, () => new THREE.MeshLambertMaterial({ map: canvasTex(256, 176, (c, w, h) => {
+        c.fillStyle = '#fffaf0'; c.fillRect(0, 0, w, h);
+        c.strokeStyle = '#e2b6c0'; c.lineWidth = 5; c.strokeRect(9, 9, w - 18, h - 18);
+        c.fillStyle = '#b5475f'; c.textAlign = 'center'; c.font = 'italic bold 34px Georgia, serif';
+        c.fillText('Alles Liebe', 128, 76);
+        if (name) fitText(c, 'für ' + name, 128, 128, 210, 'italic', 'Georgia, serif', 30, '#7a4a56');
+      }) }));
+      add(box, mat, 0, lidTop + 0.004, 0, 0.27, 0.006, 0.19, 0, -0.25, 0);
     } else if (L.type === 'sticker') {
       const top = this.lidMat('st' + item.id, () => new THREE.MeshLambertMaterial({ map: canvasTex(128, 128, (c, w, h) => {
         c.fillStyle = L.color; c.beginPath(); c.arc(64, 64, 62, 0, 6.283); c.fill();
@@ -196,21 +267,6 @@ export class Deco {
       });
       add(blob, mat, 0, lidTop + 0.012, 0, 0.085, 0.024, 0.085);
       add(blob, mat, 0, lidTop + 0.026, 0, 0.058, 0.01, 0.058);
-    } else if (L.type === 'tag' || L.type === 'card') {
-      const isTag = L.type === 'tag';
-      const mat = this.lidMat(L.type, () => new THREE.MeshLambertMaterial({ map: canvasTex(128, isTag ? 192 : 128, (c, w, h) => {
-        c.fillStyle = isTag ? '#c9a173' : '#fffaf0'; c.fillRect(0, 0, w, h);
-        c.strokeStyle = isTag ? '#8a6a44' : '#e2b6c0'; c.lineWidth = 4; c.strokeRect(6, 6, w - 12, h - 12);
-        if (isTag) { c.fillStyle = '#f4ece0'; c.beginPath(); c.arc(64, 22, 9, 0, 6.283); c.fill(); }
-        c.fillStyle = isTag ? '#3e2a18' : '#b5475f'; c.textAlign = 'center'; c.font = 'italic bold 26px Georgia, serif';
-        c.fillText(isTag ? 'Für dich' : 'Alles Liebe', 64, isTag ? 110 : 72);
-      }) }));
-      if (isTag) {
-        const t = add(box, mat, 0, 0, 0, 0.13, 0.004, 0.19);
-        t.position.set(0, lidTop - 0.06, 0.05); t.rotation.set(1.25, 0, 0.12);
-        const string = this.lidMat('twineMat', () => new THREE.MeshLambertMaterial({ color: 0xd9c7a8 }));
-        add(box, string, 0, lidTop + 0.003, -0.04, 0.008, 0.006, 0.12);
-      } else add(box, mat, 0, lidTop + 0.004, 0, 0.26, 0.006, 0.18, 0, -0.25, 0);
     } else if (L.type === 'orange') {
       const top = this.lidMat('orange', () => new THREE.MeshStandardMaterial({ roughness: 0.6, map: canvasTex(128, 128, (c) => {
         c.fillStyle = '#c25a12'; c.beginPath(); c.arc(64, 64, 63, 0, 6.283); c.fill();
@@ -240,13 +296,25 @@ export class Deco {
     return g;
   }
 
+  /** Schnur vom Loch des Anhängers zum Knoten der Schleife (Mitte des Deckels). */
+  addTagString(o, slot, type) {
+    const pk = this.packages, i = pk.active, top = pk.lidTop(i) + 0.007;
+    const hole = type === 'tag' ? new THREE.Vector3(-0.121, top, 0.034) : new THREE.Vector3(0, top + 0.014, -0.07);
+    const zx = pk.types[i].shape === 'heart' ? -0.08 : 0;
+    const knot = new THREE.Vector3(-slot.x, top + 0.004, -slot.z + zx);
+    const mid = hole.clone().lerp(knot, 0.5); mid.x += 0.03; mid.z += 0.03;
+    const curve = new THREE.CatmullRomCurve3([hole, hole.clone().lerp(mid, 0.5).add(new THREE.Vector3(0, 0.002, 0.012)), mid, knot]);
+    const m = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.006, 5), this.lidMat('stringMat', () => new THREE.MeshLambertMaterial({ color: 0xb89870 })));
+    m.userData.own = true; o.add(m);
+  }
+
   /** Platz der Deckel-Deko je Gruppe (Deckel-Koordinaten). */
   lidSlot(group, foot, out) {
     const hz = foot[1] / 2 + PKG.lidPad, shape = this.packages.types[this.packages.active].shape;
     if (group === 'baender') return out.set(0, 0, 0);
     // Siegel/Sticker neben die Schleife (auf dem Knoten wäre es verdeckt)
     if (group === 'siegel') return shape === 'heart' ? out.set(-0.27, 0, -0.02) : out.set(-0.24, 0, 0.12);
-    if (group === 'anhaenger') return this.handItem?.look.type === 'card' || shape === 'heart' ? out.set(0.22, 0, 0.12) : out.set(0.3, 0, hz - 0.02);
+    if (group === 'anhaenger') return shape === 'heart' ? out.set(0.2, 0, 0.1) : out.set(0.24, 0, Math.min(0.2, hz - 0.12));
     return out.set(0.24, 0, -0.13);
   }
 
@@ -260,7 +328,7 @@ export class Deco {
       const n = Math.min(HAND, L.n), k = kindOf(L), r = this.r;
       this.handN = n;
       for (let i = 0; i < n; i++) {
-        const a = r() * 6.283, d = Math.sqrt(r()) * (L.geo === 'strand' ? 0.1 : 0.085);
+        const a = r() * 6.283, d = Math.sqrt(r()) * (L.geo === 'sprig' ? 0.1 : 0.085);
         this.handOff[i].set(Math.cos(a) * d, (r() - 0.5) * 0.05, Math.sin(a) * d);
         this.handRot[i].set((r() - 0.5) * 1.2, r() * 6.283, (r() - 0.5) * 1.2);
         this.partScale(L, this.handScale[i]);
@@ -282,8 +350,6 @@ export class Deco {
   partScale(L, out) {
     // etwas größer als in echt, damit es auf dem Handy gut zu sehen ist
     const s = (L.size[0] + this.r() * (L.size[1] - L.size[0])) * 1.7;
-    if (L.geo === 'flat') return out.set(s, 0.007, s * (L.petal ? 0.6 : 0.85));
-    if (L.geo === 'strand') return out.set(s, s, s);
     return out.set(s, s, s);
   }
 
@@ -325,7 +391,9 @@ export class Deco {
     const pk = this.packages, i = pk.active, shape = pk.types[i].shape, fit = pk.fit(i), r = this.r;
     const [fw, fd] = pk.footprint(i);
     let x = 0, z = 0;
+    const soapFirst = r() < 0.75;   // meistens auf der Seife (gut sichtbar), sonst daneben
     for (let k = 0; k < 30; k++) {
+      if (soapFirst) { x = (r() - 0.5) * 0.8 * fit.s; z = fit.dz + (r() - 0.5) * 0.5 * fit.s; break; }
       x = (r() - 0.5) * fw; z = (r() - 0.5) * fd;
       if (shape === 'box' && Math.abs(x) < fw / 2 - 0.07 && Math.abs(z) < fd / 2 - 0.07) break;
       if ((shape === 'round' || shape === 'hex') && Math.hypot(x, z) < fw / 2 * (shape === 'hex' ? 0.84 : 1) - 0.07) break;
@@ -334,9 +402,9 @@ export class Deco {
     this.partScale(L, outScale);
     const onSoap = Math.abs(x) < 0.425 * fit.s && Math.abs(z - fit.dz) < 0.28 * fit.s;
     const top = PKG.wall + 0.306 * fit.s;
-    const y = onSoap ? top + outScale.y * (L.geo === 'sphere' ? 0.9 : 0.5) + 0.004 : 0.04 + r() * 0.13;
-    // nicht durch den Deckel: Teile auf der Seife dürfen leicht einsinken
-    return out.set(x, Math.min(y, PKG.h - 0.004), z);
+    const y = onSoap ? top + outScale.y * (ROUND[L.geo] ? 0.6 : 0.25) + 0.004 : 0.04 + r() * 0.13;
+    // nicht durch den Deckel (Deckel-Oberseite bei lidY + lidH)
+    return out.set(x, Math.min(y, this.packages.lidY + PKG.lidH - 0.008 - outScale.y * (ROUND[L.geo] ? 1 : 0.5)), z);
   }
 
   /** Loslassen über dem Päckchen: Teile fallen hinein bzw. Deckel-Deko legt sich auf den Deckel. */
@@ -422,6 +490,7 @@ export class Deco {
       o.position.copy(a.slot); o.rotation.set(0, 0, 0); o.scale.set(1, 1, 1);
       this.packages.lidContent.add(o);
       this.lidItems[a.item.group] = { item: a.item, obj: o };
+      if (a.item.look.type === 'tag' || a.item.look.type === 'woodtag') this.addTagString(o, a.slot, a.item.look.type);
       if (a.item.group === 'baender') this.packages.setBowHidden(true);
       const prev = this.applied.findIndex((x) => x.group === a.item.group);
       if (prev >= 0) this.applied.splice(prev, 1);
@@ -440,6 +509,7 @@ export class Deco {
     const S = 192, rt = new THREE.WebGLRenderTarget(S, S);
     rt.texture.colorSpace = THREE.SRGBColorSpace;
     const sc = new THREE.Scene();
+    sc.environment = this.scene.environment; sc.environmentIntensity = 0.6;
     sc.add(new THREE.HemisphereLight(0xfff4e6, 0xa8744c, 1.3));
     const sun = new THREE.DirectionalLight(0xfff0dc, 1.4); sun.position.set(1.5, 4, 2.5); sc.add(sun);
     const cam = new THREE.PerspectiveCamera(30, 1, 0.05, 10);
@@ -459,7 +529,7 @@ export class Deco {
         const k = kindOf(L), n = Math.min(26, L.n * 2), m = new THREE.InstancedMesh(this.geo[k], this.mat[k], n);
         for (let i = 0; i < n; i++) {
           const a = r() * 6.283, d = Math.sqrt(r()) * 0.12;
-          this.partScale(L, _s); _s.multiplyScalar(L.geo === 'strand' ? 1.2 : 1.4);
+          this.partScale(L, _s); _s.multiplyScalar(L.geo === 'sprig' ? 1.0 : 1.4);
           _q.setFromEuler(_e.set((r() - 0.5) * 0.6, r() * 6.3, (r() - 0.5) * 0.6));
           m.setMatrixAt(i, _m.compose(_p.set(Math.cos(a) * d, 0.02 + r() * 0.03, Math.sin(a) * d), _q, _s));
           m.setColorAt(i, _c.set(L.colors[i % L.colors.length]));

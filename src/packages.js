@@ -270,7 +270,8 @@ export class Packages {
   /** Gewähltes Päckchen: bekommt Seidenpapier in seiner Farbe. */
   setActive(i) {
     this.active = i;
-    this.tissue.visible = i >= 0;
+    // Seidenpapier-Knäuel entfernt (wirkte wie Füllpapier, sah nicht gut aus) – Mesh bleibt unsichtbar
+    this.tissue.visible = false;
     this.content.visible = this.lidContent.visible = i >= 0;
     if (i < 0) return;
     this.tissue.geometry = this.slots[i].fam.tissue;
