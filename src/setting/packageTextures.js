@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { rng } from './textures.js';
 
 export const TILE = 256;
+const SERIF = "'Fraunces', Georgia, serif";
 
 function fibres(g, x0, y0, S, seed, dark = 'rgba(90,60,35,0.16)', light = 'rgba(255,255,255,0.22)', n = 900) {
   const r = rng(seed);
@@ -88,7 +89,7 @@ const DESIGNS = {
     // breite bedruckte Banderole (Bauchbinde) aus cremefarbenem Papier mit Etikett
     g.fillStyle = '#f4ead8'; g.fillRect(x + S * 0.3, y, S * 0.4, S);
     g.strokeStyle = '#6b4a2c'; g.lineWidth = 2; g.strokeRect(x + S * 0.33, y + 3, S * 0.34, S - 6);
-    if (lid) { g.fillStyle = '#6b4a2c'; g.font = 'bold 22px Georgia, serif'; g.textAlign = 'center'; g.fillText('SEIFE', x + S / 2, y + S / 2 + 8); }
+    if (lid) { g.fillStyle = '#6b4a2c'; g.font = `600 22px ${SERIF}`; g.textAlign = 'center'; g.fillText('SEIFE', x + S / 2, y + S / 2 + 8); }
   },
   kraft0(g, x, y, S, lid) {
     g.fillStyle = '#c39563'; g.fillRect(x, y, S, S);
@@ -110,7 +111,7 @@ const DESIGNS = {
   zeitung(g, x, y, S, lid) {
     g.fillStyle = '#ece7da'; g.fillRect(x, y, S, S);
     const r = rng(lid ? 3 : 4);
-    g.fillStyle = 'rgba(40,40,40,0.75)'; g.font = 'bold 20px Georgia, serif'; g.textAlign = 'left';
+    g.fillStyle = 'rgba(40,40,40,0.75)'; g.font = `600 20px ${SERIF}`; g.textAlign = 'left';
     g.fillText('TAGESBLATT', x + 12, y + 28);
     for (let c = 0; c < 3; c++) for (let l = 0; l < 22; l++) {
       const w = (S / 3 - 14) * (0.6 + r() * 0.4);
@@ -173,7 +174,7 @@ const DESIGNS = {
       g.fillStyle = 'rgba(70,40,15,0.6)'; g.fillRect(x, yy, S, 3);
       g.fillStyle = '#6a6460'; for (const nx of [12, S - 12]) { g.beginPath(); g.arc(x + nx, yy + S / n / 2, 3.5, 0, 6.283); g.fill(); }
     }
-    if (lid) { g.fillStyle = 'rgba(60,35,15,0.75)'; g.font = 'bold 24px Georgia, serif'; g.textAlign = 'center'; g.fillText('HANDMADE', x + S / 2, y + S / 2 + 8); }
+    if (lid) { g.fillStyle = 'rgba(60,35,15,0.75)'; g.font = `600 24px ${SERIF}`; g.textAlign = 'center'; g.fillText('HANDMADE', x + S / 2, y + S / 2 + 8); }
   },
   leinen(g, x, y, S, lid) {
     g.fillStyle = '#d8cdb8'; g.fillRect(x, y, S, S);
@@ -200,7 +201,7 @@ const DESIGNS = {
     gr.addColorStop(0, '#5f8f8a'); gr.addColorStop(0.35, '#a8d0c9'); gr.addColorStop(0.6, '#6f9e98'); gr.addColorStop(1, '#4e7a75');
     g.fillStyle = gr; g.fillRect(x, y, S, S);
     g.fillStyle = 'rgba(255,255,255,0.8)'; for (let i = 0; i < S; i += 24) g.fillRect(x + i, y, 4, S);
-    if (!lid) { g.fillStyle = '#f3e9d3'; g.fillRect(x, y + S * 0.3, S, S * 0.4); g.fillStyle = '#7a4a2a'; g.font = 'bold 26px Georgia, serif'; g.textAlign = 'center'; g.fillText('SAVON', x + S / 2, y + S / 2 + 9); }
+    if (!lid) { g.fillStyle = '#f3e9d3'; g.fillRect(x, y + S * 0.3, S, S * 0.4); g.fillStyle = '#7a4a2a'; g.font = `600 26px ${SERIF}`; g.textAlign = 'center'; g.fillText('SAVON', x + S / 2, y + S / 2 + 9); }
   },
   wabe(g, x, y, S, lid) {
     g.fillStyle = '#f2b93b'; g.fillRect(x, y, S, S);
@@ -211,7 +212,7 @@ const DESIGNS = {
       g.beginPath(); for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283 + Math.PI / 6; g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); } g.closePath(); g.stroke();
       g.fillStyle = 'rgba(255,235,160,0.25)'; g.fill();
     }
-    if (lid) { g.fillStyle = '#4a2e0e'; g.font = 'bold 28px Georgia, serif'; g.textAlign = 'center'; g.fillText('HONIG', x + S / 2, y + S / 2 + 10); }
+    if (lid) { g.fillStyle = '#4a2e0e'; g.font = `600 28px ${SERIF}`; g.textAlign = 'center'; g.fillText('HONIG', x + S / 2, y + S / 2 + 10); }
   },
   herz(g, x, y, S, lid) {
     const gr = g.createLinearGradient(x, y, x, y + S);
@@ -269,18 +270,51 @@ export function makePackageAtlas(ids) {
   const S = TILE, n = ids.length, rows = Math.ceil(n / ATLAS_COLS) * 2;
   const c = document.createElement('canvas'); c.width = S * ATLAS_COLS; c.height = S * rows;
   const g = c.getContext('2d');
-  ids.forEach((id, i) => {
-    const x = (i % ATLAS_COLS) * S, y = Math.floor(i / ATLAS_COLS) * 2 * S;
-    for (const [lid, yy] of [[true, y], [false, y + S]]) {
-      g.save(); g.beginPath(); g.rect(x, yy, S, S); g.clip();
-      DESIGNS[id](g, x, yy, S, lid);
-      g.restore();
-    }
-  });
+  const draw = () => {
+    g.clearRect(0, 0, c.width, c.height);
+    ids.forEach((id, i) => {
+      const x = (i % ATLAS_COLS) * S, y = Math.floor(i / ATLAS_COLS) * 2 * S;
+      for (const [lid, yy] of [[true, y], [false, y + S]]) {
+        g.save(); g.beginPath(); g.rect(x, yy, S, S); g.clip();
+        DESIGNS[id](g, x, yy, S, lid);
+        finish(g, x, yy, S, i * 2 + (lid ? 0 : 1));
+        g.restore();
+      }
+    });
+    grade(g, c.width, c.height);
+  };
+  draw();
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
+  // Beschriftungen in Fraunces: sobald die Schrift geladen ist, einmal neu zeichnen
+  if (document.fonts && document.fonts.load) document.fonts.load(`600 24px ${SERIF}`).then(() => { draw(); t.needsUpdate = true; }).catch(() => {});
   return { tex: t, rows };
+}
+
+/** Feinschliff je Kachel: Papierkorn + leicht dunklere Kanten (wirkt wie Licht-Verdeckung an Falzen). */
+function finish(g, x, y, S, seed) {
+  const r = rng(101 + seed);
+  for (let i = 0; i < 1600; i++) {
+    g.fillStyle = r() < 0.5 ? 'rgba(70,45,25,0.045)' : 'rgba(255,250,240,0.06)';
+    g.fillRect(x + r() * S, y + r() * S, 1 + r(), 1 + r());
+  }
+  const e = g.createRadialGradient(x + S / 2, y + S / 2, S * 0.42, x + S / 2, y + S / 2, S * 0.75);
+  e.addColorStop(0, 'rgba(60,40,22,0)'); e.addColorStop(1, 'rgba(60,40,22,0.16)');
+  g.fillStyle = e; g.fillRect(x, y, S, S);
+}
+
+/** Farbgebung „Premium“: Sättigung etwas zurück, Schwarz leicht angehoben, Weiß warm. */
+function grade(g, w, h) {
+  const im = g.getImageData(0, 0, w, h), d = im.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], gg = d[i + 1], b = d[i + 2];
+    const l = 0.3 * r + 0.59 * gg + 0.11 * b, k = 0.8;
+    d[i] = Math.min(255, 10 + (l + (r - l) * k) * 0.965 + 3);
+    d[i + 1] = Math.min(255, 9 + (l + (gg - l) * k) * 0.965);
+    d[i + 2] = Math.min(255, 7 + (l + (b - l) * k) * 0.95);
+  }
+  g.putImageData(im, 0, 0);
 }
 
 /** Einzeltextur (z. B. Hutschachtel): Deckel oder Schachtel. */

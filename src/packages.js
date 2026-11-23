@@ -44,7 +44,8 @@ const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
  * waagerecht wiederholt wird (runde/sechseckige Wände), immer innerhalb der eigenen Kachel.
  */
 function atlasMaterial(map, rows, lid, repx = 1, extra = {}) {
-  const mat = new THREE.MeshLambertMaterial({ map, ...extra });
+  // Papier/Karton: matt mit leichtem Schimmer (PBR, Umgebungslicht aus scene.environment)
+  const mat = new THREE.MeshStandardMaterial({ map, roughness: 0.66, metalness: 0, envMapIntensity: 0.55, ...extra });
   mat.defines = { PKG_LID: lid ? '1.0' : '0.0', PKG_ROWS: rows.toFixed(1), PKG_COLS: ATLAS_COLS.toFixed(1), PKG_REPX: repx.toFixed(1) };
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
@@ -116,6 +117,19 @@ function bowGeometry() {
   return g;
 }
 
+/**
+ * Deckel mit abgerundeter Oberkante (statt harter Zylinderkante). Gruppen wie CylinderGeometry:
+ * 0 = Rand (Lathe), 1 = Deckelfläche oben, 2 = unten -> gleiche Material-Arrays/Atlas-UVs.
+ */
+function roundedLid(R, H, segs, b = 0.014) {
+  const prof = [[R, 0], [R, H - b], [R - b * 0.29, H - b * 0.29], [R - b, H]].map(([x, y]) => new THREE.Vector2(x, y));
+  const side = new THREE.LatheGeometry(prof, segs);
+  const top = new THREE.CircleGeometry(R - b, segs, Math.PI / 2).rotateX(-Math.PI / 2).translate(0, H, 0);
+  const bottom = new THREE.CircleGeometry(R, segs, Math.PI / 2).rotateX(Math.PI / 2);
+  const g = mergeGeometries([side.toNonIndexed(), top.toNonIndexed(), bottom.toNonIndexed()], true);
+  return g;
+}
+
 /** Herz als offene Schachtel (Wand + Boden) bzw. Deckel; UVs planar (Deckel) und um den Umfang (Wand). */
 function heartGeometries() {
   const { h, wall, lidH, lidPad } = PKG;
@@ -157,8 +171,8 @@ export class Packages {
     // runde Schachtel (Wand innen sichtbar, Boden) + Deckel mit Deckelfläche
     const cyl = (r, segs) => {
       const side = new THREE.CylinderGeometry(r, r, h, segs, 1, true).translate(0, h / 2, 0);
-      const floor = new THREE.CircleGeometry(r, segs).rotateX(-Math.PI / 2).translate(0, 0.004, 0);
-      const lid = new THREE.CylinderGeometry(r + lidPad, r + lidPad, lidH, segs).translate(0, lidH / 2, 0);
+      const floor = new THREE.CircleGeometry(r * 0.99, segs, Math.PI / 2).rotateX(-Math.PI / 2).translate(0, 0.004, 0);   // Ecken wie die Wand (keine Zacken)
+      const lid = roundedLid(r + lidPad, lidH, segs);
       return { body: mergeGeometries([side, floor], true), lid };
     };
     const round = cyl(R, 40), hex = cyl(HEX_R, 6);
@@ -186,7 +200,7 @@ export class Packages {
 
     // Schleifen auf den Deckeln
     this.bowGeo = bowGeometry();
-    this.bowMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0.1 });
+    this.bowMat = new THREE.MeshStandardMaterial({ roughness: 0.42, metalness: 0.05, envMapIntensity: 0.9 });   // Satinband
     const nBow = this.types.filter((x) => x.bow).length;
     this.bow = new THREE.InstancedMesh(this.bowGeo, this.bowMat, Math.max(1, nBow));
     this.bowOffset = new THREE.Matrix4().makeTranslation(0, lidH, 0);
