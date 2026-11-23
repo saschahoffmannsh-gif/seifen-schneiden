@@ -65,7 +65,7 @@ function modes(list, { t = 0, gain = 0.05, a = 0.002 } = {}) {
 export function sndPaper() {
   if (!ctx) return;
   const n = 3 + (Math.random() * 2 | 0);
-  for (let i = 0; i < n; i++) noise({ t: i * rnd(0.03, 0.06), f: rnd(2200, 3600), q: 1.2, gain: rnd(0.025, 0.05), a: 0.006, d: rnd(0.03, 0.07), lp: 5000 });
+  for (let i = 0; i < n; i++) noise({ t: i * rnd(0.03, 0.06), f: rnd(2000, 3200), q: 1.2, gain: rnd(0.02, 0.04), a: 0.008, d: rnd(0.03, 0.07), lp: 4200 });
   noise({ t: 0, type: 'lowpass', f: 900, gain: 0.02, a: 0.02, d: 0.12 });
 }
 /** Holz: Schublade auf – kurzes Gleiten, dann ein dumpfes Klopfen. */
