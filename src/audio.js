@@ -15,27 +15,46 @@ export function unlockAudio() {
   for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3);
 }
 
-function noiseBurst(freq, q, gain, dur) {
-  if (!ctx) return;
-  const t = ctx.currentTime;
-  const src = ctx.createBufferSource(); src.buffer = noiseBuf;
-  const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
-  const g = ctx.createGain();
-  g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  src.connect(f); f.connect(g); g.connect(master);
-  src.start(t); src.stop(t + dur + 0.02);
+// Schneiden + fallende Würfel: eigener, gedämpfter Bus (Tiefpass + sanfter Kompressor), damit viele
+// gleichzeitige Würfel zu einem weichen Rieseln verschmelzen statt zu klackern.
+let soft = null, density = 0, densityT = 0;
+function softBus() {
+  if (soft || !ctx) return soft;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1500; lp.Q.value = 0.5;
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -30; comp.knee.value = 18; comp.ratio.value = 10; comp.attack.value = 0.004; comp.release.value = 0.25;
+  const out = ctx.createGain(); out.gain.value = 0.9;
+  lp.connect(comp); comp.connect(out); out.connect(master);
+  soft = lp;
+  return soft;
 }
 
-/** Knuspriges Schneidegeräusch beim Lösen einer Reihe. */
-export function sndCut() { noiseBurst(2200 + Math.random() * 1500, 1.2, 0.5, 0.08); }
+/** Weicher Rausch-Hauch: sanfter Anstieg (keine Klick-Transiente), Tiefpass-gefiltert. */
+function softBurst(freq, q, gain, attack, dur) {
+  if (!ctx || !softBus()) return;
+  const t = ctx.currentTime;
+  const src = ctx.createBufferSource(); src.buffer = noiseBuf;
+  src.playbackRate.value = 0.6 + Math.random() * 0.25;   // langsamer abgespielt = dunkler, weicher
+  const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(gain, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + attack + dur);
+  src.connect(f); f.connect(g); g.connect(soft);
+  src.start(t); src.stop(t + attack + dur + 0.03);
+}
 
-/** Leises Klicken, wenn ein Würfel landet (gedrosselt). */
+/** Leises, gedämpftes Schneidegeräusch beim Lösen einer Reihe. */
+export function sndCut() { softBurst(650 + Math.random() * 350, 0.8, 0.22, 0.014, 0.13); }
+
+/** Feines Rieseln, wenn Würfel landen: gedrosselt, je mehr gleichzeitig, desto leiser. */
 export function sndTick() {
   if (!ctx) return;
   const now = ctx.currentTime;
-  if (now - lastTick < 0.035) return;
+  density = density * Math.exp(-(now - densityT) * 4) + 1; densityT = now;   // Würfel pro ~0,25 s
+  if (now - lastTick < 0.045 + Math.random() * 0.03) return;
   lastTick = now;
-  noiseBurst(3500 + Math.random() * 2500, 6, 0.18, 0.03);
+  const g = 0.07 / Math.sqrt(1 + density * 0.6);
+  softBurst(520 + Math.random() * 420, 1.4, g, 0.005, 0.05 + Math.random() * 0.03);
 }
 
 function tone(freq, dur, type = 'sine', gain = 0.25, when = 0) {
