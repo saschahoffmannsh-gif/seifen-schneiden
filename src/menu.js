@@ -6,7 +6,7 @@ import { sound } from './sound.js';
 import { PACKAGE_TYPES } from './decor.js';
 import { DECO_ITEMS } from './decoItems.js';
 import { ADDITIVES } from './additives.js';
-import { sndPop } from './audio.js';
+import { sndWood } from './audio.js';
 import { createStartScene } from './startscene.js';
 
 const SAVE_KEY = 'seifen-save-v1';
@@ -72,7 +72,7 @@ export function createMenu({ getCoins }) {
     b.setAttribute('aria-checked', String(sound.on));
     $('set-sound-ic').innerHTML = sound.on ? ICON.soundOn : ICON.soundOff;
   }
-  $('set-sound').onclick = () => { sound.on = !sound.on; syncSound(); if (sound.on) sndPop(); };
+  $('set-sound').onclick = () => { sound.on = !sound.on; syncSound(); if (sound.on) sndWood(); };
   $('set-reset').onclick = () => openModal('confirm');
   $('confirm-no').onclick = () => closeModal('confirm');
   $('confirm-yes').onclick = () => {

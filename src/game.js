@@ -15,7 +15,7 @@ import { BLOCK, BOWL, CUBE, CUT, OVEN_SECONDS, BLOCK_BASE_Y, SLICES, MOULD_CUBES
 import { SOAP_LIST, SOAP_BY_ID } from './soaps.js';
 import { makeMarbleTexture } from './marble.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { sndCut, sndPop, sndCoin, sndDing, haptic } from './audio.js';
+import { sndCut, sndPaper, sndDrawer, sndWood, sndThump, sndGlass, sndCeramic, sndCardboard, sndLid, sndFabric, sndCoins, haptic } from './audio.js';
 import { PKG, TABLE_SPOT, PKG_SHELF_SCALE, SHADOW_SOAP, SHADOW_LID } from './packages.js';
 import { TABLE_Y, CABINET, SHELF_FRONT_Z } from './setting/wall.js';
 import { OrderNotes, NOTE_COUNT } from './orderNotes.js';
@@ -181,7 +181,7 @@ export class Game {
     this.additives = []; this.warnedAdd = false;
     this.ui.setOrder(this.order);
     this.refreshMix();
-    sndPop();
+    sndPaper();
     this.toShelf();
   }
 
@@ -255,7 +255,7 @@ export class Game {
       if (!o.soaps.includes(d.soap)) return 'Nicht in der Bestellung';
       if (this.picked.has(d.soap.id)) return 'Bereits ausgewählt';
       this.picked.add(d.soap.id); this.pickedDrawers.add(d);
-      sndPop(); haptic(12);
+      sndDrawer(); haptic(12);
       const all = o.soaps.every((s) => this.picked.has(s.id));
       return { find: findText(), done: all ? () => this.stockShelf() : null };
     }, () => { if (back === 'choose') this.toChoose(); else this.toShelf(); }, (d) => this.drawerStock(d));
@@ -278,7 +278,7 @@ export class Game {
         _t.copy(home[i]); _t.y += (1 - k) * 0.9 + Math.sin(t * Math.PI) * 0.06;
         this.shelf.place(i, _t, 0.36 * (0.4 + 0.6 * k));
       }
-    }, () => { this.shelf.setSoaps(list, this.shelfFracs()); sndPop(); this.toShelf(); }, (t) => t);
+    }, () => { this.shelf.setSoaps(list, this.shelfFracs()); sndWood(); this.toShelf(); }, (t) => t);
   }
 
   /** Länge der Seifenstücke im Regal: so viele Scheiben, wie das nächste Stück hat (Rest aus dem Vorrat). */
@@ -352,7 +352,7 @@ export class Game {
     this.refreshMix();
     const p = Math.round(this.pcts[soap.id] || 0);
     if (used) { this.confetti.burst(0, BLOCK_BASE_Y + 0.2, 0.3, 60); this.ui.popup(`${soap.emoji} ${p} %`); }
-    sndPop(); haptic(20);
+    sndThump(0.5); haptic(20);
     this.shelf.setSoaps(this.order.soaps, this.shelfFracs());
     this.state = 'between';
     setTimeout(() => this.toShelf(), 600);
@@ -384,7 +384,7 @@ export class Game {
       this.additives.push(a);
       this.confetti.burst(0, 0.7, 0.2, 40);
       this.ui.popup(`+ ${a.emoji} ${a.name}`);
-      sndPop(); haptic(12);
+      sndGlass(); haptic(12);
     }
     this.toShelf();
   }
@@ -435,7 +435,7 @@ export class Game {
     this.ui.showOven(false);
     this.ovenLight.intensity = 0;
     this.bg.copy(this.bgBase);
-    sndDing();
+    sndCeramic();
     this.ui.hint('Geschmolzen – bereit zum Ausformen');
     this.ui.actions([{ label: '✨ Aus der Form nehmen', onClick: () => this.unmold() }]);
   }
@@ -446,7 +446,7 @@ export class Game {
     this.bar.visible = true;
     this.barT = 0;
     this.confetti.burst(0, 0.8, 0.4, 140);
-    sndPop(); haptic(25);
+    sndThump(); haptic(25);
     this.ui.popup('Wunderschön!');
     const q = this.quality || this.rateMix();
     this.price = q.price;
@@ -566,7 +566,7 @@ export class Game {
     }, () => {
       this.bowl.visible = false; this.bowlShadow.visible = false;
       this.packages.setBlob(SHADOW_SOAP, spot.x, TABLE_Y + 0.003, spot.z, 1.35, 0.95);
-      sndPop(); haptic(10);
+      sndThump(0.8); haptic(10);
       this.state = 'pickPkg';
       this.ui.hint('Wähle eine Verpackung im Regal');
     });
@@ -628,7 +628,7 @@ export class Game {
       this.packages.setClosed(i, _a, 0, PKG_SHELF_SCALE + (1 - PKG_SHELF_SCALE) * e);
     }, () => {
       this.pkgShadow(i, to.x, to.z);
-      sndPop();
+      sndCardboard();
       // Deckel abheben und mit Abstand flach vorne neben das Päckchen legen
       _b.copy(to); _b.y += this.packages.lidY;
       const lid0 = _b.clone();
@@ -669,7 +669,7 @@ export class Game {
       bar.position.set(p0.x + (to.x - p0.x) * e, TABLE_Y + BAR_HALF_H * sc / BAR_TABLE_SCALE + PKG.wall * e + Math.sin(t * Math.PI) * 0.7, p0.z + (to.z + fit.dz - p0.z) * e);
       bar.rotation.set(Math.sin(t * Math.PI) * 0.25, ry0 + (ry1 - ry0) * e, 0);
     }, () => {
-      sndPop();
+      sndThump(0.6);
       this.toDecorFill();
     });
   }
@@ -696,7 +696,7 @@ export class Game {
   undoDeco(phase) {
     if (this.drag || this.deco.busy) return;
     const it = this.deco.undo(phase, phaseOf);
-    if (it) { sndPop(); this.ui.popup(`${it.name} entfernt`); }
+    if (it) { sndFabric(); this.ui.popup(`${it.name} entfernt`); }
     this.decoActions();
   }
 
@@ -716,7 +716,7 @@ export class Game {
       this.packages.setLid(i, _a, Math.sin(t * Math.PI) * 0.35, TABLE_SPOT.lidRy * (1 - e), 0, 1);
     }, () => {
       this.bar.visible = false;
-      sndPop(); haptic(15);
+      sndLid(); haptic(15);
       this.state = 'packed';
       this.ui.hint('Jetzt Schleife oder Anhänger – unten im Regal');
       this.decoActions();
@@ -787,7 +787,7 @@ export class Game {
     if (why) { this.ui.hint(why); return; }
     _dragPos.copy(TABLE_SPOT.pkg); _dragPos.y = TABLE_Y + 0.75; _dragPos.z += 0.15;
     this.deco.beginHand(item, _dragPos);
-    this.deco.drop(() => { sndPop(); haptic(10); this.ui.popup(`+${item.bonus} 🪙 ${item.name}`); this.decoActions(); });
+    this.deco.drop(() => { sndFabric(); haptic(10); this.ui.popup(`+${item.bonus} 🪙 ${item.name}`); this.decoActions(); });
     this.ui.hint(this.state === 'decorFill' ? 'Mehr Deko – oder Deckel drauf' : 'Mehr Deko – oder zum Versenden zur Seite wischen');
   }
 
@@ -832,7 +832,7 @@ export class Game {
     }
     const why = this.decoBlocked(d.item);
     if (over && !why) {
-      this.deco.drop(() => { sndPop(); haptic(10); this.ui.popup(`+${d.item.bonus} 🪙 ${d.item.name}`); this.decoActions(); });
+      this.deco.drop(() => { sndFabric(); haptic(10); this.ui.popup(`+${d.item.bonus} 🪙 ${d.item.name}`); this.decoActions(); });
       this.ui.hint(this.state === 'decorFill' ? 'Mehr Deko – oder Deckel drauf' : 'Zum Versenden zur Seite wischen');
     } else {
       this.deco.fallAway();
@@ -890,7 +890,7 @@ export class Game {
       this.additives = []; this.quality = null;
       this.coins += earned; save.coins = this.coins;
       this.ui.setCoins(this.coins, true);
-      sndCoin(); haptic(20);
+      sndCoins(); haptic(20);
       const db = earned - this.price - (this.pkgType ? this.pkgType.bonus : 0);
       this.ui.popup(db > 0 ? `+${earned} 🪙 (Deko +${db})` : `+${earned} 🪙`);
       // Schale kommt zurück, Päckchen wieder ins Regal, neue Bestellung
