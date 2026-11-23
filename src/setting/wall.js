@@ -30,6 +30,9 @@ export const TOP_SHELF = SHELVES[2];      // Päckchen
 const K = 1.3;                        // Größe der Deko-Sachen
 const SHELF_D = 0.36, SHELF_T = 0.07;
 export const SHELF_Z = WALL_Z + SHELF_D * 0.5;  // Mitte der Bretttiefe
+// Wandschrank mit Türen über dem obersten Brett: im Spiel ist nur der untere Teil zu sehen
+export const CABINET = { x: -0.27, w: 2.9, bottom: 2.98, h: 1.7, d: 0.42 };
+export const SHELF_FRONT_Z = WALL_Z + SHELF_D + 0.005; // Vorderkante der Bretter
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
@@ -98,6 +101,31 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
       brackets.add(bx, sh.y - SHELF_T - 0.012, WALL_Z + SHELF_D * 0.42, 0.035, 0.024, SHELF_D * 0.8);
       brackets.add(bx, sh.y - SHELF_T - 0.09, WALL_Z + 0.1, 0.03, 0.022, 0.24, Math.PI / 4, 0, 0);
     }
+  }
+
+  // ---------- Wandschrank (Seifen-Vorrat): Korpus, Sockelleiste, zwei Türen mit Füllung, Messingknäufe ----------
+  {
+    const C = CABINET, cz = WALL_Z + C.d / 2;
+    const darkWood = new THREE.MeshLambertMaterial({ map: boardTex, color: 0xb88a62 });
+    const doorWood = new THREE.MeshLambertMaterial({ map: boardTex, color: 0xe0bb92 });
+    const brass = new THREE.MeshStandardMaterial({ color: 0xc9a04a, metalness: 0.85, roughness: 0.32, envMap: env, envMapIntensity: 1.0 });
+    const body = new THREE.Mesh(box, darkWood);
+    body.scale.set(C.w, C.h, C.d); body.position.set(C.x, C.bottom + C.h / 2, cz);
+    group.add(body);
+    const ledge = new THREE.Mesh(new RoundedBoxGeometry(C.w + 0.1, 0.08, C.d + 0.06, 2, 0.02), darkWood);
+    ledge.position.set(C.x, C.bottom + 0.02, cz + 0.02);
+    group.add(ledge);
+    const doors = batch(box, doorWood), panels = batch(box, darkWood), knobs = batch(new THREE.SphereGeometry(1, 16, 12), brass);
+    const dw = C.w / 2 - 0.07, dh = C.h - 0.14, dz = WALL_Z + C.d + 0.022;
+    for (const s of [-1, 1]) {
+      const dx = C.x + s * (dw / 2 + 0.015);
+      doors.add(dx, C.bottom + 0.07 + dh / 2, dz, dw, dh, 0.04);
+      panels.add(dx, C.bottom + 0.07 + dh / 2 + 0.06, dz + 0.022, dw - 0.2, dh - 0.32, 0.012);   // abgesetzte Füllung
+      knobs.add(C.x + s * 0.09, C.bottom + 0.26, dz + 0.045, 0.035, 0.035, 0.03);
+      knobs.add(C.x + s * 0.09, C.bottom + 0.26, dz + 0.025, 0.016, 0.016, 0.03);
+    }
+    for (const b of [doors, panels, knobs]) b.build(group);
+    shades.add(C.x, C.bottom - 0.12, WALL_Z + 0.003, C.w + 0.3, 0.34, 1);
   }
 
   // ---------- Verpackungs-Deko auf dem unteren Brett (für später freischaltbar, siehe decor.js) ----------

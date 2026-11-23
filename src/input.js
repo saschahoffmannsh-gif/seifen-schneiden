@@ -22,6 +22,6 @@ export function createInput(el, onFirstGesture) {
   el.addEventListener('pointercancel', up);
   // iOS: kein Doppeltipp-Zoom / Scrollen
   // (außer in scrollbaren Listen wie der Päckchen-Auswahl)
-  document.addEventListener('touchmove', (e) => { if (!e.target.closest || !e.target.closest('.scroll-x')) e.preventDefault(); }, { passive: false });
+  document.addEventListener('touchmove', (e) => { if (!e.target.closest || !e.target.closest('.scroll-x, .scroll-y')) e.preventDefault(); }, { passive: false });
   return state;
 }

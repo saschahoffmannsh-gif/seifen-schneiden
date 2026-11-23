@@ -101,10 +101,11 @@ export class ShelfSoaps {
   }
 
   /** Antippen: welche Seife wurde getroffen? (nur beim Tippen aufgerufen) */
-  pick(ndc, camera, isAvailable) {
+  pick(ndc, camera, isAvailable, exactOnly = false) {
     this.ray.setFromCamera(ndc, camera);
     const hits = this.ray.intersectObject(this.body, false);
     for (const h of hits) if (this.soaps[h.instanceId] && isAvailable(this.soaps[h.instanceId])) return h.instanceId;
+    if (exactOnly) return -1;
     // daneben getippt? Großzügig: nächste Seife in Bildschirmnähe (Finger sind dick)
     let best = -1, bd = 0.13 * 0.13;
     for (let i = 0; i < this.soaps.length; i++) {

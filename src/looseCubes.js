@@ -55,7 +55,7 @@ export class LooseCubes {
     this.next = 0;
     this.used = 0;
     this.activeCount = 0;
-    this.typeCounts = new Int32Array(8);  // wie viele Würfel pro Sorte in der Schale sind
+    this.typeCounts = new Int32Array(16);  // wie viele Würfel pro Sorte in der Schale sind
     this.blockTop = -1;                   // Oberkante des Seifenblocks (Kollision)
     this.blockHalfX = 0; this.blockHalfZ = 0;
     this.onLand = null;                   // Callback für Klick-Geräusch

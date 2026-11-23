@@ -98,7 +98,7 @@ export function createScene(canvas) {
     camera.aspect = w / h;
     // Querformat: mehr Höhe zeigen, damit alle drei Regalbretter (Päckchen oben) ins Bild passen
     const land = camera.aspect > 1.15;
-    const FIT_H = land ? 4.5 : 3.1, lift = land ? 0.55 : 0;
+    const FIT_H = land ? 4.5 : 3.1, lift = land ? 0.8 : 0.32;  // etwas angehoben: unterer Teil des Wandschranks sichtbar
     const vf = THREE.MathUtils.degToRad(camera.fov);
     const hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
     const dist = Math.max(FIT_W / 2 / Math.tan(hf / 2), FIT_H / 2 / Math.tan(vf / 2));
