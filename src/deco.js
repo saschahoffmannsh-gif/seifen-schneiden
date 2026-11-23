@@ -19,7 +19,9 @@ const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Eule
 const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color(), _v = new THREE.Vector3();
 const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
 const kindOf = (look) => look.geo;
-const ROUND = { pearl: 1, metal: 1 };
+// halbe Höhe je Form (bezogen auf die Skalierung): zum Auflegen auf die Seife und gegen Durchstechen des Deckels
+const HALF = { pearl: 1, metal: 1, heart: 0.2, flower: 0.12, rose: 0.5, sprig: 0.07, petal: 0.1 };
+const ON_SOAP = { sprig: 1, rose: 1 };   // lange/hohe Teile immer auf die Seife (nicht an die Wand)
 
 function heartShape(k = 1) {
   const s = new THREE.Shape();
@@ -391,7 +393,7 @@ export class Deco {
     const pk = this.packages, i = pk.active, shape = pk.types[i].shape, fit = pk.fit(i), r = this.r;
     const [fw, fd] = pk.footprint(i);
     let x = 0, z = 0;
-    const soapFirst = r() < 0.75;   // meistens auf der Seife (gut sichtbar), sonst daneben
+    const soapFirst = ON_SOAP[L.geo] || r() < 0.75;   // meistens auf der Seife (gut sichtbar), sonst daneben
     for (let k = 0; k < 30; k++) {
       if (soapFirst) { x = (r() - 0.5) * 0.8 * fit.s; z = fit.dz + (r() - 0.5) * 0.5 * fit.s; break; }
       x = (r() - 0.5) * fw; z = (r() - 0.5) * fd;
@@ -402,9 +404,10 @@ export class Deco {
     this.partScale(L, outScale);
     const onSoap = Math.abs(x) < 0.425 * fit.s && Math.abs(z - fit.dz) < 0.28 * fit.s;
     const top = PKG.wall + 0.306 * fit.s;
-    const y = onSoap ? top + outScale.y * (ROUND[L.geo] ? 0.6 : 0.25) + 0.004 : 0.04 + r() * 0.13;
+    const hh = outScale.y * HALF[L.geo];
+    const y = onSoap ? top + hh * (L.geo === 'pearl' || L.geo === 'metal' ? 0.6 : 0.9) + 0.004 : 0.04 + r() * 0.13;
     // nicht durch den Deckel (Deckel-Oberseite bei lidY + lidH)
-    return out.set(x, Math.min(y, this.packages.lidY + PKG.lidH - 0.008 - outScale.y * (ROUND[L.geo] ? 1 : 0.5)), z);
+    return out.set(x, Math.min(y, this.packages.lidY + PKG.lidH - 0.008 - hh), z);
   }
 
   /** Loslassen über dem Päckchen: Teile fallen hinein bzw. Deckel-Deko legt sich auf den Deckel. */

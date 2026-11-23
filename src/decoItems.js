@@ -32,8 +32,8 @@ export const DECO_ITEMS = [
   F('vergissmeinnicht', 'blueten', 'Vergissmeinnicht', 70, 4, { geo: 'flower', colors: ['#8fb8f0', '#a9c8f6', '#7fa8e6'], size: [0.06, 0.075], n: 8 }),
   F('rosenblaetter', 'blueten', 'Rosenblätter', 80, 5, { geo: 'petal', colors: ['#c8203f', '#e0425e', '#b51a37'], size: [0.05, 0.065], n: 8 }),
   F('lavendel', 'blueten', 'Lavendelzweige', 100, 6, { geo: 'sprig', colors: ['#ffffff', '#f4f0ff'], size: [0.17, 0.21], n: 5 }),
-  F('rosen-getrocknet', 'blueten', 'Getrocknete Rosen', 150, 8, { geo: 'rose', colors: ['#c45a6e', '#d98a9a', '#b8485e'], size: [0.05, 0.065], n: 5 }),
-  F('rosen-creme', 'blueten', 'Rosenknospen creme', 180, 9, { geo: 'rose', colors: ['#f6e7d6', '#f1dcc4', '#fbf0e4'], size: [0.05, 0.065], n: 5 }),
+  F('rosen-getrocknet', 'blueten', 'Getrocknete Rosen', 150, 8, { geo: 'rose', colors: ['#c45a6e', '#d98a9a', '#b8485e'], size: [0.04, 0.05], n: 5 }),
+  F('rosen-creme', 'blueten', 'Rosenknospen creme', 180, 9, { geo: 'rose', colors: ['#f6e7d6', '#f1dcc4', '#fbf0e4'], size: [0.04, 0.05], n: 5 }),
 
   F('schnur', 'baender', 'Bäckerschnur', 0, 2, { type: 'ribbon', color: '#f4eee6', tex: 'twine', w: 0.025, rough: 0.9 }),
   F('satin-rosa', 'baender', 'Satinschleife rosa', 50, 4, { type: 'ribbon', color: '#f3a5bb', w: 0.06, rough: 0.28, sheen: true }),
