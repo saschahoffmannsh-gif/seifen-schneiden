@@ -171,7 +171,7 @@ export function createUI() {
       btn.disabled = !enough;
       btn.innerHTML = rich(!it.cost ? (o.verb || 'Nehmen') : enough ? `${o.verb || 'Freischalten'} für ${it.cost} 🪙` : `Zu wenig Münzen · ${it.cost} 🪙`);
       const close = () => { root.classList.remove('open'); btn.onclick = null; root.onclick = null; };
-      btn.onclick = () => { if (buy()) { sndCoins(false); close(); } };
+      btn.onclick = () => { if (buy()) { if (it.cost) sndCoins(false); close(); } };
       $('unlock-close').onclick = close;
       root.onclick = (e) => { if (e.target === root) close(); };
       root.classList.add('open');

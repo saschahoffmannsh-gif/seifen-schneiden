@@ -2,7 +2,7 @@
 // gefiltertes Rauschen + kurze Resonanzen (Holz, Karton, Keramik, Metall). Keine Synth-Pieptöne.
 // Alles läuft über einen gemeinsamen Bus (sanfter Tiefpass + Kompressor) in ctx.destination –
 // der Ton-Schalter (sound.js) sitzt dahinter und schaltet damit alles stumm.
-let ctx = null, bus = null, noiseBuf = null;
+let ctx = null, bus = null, bright = null, noiseBuf = null;
 
 /** Muss aus einer Nutzer-Geste heraus aufgerufen werden (iOS-Regel). */
 export function unlockAudio() {
@@ -20,6 +20,9 @@ function init(c) {
   const out = ctx.createGain(); out.gain.value = 0.8;
   lp.connect(comp); comp.connect(out); out.connect(ctx.destination);
   bus = lp;
+  // heller Zweig für Metall (Münzen): gleiche Dynamik, aber Höhen bis ~12 kHz
+  const lpB = ctx.createBiquadFilter(); lpB.type = 'lowpass'; lpB.frequency.value = 12000; lpB.Q.value = 0.5;
+  lpB.connect(comp); bright = lpB;
   // 2 s weißes Rauschen, wird mit zufälligem Startpunkt für alle Geräusche wiederverwendet
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0);
@@ -116,15 +119,43 @@ export function sndCeramic() {
   noise({ type: 'lowpass', f: 2500, gain: 0.03, a: 0.002, d: 0.02 });
   modes([[820, 0.18], [1330, 0.12, 0.5], [2150, 0.08, 0.25]], { gain: 0.025 });
 }
-/** Münzen: zwei, drei weich klimpernde Münzen (big = mehr). */
+/**
+ * Ein Münz-Anschlag: kurzer Metall-Klick + inharmonische Resonanzen einer dünnen Metallscheibe
+ * (je Mode zwei leicht verstimmte Schwinger -> Schwebung/Schimmer), gedämpft durch Kontakt.
+ */
+const COIN_RATIOS = [[1, 1, 1], [1.505, 0.75, 0.8], [2.08, 0.5, 0.6], [2.76, 0.32, 0.45], [3.58, 0.2, 0.32]];
+function coinHit(t, f0, gain, ring) {
+  const t0 = ctx.currentTime + t;
+  noise({ t, type: 'highpass', f: 3800, q: 0.7, gain: gain * 0.55, a: 0.0008, d: 0.005 });
+  for (const [r, k, dk] of COIN_RATIOS) {
+    for (const det of [0.9985, 1.0018]) {
+      const o = ctx.createOscillator(); o.frequency.value = f0 * r * det;
+      const g = ctx.createGain(), d = ring * dk * rnd(0.85, 1.15);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(gain * k * 0.5, t0 + 0.0015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.0015 + d);
+      o.connect(g); g.connect(bright); o.start(t0); o.stop(t0 + d + 0.03);
+    }
+  }
+}
+/**
+ * Münzgeklimper: mehrere Münzen fallen nacheinander in die Kasse und aufeinander –
+ * schnelle, unregelmäßige Anschläge, verschiedene Münzgrößen, zuletzt eine Münze, die nachklingt.
+ * big = Einnahme (Verkauf, mehr Münzen), sonst Bezahlen (Freischalten/Nachkaufen, weniger).
+ */
+const COIN_F = [2380, 2860, 3350, 3980];
 export function sndCoins(big = true) {
   if (!ctx) return;
-  const n = big ? 3 : 2;
+  const n = big ? 7 + (Math.random() * 3 | 0) : 4 + (Math.random() * 2 | 0);
+  // in die Schale: ein dezenter, tieferer Teller-Klang beim ersten Aufprall
+  modes([[880, 0.22], [1420, 0.16, 0.45], [2310, 0.1, 0.25]], { gain: 0.008 });
+  let t = 0;
   for (let i = 0; i < n; i++) {
-    const t = i * rnd(0.05, 0.09), k = 1 - i * 0.2;
-    noise({ t, type: 'highpass', f: 2500, gain: 0.012 * k, a: 0.001, d: 0.01 });
-    const b = rnd(0.94, 1.08);
-    modes([[1900 * b, 0.12], [2870 * b, 0.09, 0.6], [4300 * b, 0.06, 0.3]], { t, gain: 0.016 * k });
+    const last = i === n - 1;
+    const f0 = COIN_F[(Math.random() * COIN_F.length) | 0] * rnd(0.97, 1.03);
+    const g = 0.016 * rnd(0.6, 1) * (i === 0 ? 1 : 0.85);
+    coinHit(t, f0, g, last ? rnd(0.5, 0.7) : rnd(0.14, 0.32));
+    if (Math.random() < 0.35 && !last) coinHit(t + rnd(0.008, 0.02), f0 * rnd(1.08, 1.2), g * 0.45, 0.1);   // kurzes Nachprellen
+    t += i < 2 ? rnd(0.05, 0.09) : rnd(0.025, 0.075);
   }
 }
 
