@@ -158,7 +158,7 @@ export class Game {
     this.ui.setOrder(null);
     this.ui.setCut(null);
     this.shelf.setSoaps([]);
-    this.ui.hint('Tippe auf eine Bestellung am Regal');
+    this.ui.hint('Wähle eine Bestellung am Regal');
     this.ui.actions([]);
   }
 
@@ -226,7 +226,7 @@ export class Game {
       save.setStock(soap.id, S + BAR_SLICES);
       if (after) after();
       return true;
-    }, { line: `+${BAR_SLICES} Scheiben (Vorrat jetzt ${S})` + (cost ? '' : ' – geschenkt!'), verb: cost ? 'Kaufen' : 'Mitnehmen' });
+    }, { line: `+${BAR_SLICES} Scheiben (Vorrat jetzt ${S})` + (cost ? '' : ' · ein Geschenk'), verb: cost ? 'Kaufen' : 'Mitnehmen' });
   }
 
   /** Vollbild-Schrank: alle Seifen der Bestellung in den Schubladen finden. */
@@ -236,9 +236,9 @@ export class Game {
     haptic(8);
     const o = this.order;
     const findText = () => {
-      if (!o) return 'Erst eine Bestellung annehmen';
+      if (!o) return 'Nimm zuerst eine Bestellung an';
       const rest = o.soaps.filter((s) => !this.picked.has(s.id));
-      return rest.length ? `Finde: ${rest.map((s) => s.name).join(', ')}` : 'Alles gefunden!';
+      return rest.length ? `Gesucht: ${rest.map((s) => s.name).join(', ')}` : 'Alles beisammen';
     };
     this.ui.hint('');
     this.ui.openCabinet(this.cabLayout, findText(), (d) => !!o && this.stocked === false && d.kind === 'soap' && this.picked.has(d.soap.id) && this.pickedDrawers.has(d), (d) => {
@@ -249,10 +249,10 @@ export class Game {
         return { refresh: true };
       }
       if (d.kind === 'empty') return 'Leer';
-      if (!o) return 'Erst eine Bestellung annehmen';
+      if (!o) return 'Nimm zuerst eine Bestellung an';
       if (this.stocked) return 'Die Seifen stehen schon im Regal';
       if (!o.soaps.includes(d.soap)) return 'Nicht in der Bestellung';
-      if (this.picked.has(d.soap.id)) return 'Schon ausgewählt';
+      if (this.picked.has(d.soap.id)) return 'Bereits ausgewählt';
       this.picked.add(d.soap.id); this.pickedDrawers.add(d);
       sndPop(); haptic(12);
       const all = o.soaps.every((s) => this.picked.has(s.id));
@@ -290,11 +290,11 @@ export class Game {
     this.knife.visible = false;
     this.refreshMix();
     const missing = this.missingSoaps();
-    if (!this.stocked) this.ui.hint('Tippe auf den Schrank');
+    if (!this.stocked) this.ui.hint('Hol die Seifen aus dem Schrank');
     else if (missing.length) {
       const m = this.order.mix.find((x) => x.soap === missing[0]);
-      this.ui.hint(`Tippe auf ${m.soap.emoji} ${m.soap.name}: ${m.pct} % = ${m.pct / PCT_PER_SLICE} Scheiben`);
-    } else this.ui.hint(this.order.additive && !this.additives.includes(this.order.additive) ? `Passt! Noch ${this.order.additive.emoji} ${this.order.additive.name} dazu` : 'Mischung passt! Jetzt schmelzen');
+      this.ui.hint(`${m.soap.name}: ${m.pct / PCT_PER_SLICE} Scheiben für ${m.pct} % – tippe aufs Stück`);
+    } else this.ui.hint(this.order.additive && !this.additives.includes(this.order.additive) ? `Fast fertig – noch ${this.order.additive.name} hinzufügen` : 'Die Mischung stimmt – jetzt schmelzen');
     const acts = [];
     if (this.stocked) acts.push({ label: '✨ Zusätze', onClick: () => this.openAdditives() });
     if (this.loose.used > 0) acts.push({ label: '🔥 Schmelzen', alt: true, onClick: () => this.toOven() });
@@ -306,7 +306,7 @@ export class Game {
     if (this.state !== 'shelf') return;
     const soap = this.shelf.soaps[slot];
     if (save.stock(soap.id) <= 0) {
-      this.ui.hint(`Kein ${soap.name} mehr – im Schrank ein neues Stück holen`);
+      this.ui.hint(`${soap.name} ist aufgebraucht – hol ein neues Stück aus dem Schrank`);
       return;
     }
     this.state = 'flying';
@@ -320,7 +320,7 @@ export class Game {
     this.state = 'cutting';
     const m = this.order.mix.find((x) => x.soap === soap);
     const have = Math.round(this.pcts[soap.id] || 0);
-    this.ui.hint(m ? `${m.pct / PCT_PER_SLICE - Math.round(have / PCT_PER_SLICE)} Scheiben ${soap.name} – wisch hin und her ↔` : 'Wisch hin und her ↔');
+    this.ui.hint(m ? `Noch ${m.pct / PCT_PER_SLICE - Math.round(have / PCT_PER_SLICE)} Scheiben ${soap.name} – sanft hin und her wischen` : 'Sanft hin und her wischen');
     this.block.load(soap, Math.min(SLICES, save.stock(soap.id)));
     this.ui.actions([{ label: '✋ Fertig mit dieser Seife', onClick: () => this.stopCutting() }]);
     this.loose.blockHalfX = this.block.halfX; this.loose.blockHalfZ = this.block.halfZ;
@@ -364,7 +364,7 @@ export class Game {
     const need = this.order && this.order.additive;
     const items = ADDITIVES.slice().sort((a, b) => ADD_CATS.indexOf(a.cat) - ADD_CATS.indexOf(b.cat)).map((a) => ({
       id: a.id, name: a.name, cat: a.cat, thumb: additiveThumb(a), unlocked: a.unlocked, cost: a.cost, bonus: a.bonus,
-      sub: (this.additives.includes(a) ? '✔ drin' : `+${a.bonus} 🪙`) + (need === a ? ' · gewünscht' : ''),
+      sub: (this.additives.includes(a) ? '✔ enthalten' : `+${a.bonus} 🪙`) + (need === a ? ' · gewünscht' : ''),
       disabled: !this.additives.includes(a) && this.additives.length >= MAX_ADDITIVES ? `Höchstens ${MAX_ADDITIVES} Zusätze` : null,
       add: a,
     }));
@@ -378,7 +378,7 @@ export class Game {
 
   toggleAdditive(a) {
     const i = this.additives.indexOf(a);
-    if (i >= 0) { this.additives.splice(i, 1); this.ui.popup(`${a.name} raus`); }
+    if (i >= 0) { this.additives.splice(i, 1); this.ui.popup(`${a.name} entfernt`); }
     else {
       this.additives.push(a);
       this.confetti.burst(0, 0.7, 0.2, 40);
@@ -393,7 +393,7 @@ export class Game {
     const need = this.order && this.order.additive;
     if (need && !this.additives.includes(need) && !this.warnedAdd && this.state === 'shelf') {
       this.warnedAdd = true;
-      this.ui.hint(`${this.order.customer} wünscht sich ${need.name} – oder einfach nochmal „Schmelzen“`);
+      this.ui.hint(`${this.order.customer} wünscht sich ${need.name} – oder direkt schmelzen`);
       this.openAdditives();
       return;
     }
@@ -435,7 +435,7 @@ export class Game {
     this.ovenLight.intensity = 0;
     this.bg.copy(this.bgBase);
     sndDing();
-    this.ui.hint('Fertig geschmolzen!');
+    this.ui.hint('Geschmolzen – bereit zum Ausformen');
     this.ui.actions([{ label: '✨ Aus der Form nehmen', onClick: () => this.unmold() }]);
   }
 
@@ -451,7 +451,7 @@ export class Game {
     this.price = q.price;
     this.buildBarBits();
     this.ui.showQuality(q);
-    this.ui.hint((q.stars === 3 ? 'Perfekt!' : q.stars === 2 ? 'Schöne Seife!' : 'Fast …') + ' Dreh sie mit dem Finger 👆');
+    this.ui.hint((q.stars === 3 ? 'Perfekt' : q.stars === 2 ? 'Eine schöne Seife' : 'Fast') + ' – dreh sie mit dem Finger');
     this.showcase.start(this.bar);
     this.ui.actions([{ label: `🪙 Verkaufen für ${this.price}`, alt: true, onClick: () => this.sell() }]);
     this.bar.scale.set(0.6, 0.6, 0.6); this.bar.rotation.set(0, 0, 0);
@@ -495,7 +495,7 @@ export class Game {
     let price = Math.round(o.reward * [0, 0.7, 1, 1.25][stars]);
     if (o.additive) {
       const ok = this.additives.includes(o.additive);
-      rows.push({ label: `${o.additive.emoji} ${o.additive.name}`, value: ok ? '✔ wie gewünscht' : 'fehlt (−20 %)', cls: ok ? 'good' : 'bad' });
+      rows.push({ label: `${o.additive.emoji} ${o.additive.name}`, value: ok ? '✔ wie gewünscht' : 'fehlt · −20 %', cls: ok ? 'good' : 'bad' });
       if (!ok) price = Math.round(price * 0.8);
     }
     let extra = 0;
@@ -562,7 +562,7 @@ export class Game {
       this.packages.setBlob(SHADOW_SOAP, spot.x, TABLE_Y + 0.003, spot.z, 1.35, 0.95);
       sndPop(); haptic(10);
       this.state = 'pickPkg';
-      this.ui.hint('Tippe auf ein Päckchen im Regal');
+      this.ui.hint('Wähle eine Verpackung im Regal');
     });
   }
 
@@ -573,7 +573,7 @@ export class Game {
     const items = this.packages.types.map((t, i) => ({ id: t.id, name: t.name, cat: t.cat, thumb: thumbs[i], unlocked: t.unlocked,
       cost: t.cost, bonus: t.bonus, sub: t.bonus ? `+${t.bonus} 🪙` : 'Standard', type: t }));
     this.ui.openSheet(items, {
-      title: 'Päckchen wählen', cats: PKG_CATS,
+      title: 'Verpackung', cats: PKG_CATS,
       coins: () => this.coins,
       onBuy: (it) => this.buy(it.cost, 'pkg:' + it.id, () => { it.type.unlocked = true; }),
       onSelect: (it) => {
@@ -633,7 +633,7 @@ export class Game {
         this.lidShadow(true);
         this.state = 'pickSoap';
         this.barBaseY = this.bar.position.y;
-        this.ui.hint('Tippe auf die Seife');
+        this.ui.hint('Tippe auf die Seife, um sie einzupacken');
       });
     });
   }
@@ -674,7 +674,7 @@ export class Game {
     this.state = 'decorFill';
     this.deco.customer = this.order ? this.order.customer : '';
     this.armed = null;
-    this.ui.hint('Dekoriere dein Paket – tippe auf die Deko im Regal');
+    this.ui.hint('Zeit für Dekoration – wähle sie im Regal');
     this.decoActions();
   }
 
@@ -712,7 +712,7 @@ export class Game {
       this.bar.visible = false;
       sndPop(); haptic(15);
       this.state = 'packed';
-      this.ui.hint('Jetzt Schleife oder Anhänger drauf 🎀🏷️ – tippe unten aufs Regal');
+      this.ui.hint('Jetzt Schleife oder Anhänger – unten im Regal');
       this.decoActions();
       if (then) then();
     });
@@ -782,13 +782,13 @@ export class Game {
     _dragPos.copy(TABLE_SPOT.pkg); _dragPos.y = TABLE_Y + 0.75; _dragPos.z += 0.15;
     this.deco.beginHand(item, _dragPos);
     this.deco.drop(() => { sndPop(); haptic(10); this.ui.popup(`+${item.bonus} 🪙 ${item.name}`); this.decoActions(); });
-    this.ui.hint(this.state === 'decorFill' ? 'Mehr Deko aus dem Regal – oder „Deckel drauf“' : 'Noch mehr Deko – oder zum Verschicken zur Seite wischen');
+    this.ui.hint(this.state === 'decorFill' ? 'Mehr Deko – oder Deckel drauf' : 'Mehr Deko – oder zum Versenden zur Seite wischen');
   }
 
   /** Deko gewählt (angetippt): beim nächsten Drücken schwebt sie unter dem Finger. */
   arm(item) {
     this.armed = item;
-    this.ui.hint(`${item.name}: Finger drauf halten und zum Paket ziehen`);
+    this.ui.hint(`${item.name} – halten und aufs Paket ziehen`);
   }
 
   startDrag(item, e) {
@@ -827,7 +827,7 @@ export class Game {
     const why = this.decoBlocked(d.item);
     if (over && !why) {
       this.deco.drop(() => { sndPop(); haptic(10); this.ui.popup(`+${d.item.bonus} 🪙 ${d.item.name}`); this.decoActions(); });
-      this.ui.hint(this.state === 'decorFill' ? 'Mehr Deko aus dem Regal – oder „Deckel drauf“' : 'Zum Verschicken zur Seite wischen');
+      this.ui.hint(this.state === 'decorFill' ? 'Mehr Deko – oder Deckel drauf' : 'Zum Versenden zur Seite wischen');
     } else {
       this.deco.fallAway();
       this.ui.hint(why || (this.state === 'decorFill' ? 'Über dem offenen Paket loslassen' : 'Über dem Paket loslassen'));
