@@ -92,7 +92,7 @@ export function createUI() {
           b.className = 'drawer ' + d.kind;
           const col = d.kind === 'soap' ? soapCss(d.soap) : d.kind === 'locked' ? d.color : 'transparent';
           const name = d.kind === 'soap' ? d.soap.name : d.kind === 'locked' ? d.name : 'leer';
-          b.innerHTML = `<span class="soap-pop" style="background:${col}"></span><span class="lab"><span class="dot" style="background:${col}"></span><span class="nm">${name}</span></span><span class="pull"></span>`;
+          b.innerHTML = `<span class="soap-pop" style="background:${col}"></span><span class="lab"><span class="dot" style="background:${col}"></span><span class="nm${name.length > 8 ? ' long' : ''}">${name}</span></span><span class="pull"></span>`;
           b._d = d;
           grid.appendChild(b);
         }

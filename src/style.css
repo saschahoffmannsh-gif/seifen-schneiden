@@ -272,3 +272,9 @@ body.table-mode { --ui-shift: 48px; }
 .cab-door.left .knob { right: 16px; } .cab-door.right .knob { left: 16px; }
 #cabinet.open .cab-door.left { transform: rotateY(-105deg); opacity: 0; }
 #cabinet.open .cab-door.right { transform: rotateY(105deg); opacity: 0; }
+/* schmale Handys: Schubladen-Etiketten etwas kleiner, damit "Erdbeere" & Co. ganz lesbar bleiben */
+@media (max-width: 380px) {
+  #cab-grid { gap: 5px; padding: 6px 10px 18px; }
+  .drawer .nm { font-size: 7.6px; letter-spacing: -.25px; }
+}
+.drawer .nm.long { font-size: 7px; letter-spacing: -.3px; }
