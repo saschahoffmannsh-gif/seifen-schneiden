@@ -215,7 +215,10 @@ export function createUI() {
       const d = document.createElement('div');
       d.className = 'popup';
       d.textContent = text || WORDS[(Math.random() * WORDS.length) | 0];
-      d.style.left = `${40 + Math.random() * 20}%`;
+      // lange Texte (Deko-Namen) kleiner und mittig, damit nichts über den Rand ragt
+      const long = d.textContent.length > 12;
+      if (long) d.style.fontSize = `${Math.min(30, Math.floor(window.innerWidth * 1.5 / d.textContent.length))}px`;
+      d.style.left = long ? '50%' : `${40 + Math.random() * 20}%`;
       el.popups.appendChild(d);
       setTimeout(() => d.remove(), 1150);
     },

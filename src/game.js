@@ -514,7 +514,7 @@ export class Game {
       this.bar.visible = false;
       sndPop(); haptic(15);
       this.state = 'packed';
-      this.ui.hint('Schleife, Siegel & Co. aus dem Regal – oder Paket zur Seite wischen');
+      this.ui.hint('Schleife & Co. aus dem Regal – oder wegwischen');
       this.decoActions();
     });
   }
@@ -611,7 +611,7 @@ export class Game {
     const why = this.decoBlocked(d.item);
     if (over && !why) {
       this.deco.drop(() => { sndPop(); haptic(10); this.ui.popup(`+${d.item.bonus} 🪙 ${d.item.name}`); this.decoActions(); });
-      this.ui.hint(this.state === 'decorFill' ? 'Noch mehr Deko? Tippe aufs Regal – oder „Deckel drauf“' : 'Paket zur Seite wischen zum Verschicken');
+      this.ui.hint(this.state === 'decorFill' ? 'Mehr Deko aus dem Regal – oder „Deckel drauf“' : 'Zum Verschicken zur Seite wischen');
     } else {
       this.deco.fallAway();
       this.ui.hint(why || (this.state === 'decorFill' ? 'Über dem offenen Paket loslassen' : 'Über dem Paket loslassen'));
