@@ -49,6 +49,7 @@ export class LooseCubes {
     this.type = new Int8Array(MAX).fill(-1);
     this.cell = new Int16Array(MAX).fill(-1); // Höhenfeld-Zelle, auf der der Würfel liegt
     this.hops = new Uint8Array(MAX);
+    this.hit = new Uint8Array(MAX);         // 1 = erster Aufprall schon hörbar gemacht
     this.lastCell = new Int16Array(MAX).fill(-1); // Zelle, auf der das Gefälle zuletzt geprüft wurde
     this.sliding = new Uint8Array(MAX);           // 1 = rutscht gerade zur nächsten Zelle          // wie oft der Würfel schon hangabwärts weitergerutscht ist
     this.heights = new Float32Array(GRID * GRID);
@@ -73,7 +74,7 @@ export class LooseCubes {
     if (this.type[i] >= 0) this.typeCounts[this.type[i]]--;
     this.type[i] = typeId; this.typeCounts[typeId]++;
     this.state[i] = 1;
-    this.hops[i] = 0; this.lastCell[i] = -1; this.sliding[i] = 0;
+    this.hops[i] = 0; this.hit[i] = 0; this.lastCell[i] = -1; this.sliding[i] = 0;
     const o = i * 3;
     this.pos[o] = x; this.pos[o + 1] = y; this.pos[o + 2] = z;
     // Würfel fallen senkrecht genau dort runter, wo sie sich von der Seife lösen:
@@ -136,6 +137,8 @@ export class LooseCubes {
       if (y - HALF <= ground && V[o + 1] <= 0) {
         y = ground + HALF;
         V[o + 1] = -V[o + 1] * 0.1;
+        // Geräusch genau beim ersten Aufprall (nicht erst beim Liegenbleiben nach dem Rutschen)
+        if (!this.hit[i]) { this.hit[i] = 1; if (this.onLand) this.onLand(); }
         // Schüttgut: Ist ein Nachbar deutlich tiefer, rollt/rutscht der Würfel dorthin (animiert,
         // über die normale Physik), statt hier liegen zu bleiben. So entsteht ein flacher Hügel.
         // Gefälle nur prüfen, wenn der Würfel eine neue Zelle erreicht (nicht in jedem Schritt)
@@ -217,7 +220,6 @@ export class LooseCubes {
     this.state[i] = 2;
     this.activeCount--;
     this.writeMatrix(i);
-    if (this.onLand) this.onLand();
   }
 
   writeMatrix(i) {

@@ -193,10 +193,11 @@ export function sndTick() {
   const r = rainNode();
   const level = 0.03 * (1 - Math.exp(-rate / 10));                   // sättigt: viele Würfel = nicht lauter
   r.g.gain.cancelScheduledValues(now);
-  r.g.gain.setTargetAtTime(level, now, 0.06);
-  r.g.gain.setTargetAtTime(0, now + 0.1, 0.18);                      // klingt aus, wenn nichts mehr fällt
+  r.g.gain.setTargetAtTime(level, now, 0.025);
+  // an die Aufpralle gekoppelt: ohne neuen Aufprall nach ~0.45 s verstummt (-40 dB)
+  r.g.gain.setTargetAtTime(0, now + 0.05, 0.075);
   clearTimeout(rainTimer);
-  rainTimer = setTimeout(() => { if (rain) { try { rain.src.stop(); } catch { /* schon gestoppt */ } rain = null; } }, 1500);
+  rainTimer = setTimeout(() => { if (rain) { try { rain.src.stop(); } catch { /* schon gestoppt */ } rain = null; } }, 700);
   // einzelnes Korn nur bei wenig Betrieb, mit Mindestabstand und Stimmenlimit
   if (rate < 6 && now - lastGrain > 0.09 && freeVoice(now, 0.07)) {
     lastGrain = now;
