@@ -12,16 +12,19 @@ import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { makeBlobTexture, rng } from './setting/textures.js';
-import { makePackageAtlas, makePackageTexture } from './setting/packageTextures.js';
+import { makePackageAtlas, ATLAS_COLS } from './setting/packageTextures.js';
 import { TOP_SHELF, SHELF_Z, TABLE_Y } from './setting/wall.js';
 import { PACKAGE_TYPES } from './decor.js';
 
 // Maße auf dem Tisch: passt knapp um die Seife (0.85 x 0.31 x 0.56)
 export const PKG = { w: 0.95, h: 0.34, d: 0.65, wall: 0.025, lidH: 0.1, lidOver: 0.07, lidPad: 0.025, r: 0.5 };
 export const PKG_SHELF_SCALE = 0.36;
-const SPACING = 0.47, CENTER_X = -0.27;   // Reihe auf dem obersten Brett (Bildmitte liegt bei x ~ -0.27)
+const SPACING = 0.5, CENTER_X = -0.27;   // Reihe auf dem obersten Brett (Bildmitte liegt bei x ~ -0.27)
 const N = PACKAGE_TYPES.length;
 export const SHADOW_SOAP = N, SHADOW_LID = N + 1;
+const HEX_R = 0.58, HEART_W = 1.35;
+// wie die Seife je Form im Päckchen liegt (Skalierung, Versatz nach hinten)
+const FIT = { box: { s: 1, dz: 0 }, round: { s: 0.9, dz: 0 }, hex: { s: 0.92, dz: 0 }, heart: { s: 0.75, dz: -0.107 } };
 
 // Plätze auf dem Tisch (Schale ist dann weg): Seife links, Päckchen rechts, Deckel liegt flach
 // vorne daneben (deutlicher Abstand, leicht gedreht, eigener Schatten).
@@ -36,16 +39,27 @@ const _m = new THREE.Matrix4(), _m2 = new THREE.Matrix4(), _q = new THREE.Quater
 const _s = new THREE.Vector3(), _v = new THREE.Vector3(), _p = new THREE.Vector3();
 const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
 
-/** Atlas-Material: Kachel pro Instanz (aTile), Zeile 1 = Deckel, 0 = Schachtel. */
-function atlasMaterial(map, row, tiles) {
-  const mat = new THREE.MeshLambertMaterial({ map });
-  mat.defines = { PKG_ROW: row.toFixed(1), PKG_TILES: tiles.toFixed(1) };
+/**
+ * Atlas-Material: Kachel pro Instanz (aTile), LID = Deckel-Zeile. REPX: wie oft die Kachel
+ * waagerecht wiederholt wird (runde/sechseckige Wände), immer innerhalb der eigenen Kachel.
+ */
+function atlasMaterial(map, rows, lid, repx = 1, extra = {}) {
+  const mat = new THREE.MeshLambertMaterial({ map, ...extra });
+  mat.defines = { PKG_LID: lid ? '1.0' : '0.0', PKG_ROWS: rows.toFixed(1), PKG_COLS: ATLAS_COLS.toFixed(1), PKG_REPX: repx.toFixed(1) };
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float aTile;')
-      .replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\n vMapUv = (vec2(aTile, PKG_ROW) + 0.03 + 0.94 * uv) / vec2(PKG_TILES, 2.0);\n#endif');
+      .replace('#include <common>', '#include <common>\nattribute float aTile;\nvarying vec2 vTileUv; varying vec2 vCell;')
+      .replace('#include <uv_vertex>', `#include <uv_vertex>
+        vTileUv = vec2(uv.x * PKG_REPX, uv.y);
+        vCell = vec2(mod(aTile, PKG_COLS), floor(aTile / PKG_COLS) * 2.0 + (1.0 - PKG_LID));`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vTileUv; varying vec2 vCell;')
+      .replace('#include <map_fragment>', `
+        vec2 tuv = vec2(fract(vTileUv.x), clamp(vTileUv.y, 0.0, 1.0));
+        vec2 auv = vec2((vCell.x + 0.03 + 0.94 * tuv.x) / PKG_COLS, 1.0 - (vCell.y + 1.0 - (0.03 + 0.94 * tuv.y)) / PKG_ROWS);
+        diffuseColor *= texture2D(map, auv);`);
   };
-  mat.customProgramCacheKey = () => 'pkg' + row;
+  mat.customProgramCacheKey = () => 'pkgA' + lid + repx;
   return mat;
 }
 
@@ -59,23 +73,24 @@ function crumple(seed) {
   return g;
 }
 
-/** Seidenpapier: zerknitterte Bäusche rund an der Innenwand (Seife liegt in der Mitte). */
-function tissueGeometry(round) {
+/** Herz-Umriss (Ursprung in der Bounding-Box-Mitte), Breite W. */
+function heartPoints(W, n = 72) {
+  const k = W / 32, pts = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / n * Math.PI * 2;
+    const x = 16 * Math.sin(t) ** 3, y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+    pts.push(new THREE.Vector2(x * k, (y + 2.54) * k));
+  }
+  return pts;
+}
+
+/** Seidenpapier: zerknitterte Bäusche entlang der Innenwand (path(t) -> [x, z], t in 0..1). */
+function tissueAlong(path, n, seed) {
   const parts = [];
-  const r = rng(round ? 5 : 3);
-  const n = round ? 26 : 30;
+  const r = rng(seed);
   for (let i = 0; i < n; i++) {
     const g = crumple(10 + i);
-    let x, z;
-    if (round) { const a = i / n * 6.283; x = Math.cos(a) * (PKG.r - 0.08); z = Math.sin(a) * (PKG.r - 0.08); }
-    else {
-      const per = 2 * (PKG.w + PKG.d), t = (i + 0.5) / n * per;
-      const hw = PKG.w / 2 - PKG.wall - 0.078, hd = PKG.d / 2 - PKG.wall - 0.078; // Bausch (max. 0.075) bleibt innen
-      if (t < PKG.w) { x = -hw + t / PKG.w * 2 * hw; z = hd; }
-      else if (t < PKG.w + PKG.d) { x = hw; z = hd - (t - PKG.w) / PKG.d * 2 * hd; }
-      else if (t < 2 * PKG.w + PKG.d) { x = hw - (t - PKG.w - PKG.d) / PKG.w * 2 * hw; z = -hd; }
-      else { x = -hw; z = -hd + (t - 2 * PKG.w - PKG.d) / PKG.d * 2 * hd; }
-    }
+    const [x, z] = path((i + 0.5) / n);
     // bleibt unter der Deckel-Unterkante (Deckel geschlossen bei h - lidOver)
     g.scale(0.05 + r() * 0.01, 0.04 + r() * 0.012, 0.05 + r() * 0.01).rotateY(r() * 3).translate(x, PKG.h - PKG.lidOver - 0.075 + r() * 0.01, z);
     parts.push(g);
@@ -83,6 +98,14 @@ function tissueGeometry(round) {
   const m = mergeGeometries(parts);
   m.computeVertexNormals();
   return m;
+}
+function boxPath(t) {
+  const per = 2 * (PKG.w + PKG.d), s = t * per;
+  const hw = PKG.w / 2 - PKG.wall - 0.078, hd = PKG.d / 2 - PKG.wall - 0.078;
+  if (s < PKG.w) return [-hw + s / PKG.w * 2 * hw, hd];
+  if (s < PKG.w + PKG.d) return [hw, hd - (s - PKG.w) / PKG.d * 2 * hd];
+  if (s < 2 * PKG.w + PKG.d) return [hw - (s - PKG.w - PKG.d) / PKG.w * 2 * hw, -hd];
+  return [-hw, -hd + (s - 2 * PKG.w - PKG.d) / PKG.d * 2 * hd];
 }
 
 function bowGeometry() {
@@ -93,40 +116,73 @@ function bowGeometry() {
   return g;
 }
 
+/** Herz als offene Schachtel (Wand + Boden) bzw. Deckel; UVs planar (Deckel) und um den Umfang (Wand). */
+function heartGeometries() {
+  const { h, wall, lidH, lidPad } = PKG;
+  const outer = heartPoints(HEART_W), inner = outer.map((p) => p.clone().multiplyScalar((HEART_W - 2 * wall * 1.6) / HEART_W));
+  const sh = new THREE.Shape(outer); sh.holes.push(new THREE.Path(inner.slice().reverse()));
+  const uvGen = {
+    generateTopUV(g, v, a, b, c) { return [a, b, c].map((i) => new THREE.Vector2(v[i * 3] / HEART_W + 0.5, v[i * 3 + 1] / HEART_W + 0.5)); },
+    generateSideWallUV(g, v, a, b, c, d) {
+      return [a, b, c, d].map((i) => new THREE.Vector2((Math.atan2(v[i * 3 + 1], v[i * 3]) / 6.283 + 0.5) * 3, v[i * 3 + 2] / Math.max(h, 0.001)));
+    },
+  };
+  const wallG = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false, curveSegments: 1, UVGenerator: uvGen });
+  const floor = new THREE.ShapeGeometry(new THREE.Shape(inner));
+  const fuv = floor.attributes.uv, fp = floor.attributes.position;
+  for (let i = 0; i < fuv.count; i++) fuv.setXY(i, fp.getX(i) / HEART_W + 0.5, fp.getY(i) / HEART_W + 0.5);
+  floor.translate(0, 0, 0.004);
+  const body = mergeGeometries([wallG.toNonIndexed(), floor.toNonIndexed()]).rotateX(-Math.PI / 2);
+  const lidPts = outer.map((p) => p.clone().multiplyScalar((HEART_W + 2 * lidPad) / HEART_W));
+  const lidG = new THREE.ExtrudeGeometry(new THREE.Shape(lidPts), { depth: lidH, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 2, curveSegments: 1, UVGenerator: uvGen });
+  lidG.translate(0, 0, 0.012); lidG.rotateX(-Math.PI / 2);
+  body.computeVertexNormals();
+  return { body, lid: lidG, tissue: tissueAlong((t) => { const p = inner[Math.floor(t * inner.length) % inner.length]; return [p.x * 0.85, -p.y * 0.85]; }, 30, 9) };
+}
+
 export class Packages {
   constructor(scene) {
     const { w, h, d, wall: t, lidH, lidPad, r: R } = PKG;
     this.types = PACKAGE_TYPES;
-    const boxIds = this.types.filter((x) => x.shape === 'box').map((x) => x.id);
-    const atlas = makePackageAtlas(boxIds);
+    const { tex: atlas, rows } = makePackageAtlas(this.types.map((x) => x.id));
 
-    // eckige Schachtel: Boden + 4 Wände mit leicht gerundeten Kanten, Ursprung unten in der Mitte
+    // ---- Formen-Familien: je Familie EIN InstancedMesh für Schachteln und EINS für Deckel ----
     const rb = (W, H, D, x, y, z) => new RoundedBoxGeometry(W, H, D, 2, 0.008).translate(x, y, z);
-    this.boxGeo = mergeGeometries([
+    const boxBody = mergeGeometries([
       rb(w, t, d, 0, t / 2, 0),
       rb(w, h, t, 0, h / 2, d / 2 - t / 2), rb(w, h, t, 0, h / 2, -d / 2 + t / 2),
       rb(t, h, d - 2 * t, w / 2 - t / 2, h / 2, 0), rb(t, h, d - 2 * t, -w / 2 + t / 2, h / 2, 0),
     ]);
-    this.boxLidGeo = new RoundedBoxGeometry(w + 2 * lidPad, lidH, d + 2 * lidPad, 2, 0.02).translate(0, lidH / 2, 0);
-    this.boxMat = atlasMaterial(atlas, 0, boxIds.length);
-    this.boxLidMat = atlasMaterial(atlas, 1, boxIds.length);
-    const nb = boxIds.length;
-    this.boxGeo.setAttribute('aTile', new THREE.InstancedBufferAttribute(new Float32Array(nb), 1));
-    this.boxLidGeo.setAttribute('aTile', new THREE.InstancedBufferAttribute(new Float32Array(nb), 1));
-    this.body = new THREE.InstancedMesh(this.boxGeo, this.boxMat, nb);
-    this.lid = new THREE.InstancedMesh(this.boxLidGeo, this.boxLidMat, nb);
-
-    // Hutschachtel (rund)
-    const hatBody = mergeGeometries([
-      new THREE.CylinderGeometry(R, R, h, 40, 1, true).translate(0, h / 2, 0),
-      new THREE.CircleGeometry(R, 40).rotateX(-Math.PI / 2).translate(0, 0.004, 0),
-    ]);
-    const hatLid = new THREE.CylinderGeometry(R + lidPad, R + lidPad, lidH, 40).translate(0, lidH / 2, 0);
-    const hatTex = makePackageTexture('hut', false); hatTex.repeat.set(3, 1);
-    const hatLidTex = makePackageTexture('hut', true); hatLidTex.repeat.set(3, 1);
-    this.hatGeo = hatBody; this.hatLidGeo = hatLid;
-    this.hatMat = new THREE.MeshLambertMaterial({ map: hatTex, side: THREE.DoubleSide });
-    this.hatLidMat = new THREE.MeshLambertMaterial({ map: hatLidTex });
+    const boxLid = new RoundedBoxGeometry(w + 2 * lidPad, lidH, d + 2 * lidPad, 2, 0.02).translate(0, lidH / 2, 0);
+    // runde Schachtel (Wand innen sichtbar, Boden) + Deckel mit Deckelfläche
+    const cyl = (r, segs) => {
+      const side = new THREE.CylinderGeometry(r, r, h, segs, 1, true).translate(0, h / 2, 0);
+      const floor = new THREE.CircleGeometry(r, segs).rotateX(-Math.PI / 2).translate(0, 0.004, 0);
+      const lid = new THREE.CylinderGeometry(r + lidPad, r + lidPad, lidH, segs).translate(0, lidH / 2, 0);
+      return { body: mergeGeometries([side, floor], true), lid };
+    };
+    const round = cyl(R, 40), hex = cyl(HEX_R, 6);
+    const heart = heartGeometries();
+    const A = (lid, repx, extra) => atlasMaterial(atlas, rows, lid, repx, extra);
+    const capB = A(false, 1, { side: THREE.DoubleSide }), capL = A(true, 1);
+    const FAM = {
+      box: { body: boxBody, lid: boxLid, mB: A(false, 1), mL: A(true, 1), foot: [w, d], tissue: tissueAlong(boxPath, 30, 3) },
+      round: { body: round.body, lid: round.lid, mB: [A(false, 3, { side: THREE.DoubleSide }), capB], mL: [A(true, 3), capL, capL], foot: [2 * R, 2 * R],
+        tissue: tissueAlong((t) => [Math.cos(t * 6.283) * (R - 0.08), Math.sin(t * 6.283) * (R - 0.08)], 26, 5) },
+      hex: { body: hex.body, lid: hex.lid, mB: [A(false, 6, { side: THREE.DoubleSide }), capB], mL: [A(true, 6), capL, capL], foot: [2 * HEX_R, 2 * HEX_R * 0.87],
+        tissue: tissueAlong((t) => [Math.cos(t * 6.283) * (HEX_R * 0.87 - 0.09), Math.sin(t * 6.283) * (HEX_R * 0.87 - 0.09)], 26, 7) },
+      heart: { body: heart.body, lid: heart.lid, mB: A(false, 1, { side: THREE.DoubleSide }), mL: A(true, 1), foot: [HEART_W, HEART_W * 0.97], tissue: heart.tissue },
+    };
+    this.fams = FAM;
+    for (const [key, f] of Object.entries(FAM)) {
+      const members = this.types.filter((x) => x.shape === key);
+      f.n = Math.max(1, members.length);
+      f.body.setAttribute('aTile', new THREE.InstancedBufferAttribute(new Float32Array(f.n), 1));
+      f.lid.setAttribute('aTile', new THREE.InstancedBufferAttribute(new Float32Array(f.n), 1));
+      f.bodyMesh = new THREE.InstancedMesh(f.body, f.mB, f.n);
+      f.lidMesh = new THREE.InstancedMesh(f.lid, f.mL, f.n);
+      f.used = 0;
+    }
 
     // Schleifen auf den Deckeln
     this.bowGeo = bowGeometry();
@@ -136,30 +192,38 @@ export class Packages {
     this.bowOffset = new THREE.Matrix4().makeTranslation(0, lidH, 0);
 
     // Seidenpapier im offenen Päckchen (nur beim gewählten Päckchen sichtbar)
-    this.tissueBox = tissueGeometry(false); this.tissueRound = tissueGeometry(true);
-    this.tissue = new THREE.Mesh(this.tissueBox, new THREE.MeshLambertMaterial({ flatShading: true }));
+    this.tissue = new THREE.Mesh(FAM.box.tissue, new THREE.MeshLambertMaterial({ flatShading: true }));
     this.tissue.matrixAutoUpdate = false; this.tissue.visible = false;
 
     const blobMat = new THREE.MeshBasicMaterial({ map: makeBlobTexture(), transparent: true, depthWrite: false });
     this.blob = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), blobMat, N + 2);
 
-    // Plätze: Reihe auf dem obersten Brett
-    let bi = 0, wi = 0;
+    // Plätze: einige Sorten als Beispiel nebeneinander auf dem obersten Brett, die übrigen
+    // starten (unsichtbar) in der Mitte des Bretts und fliegen von dort auf den Tisch.
+    let wi = 0;
+    const shelfIds = this.types.filter((x) => x.shelf);
     this.slots = this.types.map((ty, i) => {
-      const sl = { type: ty, round: ty.shape === 'round', inst: -1, bow: -1 };
-      if (!sl.round) { sl.inst = bi; this.boxGeo.attributes.aTile.array[bi] = bi; this.boxLidGeo.attributes.aTile.array[bi] = bi; bi++; }
+      const f = FAM[ty.shape];
+      const sl = { type: ty, fam: f, inst: f.used++, bow: -1, fit: FIT[ty.shape] };
+      f.body.attributes.aTile.array[sl.inst] = i; f.lid.attributes.aTile.array[sl.inst] = i;
       if (ty.bow) { sl.bow = wi; this.bow.setColorAt(wi, new THREE.Color(ty.bow)); wi++; }
       return sl;
     });
-    this.hatBody = new THREE.Mesh(this.hatGeo, this.hatMat); this.hatLid = new THREE.Mesh(this.hatLidGeo, this.hatLidMat);
-    for (const m of [this.hatBody, this.hatLid]) { m.matrixAutoUpdate = false; m.frustumCulled = false; scene.add(m); }
-    for (const m of [this.body, this.lid, this.bow, this.blob]) {
+    for (const f of Object.values(FAM)) {
+      for (const m of [f.bodyMesh, f.lidMesh]) { for (let i = 0; i < m.count; i++) m.setMatrixAt(i, _zero); m.frustumCulled = false; scene.add(m); }
+    }
+    for (const m of [this.bow, this.blob]) {
       for (let i = 0; i < m.count; i++) m.setMatrixAt(i, _zero);
       m.frustumCulled = false;
       scene.add(m);
     }
     scene.add(this.tissue);
-    this.home = this.types.map((_, i) => new THREE.Vector3(CENTER_X + (i - (N - 1) / 2) * SPACING, TOP_SHELF.y, SHELF_Z));
+    const ns = shelfIds.length;
+    this.shelfSlot = this.types.map((ty) => shelfIds.indexOf(ty));
+    this.home = this.types.map((ty, i) => {
+      const k = this.shelfSlot[i];
+      return new THREE.Vector3(CENTER_X + (k >= 0 ? (k - (ns - 1) / 2) * SPACING : 0), TOP_SHELF.y, SHELF_Z);
+    });
     this.onShelf = new Uint8Array(N);
     this.ray = new THREE.Raycaster();
     this.bobSlot = -1;
@@ -170,12 +234,15 @@ export class Packages {
 
   get count() { return N; }
   slotOf(id) { return this.types.findIndex((t) => t.id === id); }
-  footprint(i) { return this.slots[i].round ? [PKG.r * 2, PKG.r * 2] : [PKG.w, PKG.d]; }
+  footprint(i) { return this.slots[i].fam.foot; }
+  /** Wie die Seife in Päckchen i liegt: { s, dz }. */
+  fit(i) { return this.slots[i].fit; }
 
   /** Alle Päckchen (zu) zurück ins Regal. */
   reset() {
     this.setActive(-1);
     for (let i = 0; i < N; i++) {
+      if (this.shelfSlot[i] < 0) { this.onShelf[i] = 0; this.hide(i); continue; }
       this.onShelf[i] = 1;
       this.setClosed(i, this.home[i], 0, PKG_SHELF_SCALE);
       const [fw, fd] = this.footprint(i);
@@ -190,7 +257,7 @@ export class Packages {
     this.active = i;
     this.tissue.visible = i >= 0;
     if (i < 0) return;
-    this.tissue.geometry = this.slots[i].round ? this.tissueRound : this.tissueBox;
+    this.tissue.geometry = this.slots[i].fam.tissue;
     this.tissue.material.color.set(this.types[i].tissue || '#ffffff');
   }
 
@@ -199,8 +266,7 @@ export class Packages {
     _q.setFromEuler(_e.set(0, rotY, 0));
     _m.compose(pos, _q, _s.set(scale, scale, scale));
     const sl = this.slots[i];
-    if (sl.round) { this.hatBody.matrix.copy(_m); this.hatBody.matrixWorldNeedsUpdate = true; }
-    else { this.body.setMatrixAt(sl.inst, _m); this.body.instanceMatrix.needsUpdate = true; }
+    sl.fam.bodyMesh.setMatrixAt(sl.inst, _m); sl.fam.bodyMesh.instanceMatrix.needsUpdate = true;
     if (i === this.active) { this.tissue.matrix.copy(_m); this.tissue.matrixWorldNeedsUpdate = true; }
   }
   /** Deckel i: Unterkante bei pos, Drehung (x/z kippen beim Auf-/Zuklappen). */
@@ -208,8 +274,7 @@ export class Packages {
     _q.setFromEuler(_e.set(rx, ry, rz));
     _m.compose(pos, _q, _s.set(scale, scale, scale));
     const sl = this.slots[i];
-    if (sl.round) { this.hatLid.matrix.copy(_m); this.hatLid.matrixWorldNeedsUpdate = true; }
-    else { this.lid.setMatrixAt(sl.inst, _m); this.lid.instanceMatrix.needsUpdate = true; }
+    sl.fam.lidMesh.setMatrixAt(sl.inst, _m); sl.fam.lidMesh.instanceMatrix.needsUpdate = true;
     if (sl.bow >= 0) { this.bow.setMatrixAt(sl.bow, _m2.multiplyMatrices(_m, this.bowOffset)); this.bow.instanceMatrix.needsUpdate = true; }
   }
   /** Höhe der Deckel-Unterkante über der Schachtel-Unterkante, wenn geschlossen. */
@@ -226,12 +291,11 @@ export class Packages {
   }
   hide(i) {
     _m.copy(_zero);
-    const sl = this.slots[i];
-    if (sl.round) { this.hatBody.matrix.copy(_zero); this.hatLid.matrix.copy(_zero); this.hatBody.matrixWorldNeedsUpdate = this.hatLid.matrixWorldNeedsUpdate = true; }
-    else { this.body.setMatrixAt(sl.inst, _zero); this.lid.setMatrixAt(sl.inst, _zero); }
+    const sl = this.slots[i], f = sl.fam;
+    f.bodyMesh.setMatrixAt(sl.inst, _zero); f.lidMesh.setMatrixAt(sl.inst, _zero);
     if (sl.bow >= 0) this.bow.setMatrixAt(sl.bow, _zero);
     this.blob.setMatrixAt(i, _zero);
-    this.body.instanceMatrix.needsUpdate = this.lid.instanceMatrix.needsUpdate = this.bow.instanceMatrix.needsUpdate = this.blob.instanceMatrix.needsUpdate = true;
+    f.bodyMesh.instanceMatrix.needsUpdate = f.lidMesh.instanceMatrix.needsUpdate = this.bow.instanceMatrix.needsUpdate = this.blob.instanceMatrix.needsUpdate = true;
     if (i === this.active) this.setActive(-1);
   }
 
@@ -285,15 +349,14 @@ export class Packages {
     this.thumbs = this.slots.map((sl) => {
       const g = new THREE.Group();
       const temp = [];
-      if (sl.round) {
-        g.add(new THREE.Mesh(this.hatGeo, this.hatMat));
-        const l = new THREE.Mesh(this.hatLidGeo, this.hatLidMat); l.position.y = this.lidY; g.add(l);
-      } else {
-        const bg = this.boxGeo.clone(), lg = this.boxLidGeo.clone();
-        bg.setAttribute('aTile', new THREE.InstancedBufferAttribute(new Float32Array([sl.inst]), 1));
-        lg.setAttribute('aTile', new THREE.InstancedBufferAttribute(new Float32Array([sl.inst]), 1));
-        const b = new THREE.InstancedMesh(bg, this.boxMat, 1), l = new THREE.InstancedMesh(lg, this.boxLidMat, 1);
+      {
+        const f = sl.fam, bg = f.body.clone(), lg = f.lid.clone();
+        bg.setAttribute('aTile', new THREE.InstancedBufferAttribute(new Float32Array([this.slotOf(sl.type.id)]), 1));
+        lg.setAttribute('aTile', new THREE.InstancedBufferAttribute(new Float32Array([this.slotOf(sl.type.id)]), 1));
+        const b = new THREE.InstancedMesh(bg, f.mB, 1), l = new THREE.InstancedMesh(lg, f.mL, 1);
         b.setMatrixAt(0, _m.identity()); l.setMatrixAt(0, _m.makeTranslation(0, this.lidY, 0));
+        const k = 0.95 / Math.max(f.foot[0], 0.95);
+        g.scale.setScalar(k);
         g.add(b, l); temp.push(bg, lg);
       }
       if (sl.type.bow) {

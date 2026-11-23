@@ -1,6 +1,7 @@
 // DOM-Oberfläche: Bestellung (unter der Schale), Münzen, Knöpfe, Ofen-Balken, schwebende Texte, FPS.
 
 import { soapCss } from './cabinet.js';
+import { sndCoin as sndOk } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -29,37 +30,101 @@ export function createUI() {
     },
     hint(text) { el.hint.textContent = text || ''; },
     /**
-     * Päckchen-Auswahl (Bottom-Sheet, waagerecht scrollbar). types: [{id,name,unlocked,cost}],
-     * thumbs: Vorschaubilder (data-URLs). onSelect(type) bei freigeschalteter Sorte, onClose beim Schließen.
+     * Auswahl-Sheet (Päckchen und Deko): unten, waagerecht scrollbar, Reiter je Kategorie.
+     * items: [{ id, name, sub, thumb, unlocked, cost, bonus, cat, disabled }]
+     * o: { title, cats, onSelect(item, ev), onHold(item, ev) (gedrückt halten), onBuy(item) -> bool, onClose, coins() }
      */
-    openPicker(types, thumbs, onSelect, onClose) {
-      const root = $('pkg-picker'), list = $('pkg-list');
-      list.innerHTML = '';
-      types.forEach((t, i) => {
+    openSheet(items, o) {
+      const root = $('pkg-picker'), list = $('pkg-list'), tabs = $('pkg-tabs'), note = $('pkg-note');
+      $('pkg-title').textContent = o.title;
+      list.innerHTML = ''; tabs.innerHTML = '';
+      const cats = (o.cats || []).filter((c) => items.some((it) => it.cat === c));
+      const firstOf = {};
+      const flash = (text) => {
+        note.textContent = text; note.classList.add('show');
+        clearTimeout(note._t); note._t = setTimeout(() => note.classList.remove('show'), 1300);
+      };
+      let closed = false;
+      const close = (cancelled) => {
+        if (closed) return; closed = true;
+        root.classList.remove('open');
+        root.onclick = null; $('pkg-close').onclick = null; list.onscroll = null;
+        if (cancelled && o.onClose) o.onClose();
+      };
+      items.forEach((it) => {
         const b = document.createElement('button');
-        b.className = 'pkg-card' + (t.unlocked ? '' : ' locked');
-        b.innerHTML = `<img alt="" src="${thumbs[i]}"><span class="pkg-name">${t.name}</span>`
-          + (t.unlocked ? '<span class="pkg-sub">Standard</span>' : `<span class="pkg-sub">🔒 ${t.cost} 🪙</span><span class="lock">🔒</span>`);
-        b.addEventListener('click', () => {
-          if (!t.unlocked) {
-            b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake');
-            note.textContent = 'Noch gesperrt'; note.classList.add('show');
-            clearTimeout(note._t); note._t = setTimeout(() => note.classList.remove('show'), 1200);
-            return;
-          }
-          close(false); onSelect(t);
+        b.className = 'pkg-card' + (it.unlocked ? '' : ' locked') + (it.disabled ? ' disabled' : '');
+        b.innerHTML = `<img alt="" src="${it.thumb}"><span class="pkg-name">${it.name}</span>`
+          + (it.unlocked ? `<span class="pkg-sub">${it.sub || ''}</span>` : `<span class="pkg-sub">🔒 ${it.cost} 🪙</span><span class="lock">🔒</span>`);
+        b.dataset.cat = it.cat || '';
+        if (it.cat && !(it.cat in firstOf)) firstOf[it.cat] = b;
+        const locked = () => {
+          this.openUnlock(it, o.coins(), () => {
+            if (!o.onBuy(it)) return false;
+            it.unlocked = true;
+            b.classList.remove('locked');
+            b.querySelector('.lock')?.remove();
+            b.querySelector('.pkg-sub').textContent = it.sub || '';
+            return true;
+          });
+        };
+        // Gedrückt halten (Deko): nach kurzer Zeit ohne Wischen startet das Ziehen
+        let hold = 0, sx = 0, sy = 0, held = false;
+        b.addEventListener('pointerdown', (e) => {
+          held = false;
+          if (!o.onHold || !it.unlocked || it.disabled) return;
+          sx = e.clientX; sy = e.clientY;
+          clearTimeout(hold);
+          hold = setTimeout(() => { held = true; close(false); o.onHold(it, e); }, 230);
+        });
+        b.addEventListener('pointermove', (e) => { if (Math.abs(e.clientX - sx) > 10 && !held) clearTimeout(hold); });
+        const cancelHold = () => clearTimeout(hold);
+        b.addEventListener('pointerup', cancelHold); b.addEventListener('pointercancel', cancelHold);
+        b.addEventListener('click', (e) => {
+          clearTimeout(hold);
+          if (held) return;
+          if (!it.unlocked) { locked(); return; }
+          if (it.disabled) { b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake'); flash(it.disabled); return; }
+          close(false); o.onSelect(it, e);
         });
         list.appendChild(b);
       });
-      const note = $('pkg-note');
-      const close = (cancelled) => {
-        root.classList.remove('open');
-        root.onclick = null; $('pkg-close').onclick = null;
-        if (cancelled && onClose) onClose();
+      // Reiter: springen zur Kategorie, markieren die sichtbare
+      const tabEls = cats.map((c) => {
+        const t = document.createElement('button');
+        t.className = 'tab'; t.textContent = c;
+        t.onclick = () => { list.scrollTo({ left: firstOf[c].offsetLeft - 4, behavior: 'smooth' }); };
+        tabs.appendChild(t);
+        return t;
+      });
+      tabs.style.display = cats.length > 1 ? '' : 'none';
+      const mark = () => {
+        let cur = 0;
+        cats.forEach((c, k) => { if (firstOf[c].offsetLeft - 30 <= list.scrollLeft) cur = k; });
+        if (list.scrollLeft + list.clientWidth >= list.scrollWidth - 4) cur = cats.length - 1;
+        tabEls.forEach((t, k) => t.classList.toggle('on', k === cur));
       };
+      list.onscroll = mark;
       $('pkg-close').onclick = () => close(true);
       root.onclick = (e) => { if (e.target === root) close(true); }; // Tipp neben das Fenster
-      list.scrollLeft = 0;
+      list.scrollLeft = 0; mark();
+      root.classList.add('open');
+      return { close };
+    },
+    /** Freischalt-Dialog: Kosten, Bonus und Knopf (geht nur mit genug Münzen). */
+    openUnlock(it, coins, buy) {
+      const root = $('unlock'), btn = $('unlock-buy');
+      $('unlock-img').src = it.thumb;
+      $('unlock-name').textContent = it.name;
+      $('unlock-bonus').textContent = `+${it.bonus} 🪙 pro Verkauf`;
+      $('unlock-have').textContent = `Du hast ${coins} 🪙`;
+      const enough = coins >= it.cost;
+      btn.disabled = !enough;
+      btn.textContent = enough ? `Freischalten für ${it.cost} 🪙` : `Zu wenig Münzen (${it.cost} 🪙)`;
+      const close = () => { root.classList.remove('open'); btn.onclick = null; root.onclick = null; };
+      btn.onclick = () => { if (buy()) { sndOk(); close(); } };
+      $('unlock-close').onclick = close;
+      root.onclick = (e) => { if (e.target === root) close(); };
       root.classList.add('open');
     },
     /** Bestell-Zettel groß. canAccept=false -> nur lesen (Knopf gesperrt). */

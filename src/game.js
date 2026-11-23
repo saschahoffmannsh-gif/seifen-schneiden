@@ -21,6 +21,8 @@ import { TABLE_Y, CABINET, SHELF_FRONT_Z } from './setting/wall.js';
 import { OrderNotes, NOTE_COUNT } from './orderNotes.js';
 import { makeOrder } from './orders.js';
 import { cabinetLayout } from './cabinet.js';
+import { save, applyUnlocks } from './save.js';
+import { PKG_CATS, PACKAGE_TYPES } from './decor.js';
 
 const BAR_TABLE_SCALE = 0.85;                       // Seife auf dem Tisch / im Päckchen
 const BAR_HALF_H = 0.18 * BAR_TABLE_SCALE;          // halbe Höhe der liegenden Seife
@@ -71,7 +73,9 @@ export class Game {
     window.addEventListener('pointermove', (e) => this.swipeMove(e));
     window.addEventListener('pointerup', (e) => this.swipeEnd(e));
     window.addEventListener('pointercancel', (e) => this.swipeEnd(e, true));
-    this.coins = 0;
+    applyUnlocks(PACKAGE_TYPES, 'pkg:');
+    this.coins = save.coins;     // Münzen bleiben gespeichert (localStorage)
+    ui.setCoins(this.coins);
     this.state = 'shelf';
     this.cutIds = new Set();      // welche Sorten schon in der Schale sind
     this.bgBase = bg.clone();
@@ -349,11 +353,28 @@ export class Game {
   openPicker() {
     this.state = 'picker';
     const thumbs = this.packages.makeThumbs(this.renderer);
-    this.ui.openPicker(this.packages.types, thumbs, (type) => {
-      this.state = 'pickPkg';
-      this.pkgType = type;
-      this.flyPackage(this.packages.slotOf(type.id));
-    }, () => { if (this.state === 'picker') this.state = 'pickPkg'; });
+    const items = this.packages.types.map((t, i) => ({ id: t.id, name: t.name, cat: t.cat, thumb: thumbs[i], unlocked: t.unlocked,
+      cost: t.cost, bonus: t.bonus, sub: t.bonus ? `+${t.bonus} 🪙` : 'Standard', type: t }));
+    this.ui.openSheet(items, {
+      title: 'Päckchen wählen', cats: PKG_CATS,
+      coins: () => this.coins,
+      onBuy: (it) => this.buy(it.cost, 'pkg:' + it.id, () => { it.type.unlocked = true; }),
+      onSelect: (it) => {
+        this.state = 'pickPkg';
+        this.pkgType = it.type;
+        this.flyPackage(this.packages.slotOf(it.id));
+      },
+      onClose: () => { if (this.state === 'picker') this.state = 'pickPkg'; },
+    });
+  }
+
+  /** Freischalten mit Münzen (Päckchen und Deko); wird gespeichert. */
+  buy(cost, key, apply) {
+    if (this.coins < cost) return false;
+    this.coins -= cost; save.coins = this.coins; save.unlock(key);
+    apply();
+    this.ui.setCoins(this.coins, true);
+    return true;
   }
 
   /** Kontaktschatten des Päckchens auf dem Tisch an Position x/z (0 = ausblenden). */
@@ -414,12 +435,15 @@ export class Game {
     this.state = 'packing';
     this.ui.hint('');
     const bar = this.bar, i = this.pkgSlot;
-    const p0 = TABLE_SPOT.soap, to = TABLE_SPOT.pkg;
+    const p0 = TABLE_SPOT.soap, to = TABLE_SPOT.pkg, fit = this.packages.fit(i);
     const ry0 = bar.rotation.y, ry1 = Math.round(ry0 / Math.PI) * Math.PI;
     this.packages.setBlob(SHADOW_SOAP, 0, 0, 0, 0, 0);
     haptic(8);
+    // Seife passt sich der Form an (Herz/rund: etwas kleiner, im Herz weiter hinten)
     this.play(0.6, (e, t) => {
-      bar.position.set(p0.x + (to.x - p0.x) * e, TABLE_Y + BAR_HALF_H + PKG.wall * e + Math.sin(t * Math.PI) * 0.7, p0.z + (to.z - p0.z) * e);
+      const sc = BAR_TABLE_SCALE * (1 + (fit.s - 1) * e);
+      bar.scale.set(sc, sc, sc);
+      bar.position.set(p0.x + (to.x - p0.x) * e, TABLE_Y + BAR_HALF_H * sc / BAR_TABLE_SCALE + PKG.wall * e + Math.sin(t * Math.PI) * 0.7, p0.z + (to.z + fit.dz - p0.z) * e);
       bar.rotation.set(Math.sin(t * Math.PI) * 0.25, ry0 + (ry1 - ry0) * e, 0);
     }, () => {
       sndPop();
@@ -484,7 +508,7 @@ export class Game {
     }, () => {
       this.packages.hide(i);
       const earned = this.price + (this.pkgType ? this.pkgType.bonus : 0);
-      this.coins += earned;
+      this.coins += earned; save.coins = this.coins;
       this.ui.setCoins(this.coins, true);
       sndCoin(); haptic(20);
       this.ui.popup(`+${earned} 🪙`);

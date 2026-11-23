@@ -40,7 +40,8 @@
   <div id="pkg-picker">
     <div class="sheet panel">
       <button id="pkg-close" aria-label="Schließen">✕</button>
-      <div class="panel-title">Päckchen wählen</div>
+      <div class="panel-title" id="pkg-title">Päckchen wählen</div>
+      <div id="pkg-tabs" class="scroll-x"></div>
       <div id="pkg-list" class="scroll-x"></div>
       <div id="pkg-note">Noch gesperrt</div>
     </div>
@@ -71,6 +72,18 @@
       <div id="cab-msg"></div>
       <div class="cab-door left"><span class="knob"></span></div>
       <div class="cab-door right"><span class="knob"></span></div>
+    </div>
+  </div>
+
+  <!-- Freischalten (Päckchen und Deko) -->
+  <div id="unlock">
+    <div class="unlock-card">
+      <button id="unlock-close" class="x-btn" aria-label="Schließen">✕</button>
+      <img id="unlock-img" alt="">
+      <div id="unlock-name"></div>
+      <div id="unlock-bonus"></div>
+      <div id="unlock-have"></div>
+      <button id="unlock-buy" class="btn alt">Freischalten</button>
     </div>
   </div>
 

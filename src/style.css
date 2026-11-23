@@ -278,3 +278,33 @@ body.table-mode { --ui-shift: 48px; }
   .drawer .nm { font-size: 7.6px; letter-spacing: -.25px; }
 }
 .drawer .nm.long { font-size: 7px; letter-spacing: -.3px; }
+
+/* ---------- Reiter im Auswahl-Sheet ---------- */
+#pkg-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 0 2px 8px; scrollbar-width: none; touch-action: pan-x; }
+#pkg-tabs::-webkit-scrollbar { display: none; }
+#pkg-tabs .tab {
+  flex: 0 0 auto; border: 0; border-radius: 999px; padding: 5px 12px; font-weight: 800; font-size: 12px; cursor: pointer;
+  background: rgba(255, 240, 215, .25); color: #fbe9cf; box-shadow: inset 0 0 0 1px rgba(255,230,190,.35);
+}
+#pkg-tabs .tab.on { background: #ffe27a; color: #5b3a22; box-shadow: 0 2px 0 rgba(30,12,4,.35); }
+.pkg-card.disabled { filter: grayscale(.8) brightness(.85); opacity: .7; }
+.pkg-card { touch-action: pan-x; }
+
+/* ---------- Freischalten ---------- */
+#unlock {
+  position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
+  background: rgba(40, 20, 8, 0); pointer-events: none; visibility: hidden; transition: background .2s, visibility 0s .25s;
+}
+#unlock.open { background: rgba(40, 20, 8, .5); pointer-events: auto; visibility: visible; transition: background .2s; }
+.unlock-card {
+  position: relative; width: min(80vw, 300px); padding: 22px 18px 18px; border-radius: 16px; text-align: center; color: #5b3a22;
+  background: linear-gradient(#fbf3e4, #ecdcbd); box-shadow: 0 18px 40px rgba(0,0,0,.45);
+  transform: scale(.8); opacity: 0; transition: transform .25s cubic-bezier(.2,1.4,.4,1), opacity .2s;
+}
+#unlock.open .unlock-card { transform: none; opacity: 1; }
+#unlock-img { width: 120px; height: 120px; display: block; margin: 0 auto 4px; }
+#unlock-name { font: bold 20px Georgia, serif; }
+#unlock-bonus { font-weight: 800; color: #2e9b5f; margin: 4px 0; }
+#unlock-have { font-size: 13px; opacity: .75; margin-bottom: 12px; }
+#unlock-buy { width: 100%; font-size: 16px; }
+#unlock-buy:disabled { background: #cdbba5; color: #6d5848; box-shadow: none; }
