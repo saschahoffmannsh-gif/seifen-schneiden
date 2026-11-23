@@ -95,7 +95,7 @@ export function createBlockMaterial() {
         vec2 ce = min(vCubeUv, 1.0 - vCubeUv);
         float ed = min(ce.x, ce.y);
         float aw = max(fwidth(ed) * 1.5, 0.03);
-        diffuseColor.rgb *= 1.0 - 0.075 * (1.0 - smoothstep(0.0, aw, ed)) - 0.025 * (1.0 - smoothstep(0.0, aw * 3.0, ed));`)
+        diffuseColor.rgb *= 1.0 - 0.06 * (1.0 - smoothstep(0.0, aw, ed)) - 0.015 * (1.0 - smoothstep(0.0, aw * 3.0, ed));`)
       .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
         if (vFront > 0.5) {
           // Steigungen der Prägung (Welt-Einheiten) -> Normale kippen (Vorderseite liegt in der xy-Ebene)
