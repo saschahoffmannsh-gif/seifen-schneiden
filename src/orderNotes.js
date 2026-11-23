@@ -8,7 +8,11 @@ import { MIDDLE_SHELF, WALL_Z, SHELF_FRONT_Z } from './setting/wall.js';
 
 export const NOTE_COUNT = 3;
 const W = 0.34, H = 0.4;                 // Zettelgröße (Welt-Einheiten)
-const TW = 256, TH = Math.round(TW * H / W);
+const TW = 384, TH = Math.round(TW * H / W);   // höher aufgelöst: Schrift bleibt scharf
+const SERIF = "'Fraunces', Georgia, serif", SANS = "'DM Sans', system-ui, sans-serif";
+const soapRgb = (s) => `rgb(${s.base.map((c) => Math.round(c * 255)).join(',')})`;
+const spaced = (g, px) => { if ('letterSpacing' in g) g.letterSpacing = px + 'px'; };
+function rngFor(seed) { let t = seed >>> 0; return () => { t += 0x6d2b79f5; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; }; }
 const XS = [-1.08, -0.27, 0.54];        // Plätze (Bildmitte liegt bei x ~ -0.27)
 const ROT = [0.06, -0.04, 0.05];
 
@@ -24,6 +28,7 @@ export class OrderNotes {
     this.tex = new THREE.CanvasTexture(this.canvas);
     this.tex.colorSpace = THREE.SRGBColorSpace;
     this.tex.anisotropy = 4;
+    this.tex.generateMipmaps = true;
 
     const geo = new THREE.PlaneGeometry(W, H).translate(0, -H / 2, 0); // Ursprung oben in der Mitte
     // leicht gewölbt: Papier biegt sich unten etwas nach vorne
@@ -53,6 +58,11 @@ export class OrderNotes {
     this.active = new Uint8Array(NOTE_COUNT);
     this.pop = new Float32Array(NOTE_COUNT).fill(1);  // 0..1 Einblend-Animation
     this.wiggle = false;
+    // Canvas-Schrift braucht geladene Webfonts: danach alle Zettel neu zeichnen
+    if (document.fonts && document.fonts.load) {
+      Promise.all([`italic 500 38px ${SERIF}`, `500 30px ${SERIF}`, `600 19px ${SANS}`].map((f) => document.fonts.load(f)))
+        .then(() => { for (let i = 0; i < NOTE_COUNT; i++) if (this.orders[i]) this.draw(i); }).catch(() => {});
+    }
   }
 
   /** Zettel i zeigt eine Bestellung (null = leer). Zeichnet nur diese Kachel neu. */
@@ -69,52 +79,72 @@ export class OrderNotes {
     const g = this.g, x0 = i * TW, o = this.orders[i];
     g.clearRect(x0, 0, TW, TH);
     if (!o) { this.tex.needsUpdate = true; return; }
-    // Papier: cremeweiß, feine Linien, leicht vergilbter Rand
-    const grad = g.createLinearGradient(x0, 0, x0, TH);
-    grad.addColorStop(0, '#fffaf0'); grad.addColorStop(1, '#f6ead3');
-    g.fillStyle = grad; g.fillRect(x0, 0, TW, TH);
-    g.strokeStyle = 'rgba(120,150,200,0.25)'; g.lineWidth = 2;
-    for (let y = 92; y < TH - 10; y += 30) { g.beginPath(); g.moveTo(x0 + 14, y); g.lineTo(x0 + TW - 14, y); g.stroke(); }
-    g.strokeStyle = 'rgba(160,110,60,0.35)'; g.lineWidth = 4; g.strokeRect(x0 + 2, 2, TW - 4, TH - 4);
-    g.fillStyle = '#8a5a3c'; g.textAlign = 'center';
-    g.font = 'bold 26px Georgia, serif'; g.fillText('Bestellung', x0 + TW / 2, 44);
-    g.fillStyle = '#4a2e22'; g.font = 'italic bold 40px Georgia, serif';
-    g.fillText(o.customer, x0 + TW / 2, 92);
-    // Mischung als gestapelter Balken (Anteile wie bestellt), darunter die Prozente
-    const bx = x0 + 18, bw = TW - 36, by = 108, bh = 40;
+    const S = TW / 256;                      // Zeichnung in 256er-Koordinaten, Kachel höher aufgelöst
+    g.save(); g.translate(x0, 0); g.scale(S, S);
+    const w = 256, h = TH / S, cx = w / 2;
+    // Papier: warmes Elfenbein, feine Körnung, Rand minimal dunkler (handgeschöpft)
+    const grad = g.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, '#fdf9f1'); grad.addColorStop(1, '#f4ecdd');
+    g.fillStyle = grad; g.fillRect(0, 0, w, h);
+    const rnd = rngFor(i * 977 + (o.customer || '').length * 31);
+    for (let k = 0; k < 700; k++) { g.fillStyle = rnd() < 0.5 ? 'rgba(120,90,50,0.05)' : 'rgba(255,255,255,0.35)'; g.fillRect(rnd() * w, rnd() * h, 1.2, 1.2); }
+    const edge = g.createRadialGradient(cx, h * 0.45, h * 0.35, cx, h * 0.45, h * 0.75);
+    edge.addColorStop(0, 'rgba(150,110,60,0)'); edge.addColorStop(1, 'rgba(150,110,60,0.14)');
+    g.fillStyle = edge; g.fillRect(0, 0, w, h);
+    // feiner Goldrahmen (doppelte Haarlinie)
+    g.strokeStyle = 'rgba(184,149,93,0.75)'; g.lineWidth = 1.6; g.strokeRect(9, 9, w - 18, h - 18);
+    g.strokeStyle = 'rgba(184,149,93,0.4)'; g.lineWidth = 0.8; g.strokeRect(13, 13, w - 26, h - 26);
+    g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+    // Kopf: Eyebrow + Name
+    spaced(g, 3); g.fillStyle = '#9a7a52'; g.font = `600 13px ${SANS}`; g.fillText('BESTELLUNG', cx, 40); spaced(g, 0);
+    g.fillStyle = '#392920'; g.font = `italic 500 38px ${SERIF}`;
+    g.fillText(o.customer, cx, 82, w - 40);
+    // kleines Ornament
+    g.strokeStyle = 'rgba(184,149,93,0.8)'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(cx - 44, 98); g.lineTo(cx - 8, 98); g.moveTo(cx + 8, 98); g.lineTo(cx + 44, 98); g.stroke();
+    g.fillStyle = '#b8955d'; g.beginPath(); g.moveTo(cx, 93); g.lineTo(cx + 4, 98); g.lineTo(cx, 103); g.lineTo(cx - 4, 98); g.closePath(); g.fill();
+    // Mischung: schlanker, abgerundeter Balken
+    const bx = 26, bw = w - 52, by = 116, bh = 18;
     let acc = 0;
-    g.save(); g.beginPath(); g.roundRect(bx, by, bw, bh, 12); g.clip();
+    g.save(); g.beginPath(); g.roundRect(bx, by, bw, bh, 9); g.clip();
     o.mix.forEach((m) => {
-      const w = bw * m.pct / 100;
-      g.fillStyle = `rgb(${m.soap.base.map((c) => Math.round(c * 255)).join(',')})`;
-      g.fillRect(bx + acc, by, w + 0.5, bh);
-      g.fillStyle = 'rgba(255,255,255,0.4)'; g.fillRect(bx + acc + 4, by + 5, Math.max(0, w - 8), 7);
-      if (acc > 0) { g.fillStyle = 'rgba(255,255,255,0.9)'; g.fillRect(bx + acc - 1.5, by, 3, bh); }
-      g.fillStyle = 'rgba(40,20,10,0.85)'; g.font = 'bold 20px system-ui, sans-serif'; g.textAlign = 'center';
-      if (w > 40) g.fillText(`${m.pct}%`, bx + acc + w / 2, by + 30);
-      acc += w;
+      const ww = bw * m.pct / 100;
+      g.fillStyle = soapRgb(m.soap); g.fillRect(bx + acc, by, ww + 0.5, bh);
+      if (acc > 0) { g.fillStyle = 'rgba(253,249,241,0.95)'; g.fillRect(bx + acc - 1, by, 2, bh); }
+      acc += ww;
     });
+    const sh = g.createLinearGradient(0, by, 0, by + bh);
+    sh.addColorStop(0, 'rgba(255,255,255,0.35)'); sh.addColorStop(0.5, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(60,40,20,0.12)');
+    g.fillStyle = sh; g.fillRect(bx, by, bw, bh);
     g.restore();
-    g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 3; g.beginPath(); g.roundRect(bx, by, bw, bh, 12); g.stroke();
-    g.textAlign = 'left'; g.font = 'bold 22px Georgia, serif';
+    g.strokeStyle = 'rgba(90,60,30,0.25)'; g.lineWidth = 1; g.beginPath(); g.roundRect(bx, by, bw, bh, 9); g.stroke();
+    // Zeilen: Farbpunkt, Name, Prozent rechtsbündig
     o.mix.forEach((m, k) => {
-      const y = 180 + k * 26;
-      g.fillStyle = `rgb(${m.soap.base.map((c) => Math.round(c * 255)).join(',')})`;
-      g.beginPath(); g.roundRect(x0 + 22, y - 16, 22, 18, 5); g.fill(); g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 2; g.stroke();
-      g.fillStyle = '#4a2e22'; g.fillText(`${m.pct} % ${m.soap.name}`, x0 + 52, y, TW - 70);
+      const y = 156 + k * 25;
+      g.fillStyle = soapRgb(m.soap); g.beginPath(); g.arc(34, y - 6, 6.5, 0, 6.283); g.fill();
+      g.strokeStyle = 'rgba(60,40,20,0.25)'; g.lineWidth = 1; g.stroke();
+      g.textAlign = 'left'; g.fillStyle = '#4a3628'; g.font = `500 18px ${SANS}`; g.fillText(m.soap.name, 50, y, 140);
+      g.textAlign = 'right'; g.fillStyle = '#392920'; g.font = `600 18px ${SANS}`; g.fillText(`${m.pct} %`, w - 26, y);
     });
-    if (o.additive) { g.fillStyle = '#7a4a10'; g.font = 'italic bold 20px Georgia, serif'; g.textAlign = 'center'; g.fillText(`mit ${o.additive.name}`, x0 + TW / 2, 180 + o.mix.length * 26 + 2, TW - 24); }
-    // Münze + Belohnung
-    g.fillStyle = '#e8b830'; g.beginPath(); g.arc(x0 + TW / 2 - 36, 284, 16, 0, 6.283); g.fill();
-    g.strokeStyle = '#b8860b'; g.lineWidth = 3; g.stroke();
-    g.fillStyle = '#8a5a00'; g.font = 'bold 30px Georgia, serif'; g.textAlign = 'left';
-    g.fillText(String(o.reward), x0 + TW / 2 - 12, 295);
+    const yy = 154 + o.mix.length * 25;
+    if (o.additive) { g.textAlign = 'center'; g.fillStyle = '#8a6a3e'; g.font = `italic 400 18px ${SERIF}`; g.fillText(`mit ${o.additive.name}`, cx, yy, w - 40); }
+    // Trennlinie + Belohnung (Goldmünze)
+    g.strokeStyle = 'rgba(184,149,93,0.45)'; g.lineWidth = 1; g.beginPath(); g.moveTo(30, h - 55); g.lineTo(w - 30, h - 55); g.stroke();
+    const mx = cx - 26, my = h - 29;
+    const cg = g.createRadialGradient(mx - 4, my - 5, 2, mx, my, 15);
+    cg.addColorStop(0, '#f6e2a6'); cg.addColorStop(0.6, '#d9b35e'); cg.addColorStop(1, '#a98238');
+    g.fillStyle = cg; g.beginPath(); g.arc(mx, my, 14, 0, 6.283); g.fill();
+    g.strokeStyle = 'rgba(120,85,30,0.7)'; g.lineWidth = 1.2; g.beginPath(); g.arc(mx, my, 10, 0, 6.283); g.stroke();
+    g.textAlign = 'left'; g.fillStyle = '#392920'; g.font = `500 28px ${SERIF}`; g.fillText(String(o.reward), mx + 22, my + 9);
     if (this.active[i]) {
-      g.save(); g.translate(x0 + TW / 2, TH / 2 + 30); g.rotate(-0.35);
-      g.strokeStyle = 'rgba(46,155,95,0.85)'; g.lineWidth = 6; g.strokeRect(-100, -30, 200, 60);
-      g.fillStyle = 'rgba(46,155,95,0.9)'; g.font = 'bold 34px system-ui, sans-serif'; g.textAlign = 'center';
-      g.fillText('IN ARBEIT', 0, 12); g.restore();
+      // Stempel „In Arbeit“: salbeigrün, leicht schräg, doppelte Kontur
+      g.save(); g.translate(cx, h / 2 + 34); g.rotate(-0.26);
+      g.globalAlpha = 0.85; g.strokeStyle = '#6f8a62'; g.lineWidth = 2.5; g.beginPath(); g.roundRect(-84, -26, 168, 52, 8); g.stroke();
+      g.lineWidth = 1; g.beginPath(); g.roundRect(-78, -20, 156, 40, 5); g.stroke();
+      g.fillStyle = '#6f8a62'; spaced(g, 3); g.font = `600 20px ${SANS}`; g.textAlign = 'center'; g.fillText('IN ARBEIT', 2, 7); spaced(g, 0);
+      g.restore();
     }
+    g.restore();
     this.tex.needsUpdate = true;
   }
 
