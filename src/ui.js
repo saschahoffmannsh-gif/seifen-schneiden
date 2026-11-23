@@ -2,6 +2,7 @@
 
 import { soapCss } from './cabinet.js';
 import { sndCoin as sndOk } from './audio.js';
+import { ICON, rich, buttonLabel } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -20,7 +21,7 @@ export function createUI() {
       $('order').classList.toggle('hidden', !order);
       this._mixKey = '';
       if (!order) { this.layoutOrder(); return; }
-      el.orderText.textContent = `${order.customer} möchte:` + (order.additive ? ` mit ${order.additive.name}` : '');
+      el.orderText.innerHTML = `<span class="avatar">${rich(order.customer[0])}</span><b>${rich(order.customer)}</b> möchte:`;
       this.setMix(order, null, 0, []);
     },
     /**
@@ -55,7 +56,7 @@ export function createUI() {
     },
     /** Nach dem Ausformen: statt der Balken nur noch eine Zeile mit dem Ergebnis. */
     setMixSummary(q) {
-      el.orderProgress.innerHTML = `<div class="mx-sum">${'★'.repeat(q.stars)}${'☆'.repeat(3 - q.stars)} Mischung ${q.accuracy} % genau</div>`;
+      el.orderProgress.innerHTML = `<div class="mx-sum"><span class="mini-stars">${[0, 1, 2].map((k) => `<span class="${k < q.stars ? 'on' : 'off'}">${ICON.star}</span>`).join('')}</span> Mischung ${q.accuracy} % genau</div>`;
       this._mixKey = '';
       this.layoutOrder();
     },
@@ -66,10 +67,10 @@ export function createUI() {
     /** Deko-Bonus auf dem Bestell-Zettel ('+15 🪙 Deko'). */
     setDeco(n) {
       const d = $('order-deco');
-      d.textContent = n > 0 ? `+${n} 🪙 Deko` : '';
+      d.innerHTML = n > 0 ? rich(`+${n} 🪙 Deko`) : '';
       d.classList.toggle('hidden', !(n > 0));
     },
-    hint(text) { el.hint.textContent = text || ''; },
+    hint(text) { el.hint.innerHTML = rich(text || ''); },
     /**
      * Auswahl-Sheet (Päckchen und Deko): unten, waagerecht scrollbar, Reiter je Kategorie.
      * items: [{ id, name, sub, thumb, unlocked, cost, bonus, cat, disabled }]
@@ -95,8 +96,8 @@ export function createUI() {
       items.forEach((it) => {
         const b = document.createElement('button');
         b.className = 'pkg-card' + (it.unlocked ? '' : ' locked') + (it.disabled ? ' disabled' : '');
-        b.innerHTML = `<img alt="" src="${it.thumb}"><span class="pkg-name">${it.name}</span>`
-          + (it.unlocked ? `<span class="pkg-sub">${it.sub || ''}</span>` : `<span class="pkg-sub">🔒 ${it.cost} 🪙</span><span class="lock">🔒</span>`);
+        b.innerHTML = `<span class="pkg-thumb"><img alt="" src="${it.thumb}"></span><span class="pkg-name">${rich(it.name)}</span>`
+          + (it.unlocked ? `<span class="pkg-sub">${rich(it.sub || '')}</span>` : `<span class="pkg-sub price">${ICON.coin}${it.cost}</span><span class="lock">${ICON.lock}</span>`);
         b.dataset.cat = it.cat || '';
         if (it.cat && !(it.cat in firstOf)) firstOf[it.cat] = b;
         const locked = () => {
@@ -105,7 +106,7 @@ export function createUI() {
             it.unlocked = true;
             b.classList.remove('locked');
             b.querySelector('.lock')?.remove();
-            b.querySelector('.pkg-sub').textContent = it.sub || '';
+            const sub = b.querySelector('.pkg-sub'); sub.classList.remove('price'); sub.innerHTML = rich(it.sub || '');
             return true;
           });
         };
@@ -157,11 +158,11 @@ export function createUI() {
       const root = $('unlock'), btn = $('unlock-buy');
       $('unlock-img').src = it.thumb;
       $('unlock-name').textContent = it.name;
-      $('unlock-bonus').textContent = o.line || `+${it.bonus} 🪙 pro Verkauf`;
-      $('unlock-have').textContent = `Du hast ${coins} 🪙`;
+      $('unlock-bonus').innerHTML = rich(o.line || `+${it.bonus} 🪙 pro Verkauf`);
+      $('unlock-have').innerHTML = rich(`Du hast ${coins} 🪙`);
       const enough = coins >= it.cost;
       btn.disabled = !enough;
-      btn.textContent = !it.cost ? (o.verb || 'Nehmen') : enough ? `${o.verb || 'Freischalten'} für ${it.cost} 🪙` : `Zu wenig Münzen (${it.cost} 🪙)`;
+      btn.innerHTML = rich(!it.cost ? (o.verb || 'Nehmen') : enough ? `${o.verb || 'Freischalten'} für ${it.cost} 🪙` : `Zu wenig Münzen (${it.cost} 🪙)`);
       const close = () => { root.classList.remove('open'); btn.onclick = null; root.onclick = null; };
       btn.onclick = () => { if (buy()) { sndOk(); close(); } };
       $('unlock-close').onclick = close;
@@ -183,7 +184,7 @@ export function createUI() {
             + (st != null ? `<small class="${low ? 'low' : ''}">${low ? '⚠ ' : ''}Vorrat ${st}</small>` : '') + '</div>';
         }).join('')
         + (order.additive ? `<div class="note-row add">${order.additive.emoji} mit ${order.additive.name}</div>` : '') + '</div>';
-      $('note-reward').textContent = `Belohnung: bis ${Math.round(order.reward * 1.25)} 🪙`;
+      $('note-reward').innerHTML = `<span class="reward-chip">Belohnung bis ${ICON.coin}<b>${Math.round(order.reward * 1.25)}</b></span>`;
       btn.disabled = !canAccept;
       btn.textContent = canAccept ? 'Annehmen' : 'Erst aktuelle Bestellung fertig machen';
       const close = () => { root.classList.remove('open'); root.onclick = null; $('note-close').onclick = null; btn.onclick = null; };
@@ -261,9 +262,10 @@ export function createUI() {
     showQuality(q) {
       const root = $('quality');
       if (!q) { root.classList.remove('show'); return; }
-      $('q-stars').textContent = '★★★'.slice(0, q.stars) + '☆☆☆'.slice(0, 3 - q.stars);
+      $('q-stars').innerHTML = [0, 1, 2].map((k) => `<span class="qs ${k < q.stars ? 'on' : 'off'}" style="animation-delay:${0.25 + k * 0.18}s">${ICON.star}</span>`).join('');
+      $('q-banner').textContent = q.stars === 3 ? 'Perfekt!' : q.stars === 2 ? 'Sehr schön!' : 'Geschafft!';
       $('q-title').textContent = `Mischung: ${q.accuracy} % genau`;
-      $('q-rows').innerHTML = q.rows.map((r) => `<div class="q-row"><span>${r.label}</span><b class="${r.cls || ''}">${r.value}</b></div>`).join('');
+      $('q-rows').innerHTML = q.rows.map((r) => `<div class="q-row"><span>${rich(r.label)}</span><b class="${r.cls || ''}">${rich(r.value)}</b></div>`).join('');
       root.classList.add('show');
     },
     showOven(show) { el.oven.classList.toggle('hidden', !show); document.body.classList.toggle('oven-open', show); },
@@ -274,15 +276,18 @@ export function createUI() {
       for (const a of list) {
         const b = document.createElement('button');
         b.className = 'btn' + (a.alt ? ' alt' : '');
-        b.textContent = a.label;
+        b.innerHTML = buttonLabel(a.label);
         b.addEventListener('click', a.onClick);
         el.actions.appendChild(b);
       }
+      // mit Knöpfen unten wird der Zettel kompakter, damit Hinweis und Knöpfe nicht kollidieren
+      document.body.classList.toggle('has-actions', list.length > 0);
+      this.layoutOrder();
     },
     popup(text) {
       const d = document.createElement('div');
       d.className = 'popup';
-      d.textContent = text || WORDS[(Math.random() * WORDS.length) | 0];
+      d.innerHTML = rich(text || WORDS[(Math.random() * WORDS.length) | 0]);
       // lange Texte (Deko-Namen) kleiner und mittig, damit nichts über den Rand ragt
       const long = d.textContent.length > 12;
       if (long) d.style.fontSize = `${Math.min(30, Math.floor(window.innerWidth * 1.5 / d.textContent.length))}px`;
