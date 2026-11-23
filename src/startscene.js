@@ -121,8 +121,8 @@ export function createStartScene(canvas) {
     const rx = w * 0.3, ry = h * 0.25;
     g.beginPath(); g.ellipse(w / 2, h / 2, rx, ry, 0, 0, Math.PI * 2); g.stroke();
     g.lineWidth = 3; g.beginPath(); g.ellipse(w / 2, h / 2, rx - 16, ry - 16, 0, 0, Math.PI * 2); g.stroke();
-    g.font = font(70); g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText('Seife', w / 2, h / 2 - 6);
+    g.font = font(50); g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('Soap Shop', w / 2, h / 2 - 6);
     g.font = '600 20px "DM Sans", sans-serif'; g.fillText('M A N U F A K T U R', w / 2, h / 2 + 50);
     leafPath(g, w / 2, h / 2 - 66, 12);
   });
