@@ -36,6 +36,7 @@ const _dragPos = new THREE.Vector3(), _dragTarget = new THREE.Vector3();
 
 const BAR_TABLE_SCALE = 0.85;                       // Seife auf dem Tisch / im Päckchen
 const BAR_HALF_H = 0.18 * BAR_TABLE_SCALE;          // halbe Höhe der liegenden Seife
+const PRESENT_LIFT = 0.42;                         // Präsentation: so weit steigt die Seife (unter der Ergebniskarte)
 const easeInOut = (t) => t * t * (3 - 2 * t);
 const easeOut = (t) => 1 - (1 - t) * (1 - t) * (1 - t);
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _t = new THREE.Vector3();
@@ -455,6 +456,11 @@ export class Game {
     this.showcase.start(this.bar);
     this.ui.actions([{ label: `🪙 Verkaufen für ${this.price}`, alt: true, onClick: () => this.sell() }]);
     this.bar.scale.set(0.6, 0.6, 0.6); this.bar.rotation.set(0, 0, 0);
+    // Schale verschwindet für die Präsentation (die Seife steht frei im Licht)
+    this.play(0.35, (e) => {
+      const k = Math.max(0.001, 1 - e);
+      this.bowl.scale.set(k, k, k); this.bowl.position.y = -0.25 * e; this.bowlShadow.scale.set(k, k, k);
+    }, () => { this.bowl.visible = false; this.bowlShadow.visible = false; });
     this.state = 'unmolded';
   }
 
@@ -1015,7 +1021,7 @@ export class Game {
     const e = 1 - Math.pow(1 - this.barT, 3);
     const s = 0.6 + 0.65 * e + Math.sin(this.barT * Math.PI) * 0.08;
     this.bar.scale.set(s, s, s);
-    const y = 0.25 + e * 1.05 + Math.sin(time * 1.6) * 0.025 * e;
+    const y = 0.25 + e * PRESENT_LIFT + Math.sin(time * 1.6) * 0.025 * e;
     this.bar.position.set(0, y, 0.1);
     const sc = this.showcase;
     sc.update(dt, time, 0, y, 0.1);
