@@ -310,3 +310,48 @@ body.table-mode { --ui-shift: 48px; }
 #unlock-have { font-size: 13px; opacity: .75; margin-bottom: 12px; }
 #unlock-buy { width: 100%; font-size: 16px; }
 #unlock-buy:disabled { background: #cdbba5; color: #6d5848; box-shadow: none; }
+
+/* ---------- Mischung (im Bestell-Zettel) ---------- */
+#order-progress .mx { display: grid; grid-template-columns: 92px 1fr 52px; align-items: center; gap: 6px; font-size: 12px; margin: 2px 0; white-space: nowrap; text-align: left; }
+#order-progress .mx-n { overflow: hidden; text-overflow: ellipsis; }
+#order-progress .mx-n small.stk-n { font-size: 9px; opacity: .6; margin-left: 3px; }
+#order-progress .mx-bar { position: relative; height: 10px; border-radius: 5px; background: #efe3d3; box-shadow: inset 0 1px 2px rgba(0,0,0,.15); min-width: 90px; }
+#order-progress .mx-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; transition: width .15s; box-shadow: inset 0 -2px 0 rgba(0,0,0,.12); }
+#order-progress .mx-bar b { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #4a2e22; border-radius: 1px; }
+#order-progress .mx-v { text-align: right; font-weight: 800; }
+#order-progress .mx-v small { font-weight: 700; opacity: .55; font-size: 10px; }
+#order-progress .mx.ok .mx-v { color: #2e9b5f; }
+#order-progress .mx.over .mx-v { color: #c0392b; }
+#order-progress .mx.total { margin-top: 4px; padding-top: 3px; border-top: 1px dashed rgba(120,80,40,.3); }
+#order-progress .mx-add { font-size: 11.5px; margin-top: 2px; }
+body.table-mode #order-progress .mx { font-size: 11px; }
+
+/* großer Zettel: Kuchen + Zeilen */
+#note-soaps { align-items: center; flex-wrap: nowrap; }
+.note-pie { width: 74px; height: 74px; border-radius: 50%; flex: none; box-shadow: 0 0 0 3px #fff, 0 2px 6px rgba(0,0,0,.25); }
+.note-mix { display: flex; flex-direction: column; gap: 4px; text-align: left; }
+.note-row { display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 14px; }
+.note-row .bar-chip { width: 26px; height: 20px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; box-shadow: inset 0 -2px 0 rgba(0,0,0,.15); }
+.note-row .nr-name { min-width: 70px; }
+.note-row b { font-size: 16px; }
+.note-row small { font-size: 11px; opacity: .7; font-weight: 700; }
+.note-row small.low { color: #c0392b; opacity: 1; }
+.note-row.add { color: #7a4a10; }
+
+/* Schrank: Vorrat je Schublade */
+.drawer .stk { width: 70%; height: 4px; border-radius: 2px; background: rgba(0,0,0,.25); overflow: hidden; }
+.drawer .stk i { display: block; height: 100%; background: #8fe38f; }
+.drawer.bare .stk i { background: transparent; }
+.drawer.bare .nm::after { content: ' · leer'; opacity: .8; }
+
+/* Ergebnis-Karte */
+#quality {
+  position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 70px); transform: translate(-50%, -20px) scale(.9); opacity: 0;
+  background: #fffaf0; border-radius: 18px; padding: 10px 18px 12px; box-shadow: 0 8px 24px rgba(60,30,10,.3); text-align: center;
+  pointer-events: none; transition: opacity .3s, transform .35s cubic-bezier(.2,.9,.3,1.3); z-index: 6; min-width: 220px; color: #4a2e22;
+}
+#quality.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+#q-stars { font-size: 30px; color: #f0b400; letter-spacing: 4px; text-shadow: 0 2px 0 #c88a00; }
+#q-title { font: bold 18px Georgia, serif; margin: 2px 0 6px; }
+.q-row { display: flex; justify-content: space-between; gap: 14px; font-size: 13px; font-weight: 700; }
+.q-row b.good { color: #2e9b5f; } .q-row b.bad { color: #c0392b; }

@@ -19,9 +19,11 @@ function makeNoise(seed) {
 }
 
 /**
- * @param {{rgb:number[], w:number}[]} parts  sRGB-Farben (0..1) mit Gewicht
+ * @param {{rgb:number[], w:number}[]} parts  sRGB-Farben (0..1) mit Gewicht – die Flächenanteile
+ *   entsprechen den Gewichten (60 % Vanille -> 60 % der Fläche vanillefarben)
+ * @param {{tint?:[string,number][], specks?:object[]}} fx  Zusätze: Tönung und Sprenkel
  */
-export function makeMarbleTexture(parts, size = 256) {
+export function makeMarbleTexture(parts, size = 256, fx = {}) {
   const cv = document.createElement('canvas');
   cv.width = cv.height = size;
   const ctx = cv.getContext('2d');
@@ -35,7 +37,8 @@ export function makeMarbleTexture(parts, size = 256) {
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     const u = x / size * 4, v = y / size * 4;
     // verzerrte Wellen -> Marmor-Adern
-    const w = 0.5 + 0.5 * Math.sin((u + v * 0.6) * 2.2 + fbm(u, v) * 7);
+    // asin macht die Sinus-Welle gleichverteilt -> Fläche je Farbe = ihr Anteil
+    const w = 0.5 + Math.asin(Math.sin((u + v * 0.6) * 2.2 + fbm(u, v) * 7)) / Math.PI;
     let idx = 0; while (idx < th.length - 1 && w > th[idx]) idx++;
     const c = parts[idx].rgb;
     // weiche Kanten: helle Ader an Übergängen
@@ -47,7 +50,30 @@ export function makeMarbleTexture(parts, size = 256) {
     img.data[o + 2] = Math.min(255, (c[2] + glow) * 255);
     img.data[o + 3] = 255;
   }
+  // Tönung (z. B. Honig, Ziegenmilch) über alles
+  if (fx.tint) for (const [hex, a] of fx.tint) {
+    const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+    for (let o = 0; o < img.data.length; o += 4) {
+      img.data[o] += (r - img.data[o]) * a; img.data[o + 1] += (g - img.data[o + 1]) * a; img.data[o + 2] += (b - img.data[o + 2]) * a;
+    }
+  }
   ctx.putImageData(img, 0, 0);
+  // Sprenkel (Öle, Mohn, Blüten, Aktivkohle-Wirbel); Fläche bezogen auf 256 px
+  const k = size / 256;
+  if (fx.specks) for (const s of fx.specks) {
+    for (let i = 0; i < s.n; i++) {
+      ctx.fillStyle = s.colors[i % s.colors.length];
+      const x = Math.random() * size, y = Math.random() * size, rr = (s.r[0] + Math.random() * (s.r[1] - s.r[0])) * k;
+      ctx.globalAlpha = s.petal ? 0.85 : 0.9;
+      ctx.beginPath();
+      if (s.petal) ctx.ellipse(x, y, rr * 1.8, rr, Math.random() * 3, 0, 6.283);
+      else if (rr > 2.5 * k) { // Wirbel: kleine Schlieren
+        ctx.ellipse(x, y, rr * 2.4, rr * 0.5, Math.random() * 3, 0, 6.283);
+      } else ctx.arc(x, y, rr, 0, 6.283);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;

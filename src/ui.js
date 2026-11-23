@@ -16,13 +16,36 @@ export function createUI() {
   const WORDS = ['So satisfying!', 'Entspannend!', 'Wow!', 'Herrlich!', 'Perfekt!', 'Weiter so!', 'Mmmh!'];
 
   return {
-    setOrder(order, cutIds) {
+    setOrder(order) {
       $('order').classList.toggle('hidden', !order);
+      this._mixKey = '';
       if (!order) return;
-      el.orderText.textContent = `${order.customer} möchte:`;
-      el.orderProgress.innerHTML = order.soaps
-        .map((s) => `<span class="${cutIds.has(s.id) ? 'done' : ''}">${cutIds.has(s.id) ? '✔' : '○'} ${s.emoji} ${s.name}</span>`)
-        .join('');
+      el.orderText.textContent = `${order.customer} möchte:` + (order.additive ? ` mit ${order.additive.name}` : '');
+      this.setMix(order, null, 0, []);
+    },
+    /**
+     * Mischungs-Anzeige im Bestell-Zettel: je Sorte ein Balken (jetzt in der Form) mit Ziel-Strich,
+     * darunter die Füllung der Form (100 % = voll). pcts: { soapId: Prozent } oder null.
+     * Schreibt ins DOM nur, wenn sich die gerundeten Werte ändern.
+     */
+    setMix(order, pcts, fill, adds, stockOf) {
+      if (!order) return;
+      const key = order.id + '|' + order.mix.map((m) => Math.round(pcts ? pcts[m.soap.id] || 0 : 0) + (stockOf ? '/' + stockOf(m.soap.id) : '')).join(',') + '|' + Math.round(fill) + '|' + adds.map((a) => a.id).join(',');
+      if (key === this._mixKey) return;
+      this._mixKey = key;
+      const row = (label, col, val, target, scale, cls = '') => {
+        const w = Math.min(100, val / scale * 100), t = target / scale * 100;
+        const near = Math.abs(val - target) <= 3 ? ' ok' : val > target + 3 ? ' over' : '';
+        return `<div class="mx${cls}${near}"><span class="mx-n">${label}</span><span class="mx-bar"><i style="width:${w}%;background:${col}"></i><b style="left:${t}%"></b></span>`
+          + `<span class="mx-v">${Math.round(val)}<small>/${target} %</small></span></div>`;
+      };
+      let h = order.mix.map((m) => row(`${m.soap.emoji} ${m.soap.name}` + (stockOf ? `<small class="stk-n">${stockOf(m.soap.id)}▮</small>` : ''), soapCss(m.soap), pcts ? pcts[m.soap.id] || 0 : 0, m.pct, 100)).join('');
+      h += row('🫙 Form', '#c9a27a', fill, 100, 125, ' total');
+      if (adds.length || order.additive) {
+        const need = order.additive;
+        h += `<div class="mx-add">${need ? (adds.includes(need) ? '✔ ' : '○ ') + need.emoji + ' ' + need.name : ''}${adds.filter((a) => a !== need).map((a) => ` · ${a.emoji} ${a.name}`).join('')}</div>`;
+      }
+      el.orderProgress.innerHTML = h;
     },
     setCoins(n, bump) {
       el.coins.textContent = n;
@@ -118,15 +141,15 @@ export function createUI() {
       return { close };
     },
     /** Freischalt-Dialog: Kosten, Bonus und Knopf (geht nur mit genug Münzen). */
-    openUnlock(it, coins, buy) {
+    openUnlock(it, coins, buy, o = {}) {
       const root = $('unlock'), btn = $('unlock-buy');
       $('unlock-img').src = it.thumb;
       $('unlock-name').textContent = it.name;
-      $('unlock-bonus').textContent = `+${it.bonus} 🪙 pro Verkauf`;
+      $('unlock-bonus').textContent = o.line || `+${it.bonus} 🪙 pro Verkauf`;
       $('unlock-have').textContent = `Du hast ${coins} 🪙`;
       const enough = coins >= it.cost;
       btn.disabled = !enough;
-      btn.textContent = enough ? `Freischalten für ${it.cost} 🪙` : `Zu wenig Münzen (${it.cost} 🪙)`;
+      btn.textContent = enough ? `${o.verb || 'Freischalten'} für ${it.cost} 🪙` : `Zu wenig Münzen (${it.cost} 🪙)`;
       const close = () => { root.classList.remove('open'); btn.onclick = null; root.onclick = null; };
       btn.onclick = () => { if (buy()) { sndOk(); close(); } };
       $('unlock-close').onclick = close;
@@ -134,12 +157,21 @@ export function createUI() {
       root.classList.add('open');
     },
     /** Bestell-Zettel groß. canAccept=false -> nur lesen (Knopf gesperrt). */
-    openNote(order, canAccept, onAccept) {
+    openNote(order, canAccept, onAccept, o2 = {}) {
       const root = $('note-view'), btn = $('note-accept');
       $('note-customer').textContent = order.customer;
-      $('note-soaps').innerHTML = order.soaps.map((s) =>
-        `<div class="note-soap"><div class="bar-chip" style="background:${soapCss(s)}">${s.emoji}</div>${s.name}</div>`).join('');
-      $('note-reward').textContent = `Belohnung: ${order.reward} 🪙`;
+      // Mischung: Kuchen-Diagramm + Zeilen mit Prozent und Vorrat
+      let acc = 0;
+      const pie = order.mix.map((m) => { const a = acc; acc += m.pct; return `${soapCss(m.soap)} ${a}% ${acc}%`; }).join(',');
+      const stock = o2.stockOf || (() => null);
+      $('note-soaps').innerHTML = `<div class="note-pie" style="background:conic-gradient(${pie})"></div><div class="note-mix">`
+        + order.mix.map((m) => {
+          const st = stock(m.soap.id), need = m.pct / 10, low = st != null && st < need;
+          return `<div class="note-row"><span class="bar-chip" style="background:${soapCss(m.soap)}">${m.soap.emoji}</span><span class="nr-name">${m.soap.name}</span><b>${m.pct} %</b>`
+            + (st != null ? `<small class="${low ? 'low' : ''}">${low ? '⚠ ' : ''}Vorrat ${st}▮</small>` : '') + '</div>';
+        }).join('')
+        + (order.additive ? `<div class="note-row add">${order.additive.emoji} mit ${order.additive.name}</div>` : '') + '</div>';
+      $('note-reward').textContent = `Belohnung: bis ${Math.round(order.reward * 1.25)} 🪙`;
       btn.disabled = !canAccept;
       btn.textContent = canAccept ? 'Annehmen' : 'Erst aktuelle Bestellung fertig machen';
       const close = () => { root.classList.remove('open'); root.onclick = null; $('note-close').onclick = null; btn.onclick = null; };
@@ -149,13 +181,14 @@ export function createUI() {
       root.classList.add('open');
     },
     sceneCovered() { return covered; },
+    refreshCabinet() { if (this._cabRefresh) this._cabRefresh(); },
     noteOpen() { return $('note-view').classList.contains('open'); },
     /**
      * Seifenschrank im Vollbild. layout: Schubladen (cabinet.js). marked(d): Schublade schon gewählt?
      * pick(d) -> Fehlertext (String) oder { find, done }: Schublade fährt raus und bleibt markiert;
      * done = Funktion -> alles gefunden, Schrank geht zu, danach done().
      */
-    openCabinet(layout, findText, marked, pick, onClose) {
+    openCabinet(layout, findText, marked, pick, onClose, drawerStock) {
       const root = $('cabinet'), grid = $('cab-grid'), msg = $('cab-msg');
       if (!grid.childElementCount) {
         for (const d of layout) {
@@ -163,12 +196,25 @@ export function createUI() {
           b.className = 'drawer ' + d.kind;
           const col = d.kind === 'soap' ? soapCss(d.soap) : d.kind === 'locked' ? d.color : 'transparent';
           const name = d.kind === 'soap' ? d.soap.name : d.kind === 'locked' ? d.name : 'leer';
-          b.innerHTML = `<span class="soap-pop" style="background:${col}"></span><span class="lab"><span class="dot" style="background:${col}"></span><span class="nm${name.length > 8 ? ' long' : ''}">${name}</span></span><span class="pull"></span>`;
+          b.innerHTML = `<span class="soap-pop" style="background:${col}"></span><span class="lab"><span class="dot" style="background:${col}"></span><span class="nm${name.length > 8 ? ' long' : ''}">${name}</span>`
+            + (d.kind === 'soap' ? '<span class="stk"><i></i></span>' : '') + '</span><span class="pull"></span>';
           b._d = d;
           grid.appendChild(b);
         }
       }
-      for (const b of grid.children) { b.classList.remove('shake'); b.classList.toggle('out', marked(b._d)); }
+      this._cabRefresh = () => {
+        if (drawerStock) for (const x of grid.children) if (x._d.kind === 'soap') { const n = drawerStock(x._d); x.querySelector('.stk i').style.width = `${n * 10}%`; x.classList.toggle('bare', n === 0); x.title = `${n} Scheiben`; }
+      };
+      for (const b of grid.children) {
+        b.classList.remove('shake'); b.classList.toggle('out', marked(b._d));
+        // Vorrat: wie viele Scheiben in dieser Schublade liegen (0..10)
+        if (drawerStock && b._d.kind === 'soap') {
+          const n = drawerStock(b._d);
+          b.querySelector('.stk i').style.width = `${n * 10}%`;
+          b.classList.toggle('bare', n === 0);
+          b.title = `${n} Scheiben`;
+        }
+      }
       $('cab-find').textContent = findText;
       let busy = false;
       const shut = (then) => {
@@ -180,7 +226,8 @@ export function createUI() {
       grid.onclick = (e) => {
         const b = e.target.closest('.drawer');
         if (!b || busy || b.classList.contains('out')) return;
-        const r = pick(b._d);
+        const r = pick(b._d, b);
+        if (r && r.refresh) return;
         if (typeof r === 'string') {
           b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake');
           msg.textContent = r; msg.classList.add('show');
@@ -197,6 +244,15 @@ export function createUI() {
       root.classList.add('show');
       requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add('open')));
       clearTimeout(coverTimer); coverTimer = setTimeout(() => { covered = true; }, 520);
+    },
+    /** Ergebnis-Karte nach dem Ausformen: Genauigkeit, Sterne, Zeilen, Preis. null = ausblenden. */
+    showQuality(q) {
+      const root = $('quality');
+      if (!q) { root.classList.remove('show'); return; }
+      $('q-stars').textContent = '★★★'.slice(0, q.stars) + '☆☆☆'.slice(0, 3 - q.stars);
+      $('q-title').textContent = `Mischung: ${q.accuracy} % genau`;
+      $('q-rows').innerHTML = q.rows.map((r) => `<div class="q-row"><span>${r.label}</span><b class="${r.cls || ''}">${r.value}</b></div>`).join('');
+      root.classList.add('show');
     },
     showOven(show) { el.oven.classList.toggle('hidden', !show); document.body.classList.toggle('oven-open', show); },
     setOven(frac) { el.ovenBar.style.width = `${Math.round(frac * 100)}%`; },

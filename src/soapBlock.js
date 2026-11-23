@@ -40,18 +40,24 @@ export class SoapBlock {
   cubeY(j) { return BLOCK_BASE_Y + (j + 0.5) * CUBE; }
   cubeZ(k) { return (k - (BLOCK.nz - 1) / 2) * CUBE; }
 
-  /** Neuen Block einer Sorte aufbauen (passiert nur beim Auswählen, nicht pro Frame). */
-  load(soap) {
+  /**
+   * Neuen Block einer Sorte aufbauen (passiert nur beim Auswählen, nicht pro Frame).
+   * slices < SLICES: angebrochenes Stück aus dem Vorrat – vorne fehlen entsprechend viele Scheiben.
+   */
+  load(soap, slices = SLICES) {
     const { nx, ny, nz } = BLOCK;
+    const kz = Math.max(1, Math.min(SLICES, slices)) * SLICE_DEPTH;   // vorhandene Tiefe in Würfeln
     this.soap = soap;
     this.released.fill(0);
     this.releasedCount = 0;
+    this.loadedCount = nx * ny * kz;
     // exakt Kantenlänge 1 (keine Überlappung -> kein Z-Fighting doppelter Außenflächen); der Shader
     // rastet die Ecken auf das Würfelraster ein, damit die Außenhaut wasserdicht ist.
     // Die feinen Fugen zeichnet der Shader nur auf Schnitt-/Innenflächen.
     const s = CUBE;
     for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
       const n = this.index(i, j, k);
+      if (k >= kz) { this.released[n] = 1; this.mesh.setMatrixAt(n, _zero); continue; }
       _m.makeScale(s, s, s).setPosition(this.cubeX(i), this.cubeY(j), this.cubeZ(k));
       this.mesh.setMatrixAt(n, _m);
       cubeColor(soap, _rgb);
@@ -62,18 +68,19 @@ export class SoapBlock {
     const h = this.hidden.array;
     for (let j = 0; j < ny; j++) for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
       h[this.index(i, j, k)] = (i < nx - 1 ? 1 : 0) | (i > 0 ? 2 : 0) | (j < ny - 1 ? 4 : 0)
-        | (j > 0 ? 8 : 0) | (k < nz - 1 ? 16 : 0) | (k > 0 ? 32 : 0);
+        | (j > 0 ? 8 : 0) | (k < kz - 1 ? 16 : 0) | (k > 0 ? 32 : 0);
     }
     this.hidden.needsUpdate = true;
     this.mesh.instanceMatrix.needsUpdate = true;
     this.mesh.instanceColor.needsUpdate = true;
-    this.slice = SLICES - 1;  // SLICES-1 = Kamera-Seite (vorne)
+    this.slice = kz / SLICE_DEPTH - 1;  // vorderste vorhandene Scheibe (Kamera-Seite)
+    this.slicesLeft = kz / SLICE_DEPTH;
     this.rowsCut = 0;
     this.mesh.visible = true;
   }
 
   /** Anteil der schon abgeschnittenen Würfel (0..1). */
-  get cutFraction() { return this.releasedCount / this.count; }
+  get cutFraction() { return this.releasedCount / (this.loadedCount || this.count); }
 
   get active() { return this.slice >= 0; }
   /** Oberkante des Blocks (Höhe bleibt gleich, es wird von vorne nach hinten geschnitten). */
@@ -129,6 +136,7 @@ export class SoapBlock {
   finishSlice(onCube) {
     this.cutTo(1, onCube);
     this.slice--;
+    this.slicesLeft--;
     this.rowsCut = 0;
     if (this.slice < 0) this.mesh.visible = false;
     return this.slice < 0;

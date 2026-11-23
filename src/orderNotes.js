@@ -78,19 +78,32 @@ export class OrderNotes {
     g.strokeStyle = 'rgba(160,110,60,0.35)'; g.lineWidth = 4; g.strokeRect(x0 + 2, 2, TW - 4, TH - 4);
     g.fillStyle = '#8a5a3c'; g.textAlign = 'center';
     g.font = 'bold 26px Georgia, serif'; g.fillText('Bestellung', x0 + TW / 2, 44);
-    g.fillStyle = '#4a2e22'; g.font = 'italic bold 42px Georgia, serif';
-    g.fillText(o.customer, x0 + TW / 2, 100);
-    // Seifen als bunte Seifenstücke
-    const n = o.soaps.length, sw = 58, gap = 14, tot = n * sw + (n - 1) * gap;
-    o.soaps.forEach((s, k) => {
-      const sx = x0 + TW / 2 - tot / 2 + k * (sw + gap), sy = 132;
-      g.fillStyle = `rgb(${s.base.map((c) => Math.round(c * 255)).join(',')})`;
-      g.beginPath(); g.roundRect(sx, sy, sw, 80, 14); g.fill();
-      g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 3; g.stroke();
-      g.fillStyle = 'rgba(255,255,255,0.45)'; g.beginPath(); g.roundRect(sx + 8, sy + 8, sw - 16, 14, 7); g.fill();
+    g.fillStyle = '#4a2e22'; g.font = 'italic bold 40px Georgia, serif';
+    g.fillText(o.customer, x0 + TW / 2, 92);
+    // Mischung als gestapelter Balken (Anteile wie bestellt), darunter die Prozente
+    const bx = x0 + 18, bw = TW - 36, by = 108, bh = 40;
+    let acc = 0;
+    g.save(); g.beginPath(); g.roundRect(bx, by, bw, bh, 12); g.clip();
+    o.mix.forEach((m) => {
+      const w = bw * m.pct / 100;
+      g.fillStyle = `rgb(${m.soap.base.map((c) => Math.round(c * 255)).join(',')})`;
+      g.fillRect(bx + acc, by, w + 0.5, bh);
+      g.fillStyle = 'rgba(255,255,255,0.4)'; g.fillRect(bx + acc + 4, by + 5, Math.max(0, w - 8), 7);
+      if (acc > 0) { g.fillStyle = 'rgba(255,255,255,0.9)'; g.fillRect(bx + acc - 1.5, by, 3, bh); }
+      g.fillStyle = 'rgba(40,20,10,0.85)'; g.font = 'bold 20px system-ui, sans-serif'; g.textAlign = 'center';
+      if (w > 40) g.fillText(`${m.pct}%`, bx + acc + w / 2, by + 30);
+      acc += w;
     });
-    g.fillStyle = '#4a2e22'; g.font = 'bold 24px Georgia, serif';
-    g.fillText(o.soaps.map((s) => s.name).join(' + '), x0 + TW / 2, 248, TW - 20);
+    g.restore();
+    g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 3; g.beginPath(); g.roundRect(bx, by, bw, bh, 12); g.stroke();
+    g.textAlign = 'left'; g.font = 'bold 22px Georgia, serif';
+    o.mix.forEach((m, k) => {
+      const y = 180 + k * 26;
+      g.fillStyle = `rgb(${m.soap.base.map((c) => Math.round(c * 255)).join(',')})`;
+      g.beginPath(); g.roundRect(x0 + 22, y - 16, 22, 18, 5); g.fill(); g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 2; g.stroke();
+      g.fillStyle = '#4a2e22'; g.fillText(`${m.pct} % ${m.soap.name}`, x0 + 52, y, TW - 70);
+    });
+    if (o.additive) { g.fillStyle = '#7a4a10'; g.font = 'italic bold 20px Georgia, serif'; g.textAlign = 'center'; g.fillText(`mit ${o.additive.name}`, x0 + TW / 2, 180 + o.mix.length * 26 + 2, TW - 24); }
     // Münze + Belohnung
     g.fillStyle = '#e8b830'; g.beginPath(); g.arc(x0 + TW / 2 - 36, 284, 16, 0, 6.283); g.fill();
     g.strokeStyle = '#b8860b'; g.lineWidth = 3; g.stroke();

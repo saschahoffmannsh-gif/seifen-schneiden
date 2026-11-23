@@ -11,7 +11,7 @@
 //   pickSoap -> Seife antippen -> fliegt ins Päckchen, Deckel drauf
 //   packed  -> Päckchen zur Seite wischen -> verschickt, Geld gutgeschrieben, neue Bestellung
 import * as THREE from 'three';
-import { BLOCK, BOWL, CUBE, CUT, OVEN_SECONDS, BLOCK_BASE_Y } from './config.js';
+import { BLOCK, BOWL, CUBE, CUT, OVEN_SECONDS, BLOCK_BASE_Y, SLICES, MOULD_CUBES, PCT_PER_SLICE } from './config.js';
 import { SOAP_LIST, SOAP_BY_ID } from './soaps.js';
 import { makeMarbleTexture } from './marble.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -20,8 +20,9 @@ import { PKG, TABLE_SPOT, PKG_SHELF_SCALE, SHADOW_SOAP, SHADOW_LID } from './pac
 import { TABLE_Y, CABINET, SHELF_FRONT_Z } from './setting/wall.js';
 import { OrderNotes, NOTE_COUNT } from './orderNotes.js';
 import { makeOrder } from './orders.js';
+import { ADDITIVES, ADD_CATS, MAX_ADDITIVES, additiveThumb } from './additives.js';
 import { cabinetLayout } from './cabinet.js';
-import { save, applyUnlocks } from './save.js';
+import { save, applyUnlocks, BAR_SLICES, BAR_PRICE, STOCK_MAX } from './save.js';
 import { PKG_CATS, PACKAGE_TYPES } from './decor.js';
 import { Deco } from './deco.js';
 import { DECO_ITEMS, DECO_GROUPS, phaseOf, groupOf } from './decoItems.js';
@@ -38,6 +39,8 @@ const easeInOut = (t) => t * t * (3 - 2 * t);
 const easeOut = (t) => 1 - (1 - t) * (1 - t) * (1 - t);
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _t = new THREE.Vector3();
 
+const _m4 = new THREE.Matrix4(), _qq = new THREE.Quaternion(), _qq2 = new THREE.Quaternion();
+const _up = new THREE.Vector3(0, 1, 0), _side = new THREE.Vector3(1, 0, 0);
 const _ray = new THREE.Raycaster();
 const _ndc = new THREE.Vector2();
 const _hit = new THREE.Vector3();
@@ -54,7 +57,7 @@ export class Game {
     // Seife im Regal antippen: Raycast NUR beim Tippen, nicht pro Frame
     this.tapNdc = new THREE.Vector2();
     const canvas = renderer.domElement;
-    this.isAvailable = (s) => !this.cutIds.has(s.id);
+    this.isAvailable = () => true;   // alle Sorten der Bestellung antippbar (leerer Vorrat -> Hinweis)
     canvas.addEventListener('pointerdown', (e) => {
       const st = this.state;
       const r = canvas.getBoundingClientRect();
@@ -94,6 +97,10 @@ export class Game {
     this.deco = new Deco(scene, packages);
     this.drag = null; this.armed = null;
     applyUnlocks(PACKAGE_TYPES, 'pkg:');
+    applyUnlocks(ADDITIVES, 'add:');
+    this.additives = [];          // Zusätze in der aktuellen Seifenmasse
+    this.pcts = {};               // aktuelle Anteile in der Form (Prozent je Sorten-id), ohne Allokation pro Frame
+    this.stockOf = (id) => save.stock(id);
     this.coins = save.coins;     // Münzen bleiben gespeichert (localStorage)
     ui.setCoins(this.coins);
     this.state = 'shelf';
@@ -118,6 +125,10 @@ export class Game {
     this.liquid = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 48), this.barMat);
     this.liquid.visible = false;
     scene.add(this.liquid);
+    // eingebettete Perlen / Goldflocken auf der fertigen Seife (Kinder der Seife -> wandern mit ins Päckchen)
+    this.pearlMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 9), new THREE.MeshStandardMaterial({ color: '#fbf6ee', roughness: 0.22, metalness: 0.15 }), 48);
+    this.flakeMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 6), new THREE.MeshStandardMaterial({ color: '#e5c25c', roughness: 0.28, metalness: 1 }), 48);
+    for (const m of [this.pearlMesh, this.flakeMesh]) { m.count = 0; m.frustumCulled = false; this.bar.add(m); }
 
     // Klick-Geräusch, wenn Würfel landen
     this.onCube = (x, y, z, r, g, b, id) => loose.spawn(x, y, z, r, g, b, id);
@@ -132,7 +143,7 @@ export class Game {
     this.toChoose();
   }
 
-  noteRecipes() { return this.notes ? this.notes.orders.filter(Boolean).map((o) => o.soaps.map((s) => s.id).join('+')) : []; }
+  noteRecipes() { return this.notes ? this.notes.orders.filter(Boolean).map((o) => o.mix.map((m) => m.soap.id + ':' + m.pct).join('+')) : []; }
   noteNames() { return this.notes ? this.notes.orders.filter(Boolean).map((o) => o.customer) : []; }
 
   /** Keine Bestellung aktiv: Spieler wählt einen Zettel am Regal. */
@@ -152,7 +163,7 @@ export class Game {
     const o = this.notes.orders[i];
     if (!o) return;
     haptic(6);
-    this.ui.openNote(o, this.state === 'choose' && !this.order, () => this.acceptOrder(i));
+    this.ui.openNote(o, this.state === 'choose' && !this.order, () => this.acceptOrder(i), { stockOf: this.stockOf });
   }
 
   acceptOrder(i) {
@@ -162,7 +173,9 @@ export class Game {
     this.notes.setActive(i, true);
     this.cutIds.clear();
     this.picked.clear(); this.pickedDrawers.clear(); this.stocked = false;
-    this.ui.setOrder(this.order, this.cutIds);
+    this.additives = []; this.warnedAdd = false;
+    this.ui.setOrder(this.order);
+    this.refreshMix();
     sndPop();
     this.toShelf();
   }
@@ -175,7 +188,41 @@ export class Game {
     return this.tapNdc.y > Math.min(_a.y, _b.y) - 0.02 && this.tapNdc.x > _a.x && this.tapNdc.x < _b.x;
   }
 
-  missingSoaps() { return this.order ? this.order.soaps.filter((s) => !this.cutIds.has(s.id)) : []; }
+  /** Anteile in der Form neu zählen (Prozent der Form je Sorte) und im Zettel anzeigen. */
+  refreshMix() {
+    if (!this.order) return;
+    const c = this.loose.typeCounts;
+    let fill = 0;
+    for (const s of SOAP_BY_ID) { const p = c[s.id] * 100 / MOULD_CUBES; this.pcts[s.id] = p; fill += p; }
+    this.fillPct = fill;
+    this.ui.setMix(this.order, this.pcts, fill, this.additives, this.stockOf);
+  }
+
+  /** Sorten der Bestellung, von denen noch deutlich zu wenig in der Form ist. */
+  missingSoaps() { return this.order ? this.order.mix.filter((m) => (this.pcts[m.soap.id] || 0) < m.pct - 4).map((m) => m.soap) : []; }
+
+  /** Scheiben in Schublade d (jede Sorte hat 3 Schubladen à max. 10 Scheiben, gefüllt der Reihe nach). */
+  drawerStock(d) {
+    const same = this.cabLayout.filter((x) => x.kind === 'soap' && x.soap === d.soap);
+    const k = same.indexOf(d);
+    return Math.max(0, Math.min(BAR_SLICES, save.stock(d.soap.id) - k * BAR_SLICES));
+  }
+
+  /** Neues Stück einer Sorte kaufen (10 Scheiben). */
+  offerRestock(soap, after) {
+    const S = save.stock(soap.id);
+    if (S > STOCK_MAX - BAR_SLICES) { this.ui.popup('Schublade ist voll'); return; }
+    const c = document.createElement('canvas'); c.width = c.height = 120;
+    const g = c.getContext('2d'); g.fillStyle = `rgb(${soap.base.map((v) => Math.round(v * 255)).join(',')})`;
+    g.beginPath(); g.roundRect(20, 30, 80, 60, 14); g.fill(); g.fillStyle = 'rgba(255,255,255,.45)'; g.beginPath(); g.roundRect(28, 38, 64, 10, 5); g.fill();
+    this.ui.openUnlock({ thumb: c.toDataURL(), name: `${soap.emoji} ${soap.name} – neues Stück`, cost: BAR_PRICE, bonus: 0 }, this.coins, () => {
+      if (this.coins < BAR_PRICE) return false;
+      this.coins -= BAR_PRICE; save.coins = this.coins; this.ui.setCoins(this.coins, true);
+      save.setStock(soap.id, S + BAR_SLICES);
+      if (after) after();
+      return true;
+    }, { line: `+${BAR_SLICES} Scheiben (Vorrat jetzt ${S}▮)`, verb: 'Kaufen' });
+  }
 
   /** Vollbild-Schrank: alle Seifen der Bestellung in den Schubladen finden. */
   openCabinet() {
@@ -191,6 +238,11 @@ export class Game {
     this.ui.hint('');
     this.ui.openCabinet(this.cabLayout, findText(), (d) => !!o && this.stocked === false && d.kind === 'soap' && this.picked.has(d.soap.id) && this.pickedDrawers.has(d), (d) => {
       if (d.kind === 'locked') return 'Noch gesperrt';
+      // leere Schublade: neues Stück nachkaufen (geht immer, auch ohne Bestellung)
+      if (d.kind === 'soap' && this.drawerStock(d) === 0) {
+        this.offerRestock(d.soap, () => { this.ui.refreshCabinet(); this.refreshMix(); });
+        return { refresh: true };
+      }
       if (d.kind === 'empty') return 'Leer';
       if (!o) return 'Erst eine Bestellung annehmen';
       if (this.stocked) return 'Die Seifen stehen schon im Regal';
@@ -200,7 +252,7 @@ export class Game {
       sndPop(); haptic(12);
       const all = o.soaps.every((s) => this.picked.has(s.id));
       return { find: findText(), done: all ? () => this.stockShelf() : null };
-    }, () => { if (back === 'choose') this.toChoose(); else this.toShelf(); });
+    }, () => { if (back === 'choose') this.toChoose(); else this.toShelf(); }, (d) => this.drawerStock(d));
   }
 
   /** Alle gefundenen Seifen fliegen (nacheinander) von oben auf das mittlere Brett und stellen sich auf. */
@@ -208,7 +260,7 @@ export class Game {
     this.state = 'stocking';
     this.stocked = true;
     const list = this.order.soaps;
-    this.shelf.setSoaps(list);
+    this.shelf.setSoaps(list, this.shelfFracs());
     const home = this.shelf.home, n = list.length;
     for (let i = 0; i < n; i++) this.shelf.hide(i);
     this.play(0.5 + n * 0.12, (e) => {
@@ -220,18 +272,27 @@ export class Game {
         _t.copy(home[i]); _t.y += (1 - k) * 0.9 + Math.sin(t * Math.PI) * 0.06;
         this.shelf.place(i, _t, 0.36 * (0.4 + 0.6 * k));
       }
-    }, () => { this.shelf.setSoaps(list); sndPop(); this.toShelf(); }, (t) => t);
+    }, () => { this.shelf.setSoaps(list, this.shelfFracs()); sndPop(); this.toShelf(); }, (t) => t);
   }
+
+  /** Länge der Seifenstücke im Regal: so viele Scheiben, wie das nächste Stück hat (Rest aus dem Vorrat). */
+  shelfFracs() { return this.order.soaps.map((s) => Math.min(SLICES, save.stock(s.id)) / SLICES); }
 
   // ---------- Zustandswechsel ----------
   toShelf() {
     this.state = 'shelf';
     this.ui.setCut(null);
     this.knife.visible = false;
+    this.refreshMix();
     const missing = this.missingSoaps();
-    this.ui.hint(!missing.length ? '' : this.stocked ? `Tippe im Regal auf ${missing[0].emoji} ${missing[0].name}` : 'Tippe auf den Schrank');
+    if (!this.stocked) this.ui.hint('Tippe auf den Schrank');
+    else if (missing.length) {
+      const m = this.order.mix.find((x) => x.soap === missing[0]);
+      this.ui.hint(`Tippe im Regal auf ${m.soap.emoji} ${m.soap.name} – Ziel ${m.pct} % = ${m.pct / PCT_PER_SLICE} Scheiben`);
+    } else this.ui.hint(this.order.additive && !this.additives.includes(this.order.additive) ? `Mischung passt! Jetzt ${this.order.additive.emoji} ${this.order.additive.name} dazu` : 'Mischung passt! ✨ Zusätze oder ab in den Ofen');
     const acts = [];
-    if (this.loose.used > 0) acts.push({ label: '🔥 In den Ofen', onClick: () => this.toOven() });
+    if (this.stocked) acts.push({ label: '✨ Zusätze', onClick: () => this.openAdditives() });
+    if (this.loose.used > 0) acts.push({ label: '🔥 In den Ofen', alt: true, onClick: () => this.toOven() });
     this.ui.actions(acts);
   }
 
@@ -239,6 +300,10 @@ export class Game {
   pickSoap(slot) {
     if (this.state !== 'shelf') return;
     const soap = this.shelf.soaps[slot];
+    if (save.stock(soap.id) <= 0) {
+      this.ui.hint(`Kein ${soap.name} mehr – im Schrank ein neues Stück holen`);
+      return;
+    }
     this.state = 'flying';
     this.ui.actions([]);
     this.ui.hint('');
@@ -248,34 +313,87 @@ export class Game {
 
   startCutting(soap) {
     this.state = 'cutting';
-    this.ui.hint('Wisch hin und her – das Messer sägt sich nach unten ↔');
-    this.block.load(soap);
+    const m = this.order.mix.find((x) => x.soap === soap);
+    const have = Math.round(this.pcts[soap.id] || 0);
+    this.ui.hint(m ? `${soap.name}: Ziel ${m.pct} % (${m.pct / PCT_PER_SLICE} Scheiben)${have ? `, drin: ${have} %` : ''} – wisch hin und her ↔` : 'Wisch hin und her – das Messer sägt sich nach unten ↔');
+    this.block.load(soap, Math.min(SLICES, save.stock(soap.id)));
+    this.ui.actions([{ label: '✋ Fertig mit dieser Seife', onClick: () => this.stopCutting() }]);
     this.loose.blockHalfX = this.block.halfX; this.loose.blockHalfZ = this.block.halfZ;
     this.loose.blockTop = this.block.topY;
     this.knife.visible = true;
     this.knifeY = this.block.topY + 0.6;
     this.knifeZ = this.block.cutZ;
     this.sliceProgress = 0; this.returning = false; this.slicesCut = 0;
-    this.ui.setCut(0, soap);
     this.loose.blockTop = -1; // Würfel fallen vorne weg, keine Kollision mit der Blockoberseite nötig
     haptic(8);
   }
 
-  finishBlock() {
+  /**
+   * Schneiden beenden (Knopf oder Stück ist alle). Verbrauchte Scheiben gehen vom Vorrat ab;
+   * eine angefangene Scheibe zählt als verbraucht (der Rest davon ist Verschnitt). Der Rest des
+   * Stücks bleibt im Vorrat (im Regal sichtbar kürzer) für diese und spätere Bestellungen.
+   */
+  stopCutting() {
+    if (this.state !== 'cutting') return;
     const soap = this.block.soap;
-    this.cutIds.add(soap.id);
-    this.ui.setOrder(this.order, this.cutIds);
+    const used = this.slicesCut + (this.block.rowsCut > 0 ? 1 : 0);
+    save.setStock(soap.id, save.stock(soap.id) - used);
+    this.block.mesh.visible = false;
+    this.block.slice = -1;
     this.loose.blockTop = -1;
-    this.confetti.burst(0, BLOCK_BASE_Y + 0.2, 0.3, 110);
-    sndPop(); haptic(30);
-    this.ui.setCut(1, soap);
-    this.ui.popup(`${soap.emoji} Fertig!`);
     this.knife.visible = false;
-    setTimeout(() => this.toShelf(), 700);
+    this.ui.actions([]);
+    this.refreshMix();
+    const p = Math.round(this.pcts[soap.id] || 0);
+    if (used) { this.confetti.burst(0, BLOCK_BASE_Y + 0.2, 0.3, 60); this.ui.popup(`${soap.emoji} ${p} %`); }
+    sndPop(); haptic(20);
+    this.shelf.setSoaps(this.order.soaps, this.shelfFracs());
     this.state = 'between';
+    setTimeout(() => this.toShelf(), 600);
+  }
+
+  // ---------- Zusätze ----------
+  openAdditives() {
+    if (this.state !== 'shelf') return;
+    this.state = 'addSheet';
+    const need = this.order && this.order.additive;
+    const items = ADDITIVES.map((a) => ({
+      id: a.id, name: a.name, cat: a.cat, thumb: additiveThumb(a), unlocked: a.unlocked, cost: a.cost, bonus: a.bonus,
+      sub: (this.additives.includes(a) ? '✔ drin' : `+${a.bonus} 🪙`) + (need === a ? ' · gewünscht' : ''),
+      disabled: !this.additives.includes(a) && this.additives.length >= MAX_ADDITIVES ? `Höchstens ${MAX_ADDITIVES} Zusätze` : null,
+      add: a,
+    }));
+    this.ui.openSheet(items, {
+      title: 'Zusätze', cats: ADD_CATS, startCat: need ? need.cat : null, coins: () => this.coins,
+      onBuy: (x) => this.buy(x.cost, 'add:' + x.id, () => { x.add.unlocked = true; }),
+      onSelect: (x) => { this.state = 'shelf'; this.toggleAdditive(x.add); },
+      onClose: () => { this.state = 'shelf'; this.toShelf(); },
+    });
+  }
+
+  toggleAdditive(a) {
+    const i = this.additives.indexOf(a);
+    if (i >= 0) { this.additives.splice(i, 1); this.ui.popup(`${a.name} raus`); }
+    else {
+      this.additives.push(a);
+      this.confetti.burst(0, 0.7, 0.2, 40);
+      this.ui.popup(`+ ${a.emoji} ${a.name}`);
+      sndPop(); haptic(12);
+    }
+    this.toShelf();
   }
 
   toOven() {
+    // gewünschter Zusatz fehlt noch? Einmal freundlich daran erinnern (Auswahl geht auf)
+    const need = this.order && this.order.additive;
+    if (need && !this.additives.includes(need) && !this.warnedAdd && this.state === 'shelf') {
+      this.warnedAdd = true;
+      this.ui.hint(`${this.order.customer} wünscht sich ${need.name} – oder einfach nochmal „In den Ofen“`);
+      this.openAdditives();
+      return;
+    }
+    this.refreshMix();
+    this.quality = this.rateMix();
     this.state = 'oven';
     this.ovenT = 0;
     this.ui.actions([]);
@@ -289,8 +407,17 @@ export class Game {
     }
     // Farben abwechselnd mischen, damit Adern verschiedener Sorten nebeneinander liegen
     parts.sort((a, b) => (a.rgb[0] + a.rgb[2]) - (b.rgb[0] + b.rgb[2]));
+    // Zusätze: Tönung + Sprenkel in die Textur, Glanz ins Material
+    const fx = { tint: [], specks: [] };
+    let sheen = 0;
+    for (const a of this.additives) {
+      if (a.fx.tint) fx.tint.push(a.fx.tint);
+      if (a.fx.specks) fx.specks.push(a.fx.specks);
+      sheen += a.fx.sheen || 0;
+    }
     if (this.barMat.map) this.barMat.map.dispose();
-    this.barMat.map = makeMarbleTexture(parts);
+    this.barMat.map = makeMarbleTexture(parts, 256, fx);
+    this.barMat.roughness = Math.max(0.12, 0.35 - sheen);
     this.barMat.needsUpdate = true;
     this.fill = Math.max(0.08, this.loose.fillHeight());
     this.liquid.visible = true;
@@ -315,10 +442,11 @@ export class Game {
     this.confetti.burst(0, 0.8, 0.4, 140);
     sndPop(); haptic(25);
     this.ui.popup('Wunderschön!');
-    const match = this.order.soaps.every((s) => this.cutIds.has(s.id));
-    const extra = [...this.cutIds].filter((id) => !this.order.soaps.some((s) => s.id === id)).length;
-    this.price = match ? Math.max(10, this.order.reward - extra * 10) : Math.round(this.order.reward * 0.4);
-    this.ui.hint(match ? `${this.order.customer} ist begeistert!` : `Nicht ganz die Bestellung …`);
+    const q = this.quality || this.rateMix();
+    this.price = q.price;
+    this.buildBarBits();
+    this.ui.showQuality(q);
+    this.ui.hint(q.stars === 3 ? `${this.order.customer} ist begeistert!` : q.stars === 2 ? 'Schöne Seife!' : 'Nicht ganz die Mischung …');
     this.ui.actions([{ label: `🪙 Verkaufen für ${this.price}`, alt: true, onClick: () => this.sell() }]);
     this.bar.scale.set(0.6, 0.6, 0.6); this.bar.rotation.set(0, 0, 0);
     this.state = 'unmolded';
@@ -341,9 +469,70 @@ export class Game {
     }
   }
 
+  /**
+   * Bewertung der Mischung: Abweichung je Sorte (Prozentpunkte der Form, also auch zu wenig/zu viel
+   * Füllung) -> Genauigkeit 0..100, Sterne und Preis-Faktor. Fremde Sorten zählen voll als Abweichung.
+   */
+  rateMix() {
+    const o = this.order, rows = [];
+    let dev = 0;
+    for (const m of o.mix) {
+      const a = this.pcts[m.soap.id] || 0, d = Math.abs(a - m.pct);
+      dev += d;
+      rows.push({ label: `${m.soap.emoji} ${m.soap.name}`, value: `${Math.round(a)} % / ${m.pct} %`, cls: d <= 5 ? 'good' : d > 12 ? 'bad' : '' });
+    }
+    for (const s of SOAP_BY_ID) if (!o.mix.some((m) => m.soap === s) && this.pcts[s.id] > 0.5) dev += this.pcts[s.id];
+    const accuracy = Math.max(0, Math.round(100 - dev));
+    const stars = accuracy >= 90 ? 3 : accuracy >= 70 ? 2 : 1;
+    const fill = Math.round(this.fillPct || 0);
+    rows.push({ label: '🫙 Form', value: `${fill} % voll`, cls: Math.abs(fill - 100) <= 5 ? 'good' : Math.abs(fill - 100) > 15 ? 'bad' : '' });
+    let price = Math.round(o.reward * [0, 0.7, 1, 1.25][stars]);
+    if (o.additive) {
+      const ok = this.additives.includes(o.additive);
+      rows.push({ label: `${o.additive.emoji} ${o.additive.name}`, value: ok ? '✔ wie gewünscht' : 'fehlt (−20 %)', cls: ok ? 'good' : 'bad' });
+      if (!ok) price = Math.round(price * 0.8);
+    }
+    let extra = 0;
+    for (const a of this.additives) extra += a.bonus;
+    if (extra) rows.push({ label: '✨ Zusätze', value: `+${extra} 🪙`, cls: 'good' });
+    price += extra;
+    rows.push({ label: 'Preis', value: `${price} 🪙` });
+    return { accuracy, stars, price, rows, fill };
+  }
+
+  /** Perlen / Goldflocken auf der fertigen Seife verteilen (einmal beim Ausformen). */
+  buildBarBits() {
+    const pearls = this.additives.find((a) => a.fx.pearls), flakes = this.additives.find((a) => a.fx.flakes);
+    const put = (mesh, n, make) => {
+      mesh.count = 0;
+      for (let i = 0; i < n; i++) { make(i, _m4); mesh.setMatrixAt(mesh.count++, _m4); }
+      mesh.instanceMatrix.needsUpdate = true;
+    };
+    // Seife: 1.0 x 0.36 x 0.66, Rundung 0.1 -> Teile nur auf den flachen Bereichen von Oberseite und Vorderseite
+    const spot = (i, onTop, out, nrm) => {
+      if (onTop) { out.set((Math.random() - 0.5) * 0.78, 0.18, (Math.random() - 0.5) * 0.44); nrm.set(0, 1, 0); }
+      else { out.set((Math.random() - 0.5) * 0.78, (Math.random() - 0.5) * 0.14, 0.33); nrm.set(0, 0, 1); }
+    };
+    put(this.pearlMesh, pearls ? pearls.fx.pearls.n : 0, (i, m) => {
+      const r = 0.018 + Math.random() * 0.01;
+      spot(i, Math.random() < 0.72, _a, _b);
+      _a.addScaledVector(_b, -r * 0.35);           // halb eingebettet
+      m.compose(_a, _qq.identity(), _t.set(r, r, r));
+    });
+    put(this.flakeMesh, flakes ? flakes.fx.flakes.n : 0, (i, m) => {
+      const r = 0.012 + Math.random() * 0.02;
+      spot(i, Math.random() < 0.75, _a, _b);
+      _qq.setFromUnitVectors(_up, _b);
+      _qq.multiply(_qq2.setFromAxisAngle(_up, Math.random() * 6.283));
+      _qq.multiply(_qq2.setFromAxisAngle(_side, (Math.random() - 0.5) * 0.5));
+      m.compose(_a, _qq, _t.set(r, 0.003, r * (0.5 + Math.random() * 0.5)));
+    });
+  }
+
   /** "Verkaufen": Schale verschwindet, die fertige Seife legt sich auf den Tisch. */
   sell() {
     if (this.state !== 'unmolded') return;
+    this.ui.showQuality(null);
     this.state = 'toTable';
     document.body.classList.add('table-mode');
     this.ui.actions([]);
@@ -697,7 +886,9 @@ export class Game {
     let bob = -1;
     if (this.state === 'shelf') {
       const list = this.shelf.soaps;
-      for (let i = 0; i < list.length; i++) if (!this.cutIds.has(list[i].id)) { bob = i; break; }
+      // erste Sorte, von der noch deutlich zu wenig drin ist (ohne Allokation)
+      const mix = this.order ? this.order.mix : null;
+      if (mix) for (let k = 0; k < mix.length && bob < 0; k++) if ((this.pcts[mix[k].soap.id] || 0) < mix[k].pct - 4) bob = list.indexOf(mix[k].soap);
     }
     this.shelf.update(dt, time, bob);
     this.notes.update(dt, time, this.state === 'choose');
@@ -759,7 +950,7 @@ export class Game {
     }
 
     this.knifeTilt = damp(this.knifeTilt, THREE.MathUtils.clamp(-dx / Math.max(dt, 1e-3) * 0.03, -0.12, 0.12), 10, dt);
-    this.ui.setCut(this.block.cutFraction, this.block.soap);
+    this.refreshMix();   // Mischungs-Balken live (DOM nur bei Änderung)
     this.knife.position.set(this.knifeX, this.knifeY, this.knifeZ);
     this.knife.rotation.z = this.knifeTilt;
   }
@@ -770,7 +961,7 @@ export class Game {
     sndCut(); haptic(12);
     if (this.slicesCut === 1) this.ui.hint('');
     if (this.slicesCut % 2 === 0 || done) this.ui.popup();
-    if (done) { this.finishBlock(); return; }
+    if (done) { this.stopCutting(); return; }
     this.returning = true;
   }
 

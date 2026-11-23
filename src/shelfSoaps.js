@@ -43,6 +43,7 @@ function reliefNormalMap() {
 
 export class ShelfSoaps {
   constructor(scene) {
+    this.frac = new Float32Array(16).fill(1);
     const mat = new THREE.MeshStandardMaterial({ roughness: 0.42, metalness: 0, envMapIntensity: 0.7 });
     this.body = new THREE.InstancedMesh(new RoundedBoxGeometry(BW, BH, BD, 3, SOAP_RADIUS), mat, MAX);
     // Prägung: flache Platte direkt vor der Vorderseite, gleiche Farbe/Material + Normal Map
@@ -71,8 +72,10 @@ export class ShelfSoaps {
   }
 
   /** Rezept-Seifen ins Regal stellen (nur bei neuer Bestellung). */
-  setSoaps(list) {
+  /** fracs[i]: Länge des Stücks (Anteil der Scheiben, angebrochene Stücke sind kürzer). */
+  setSoaps(list, fracs = null) {
     this.soaps = list.slice(0, MAX);
+    for (let i = 0; i < MAX; i++) this.frac[i] = fracs && fracs[i] != null ? Math.max(0.08, fracs[i]) : 1;
     const n = this.soaps.length;
     for (let i = 0; i < MAX; i++) {
       const soap = this.soaps[i];
@@ -89,7 +92,7 @@ export class ShelfSoaps {
   }
 
   place(i, pos, scale) {
-    _m.compose(pos, _q.identity(), _s.set(scale, scale, scale));
+    _m.compose(pos, _q.identity(), _s.set(scale, scale, scale * this.frac[i]));
     this.body.setMatrixAt(i, _m);
     this.face.setMatrixAt(i, _m2.multiplyMatrices(_m, this.faceOffset));
     this.body.instanceMatrix.needsUpdate = true; this.face.instanceMatrix.needsUpdate = true;

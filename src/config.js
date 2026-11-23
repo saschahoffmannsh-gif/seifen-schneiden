@@ -4,10 +4,10 @@
 export const CUBE = 0.05;           // Kantenlänge eines Seifenwürfels (Voxel) – fein geschnitten
 
 // Seifenblock: Anzahl Würfel in x (Breite), y (Höhe), z (Tiefe)
-// Aufrecht stehendes Seifenstück: höher als breit, 4 Scheiben von vorne nach hinten.
-// 15 x 24 x 8 = 2880 Würfel pro Seife; jede Scheibe ist 2 Würfel dick (15 x 24 x 2 = 720 Würfel).
-export const BLOCK = { nx: 15, ny: 24, nz: 8 };
-export const SLICES = 4;
+// Aufrecht stehendes Seifenstück: höher als breit, 10 Scheiben von vorne nach hinten.
+// 15 x 24 x 10 = 3600 Würfel pro Seife; jede Scheibe ist 1 Würfel dick (360 Würfel) = 10 % der Form.
+export const BLOCK = { nx: 15, ny: 24, nz: 10 };
+export const SLICES = 10;
 export const SLICE_DEPTH = BLOCK.nz / SLICES;   // Würfel pro Scheibe in z
 export const SOAP_RADIUS = 0.12;    // Rundung der Kanten/Ecken des Seifenstücks
 export const SOAP_BULGE = 0.03;     // Kissen-Wölbung der Vorderseite (Mitte steht so weit vor)
@@ -34,9 +34,14 @@ export const PHYS = {
 // Schneiden: wie weit (Welt-Einheiten) ein Wisch mindestens gehen muss, damit er zählt
 export const CUT = {
   // Hin-und-her-Wischen treibt das Messer durch die vorderste Scheibe nach unten:
-  strokePerSlice: 2.0,    // so viel Wischweg (Welt-Einheiten) braucht eine ganze Scheibe (oben -> unten)
+  strokePerSlice: 1.3,    // so viel Wischweg (Welt-Einheiten) braucht eine ganze Scheibe (oben -> unten)
   knifeRange: 0.32,       // Messer darf sich +- so weit seitlich bewegen
   returnSpeed: 9,         // wie schnell das Messer nach einer Scheibe wieder hochfährt
 };
 
 export const OVEN_SECONDS = 5;
+
+// Die Form fasst genau ein ganzes Seifenstück: 100 % = 10 Scheiben = 3600 Würfel.
+// Jede Bestellung ist eine Mischung in Prozent (Schritte von 10 % = eine Scheibe).
+export const MOULD_CUBES = BLOCK.nx * BLOCK.ny * BLOCK.nz;
+export const PCT_PER_SLICE = 100 / SLICES;
