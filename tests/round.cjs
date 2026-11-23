@@ -67,33 +67,61 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await p.mouse.click(np.x, np.y); await p.waitForTimeout(400);
   console.log('note tap while stocked ->', await p.evaluate(() => document.getElementById('note-view').classList.contains('open')));
   await p.click('#note-close'); await p.waitForTimeout(400);
+  // Mischung schneiden: je Sorte genau die bestellten Scheiben (10 % = 1 Scheibe); bei der zweiten
+  // Sorte mitten in der letzten Scheibe aufhören -> angefangene Scheibe ist Verschnitt, Rest bleibt im Vorrat
+  const mix = await p.evaluate(() => window.__game.order.mix.map((m) => m.pct / 10));
   for (let s = 0; s < order.length; s++) {
     const pt = await p.evaluate((i) => { const g = window.__game; const v = g.shelf.home[i].clone().project(g.camera); return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight }; }, s);
     await p.mouse.click(pt.x, pt.y);
     await p.waitForFunction(() => window.__game.state === 'cutting', null, { timeout: 30000 });
     await p.waitForTimeout(500);
     if (s === 0) await p.screenshot({ path: out + '/2-seife-intakt.png' });
-    await p.mouse.move(210, 520); await p.mouse.down();
+    const stopAt = s === 1 ? mix[s] - 0.4 : mix[s];
+    await p.mouse.move(VW / 2, VH * 0.6); await p.mouse.down();
     let n = 0;
-    while ((await g()) === 'cutting' && n < 400) {
-      await p.mouse.move(130, 520, { steps: 3 }); await p.mouse.move(290, 520, { steps: 3 });
+    for (;;) {
+      const st = await p.evaluate(() => { const g = window.__game; return [g.state, g.slicesCut + (g.returning ? 0 : g.sliceProgress)]; });
+      if (st[0] !== 'cutting' || st[1] >= stopAt || n > 200) break;
+      const amp = stopAt - st[1] < 1 ? 0.04 : 0.2;   // zum Ende hin feine Wischer -> genau aufhören
+      await p.mouse.move(VW * (0.5 - amp), VH * 0.6, { steps: 3 }); await p.mouse.move(VW * (0.5 + amp), VH * 0.6, { steps: 3 });
       n++;
-      const f = await p.evaluate(() => window.__game.block.cutFraction);
-      if (s === 0 && !midShot && f > 0.33) { await p.mouse.up(); await p.waitForTimeout(120); await p.screenshot({ path: out + '/3-schneiden-mitte.png' }); midShot = true; await p.mouse.down(); }
+      if (s === 1 && !midShot && st[1] > 1.2) { await p.mouse.up(); await p.waitForTimeout(150); await p.screenshot({ path: out + '/3-schneiden-mitte.png' }); midShot = true; await p.mouse.down(); }
     }
     await p.mouse.up();
-    if (s === 0) { await p.waitForTimeout(1500); await p.screenshot({ path: out + '/4-haufen.png' }); }
-    if (s === order.length - 1) { for (let k = 0; k < 120 && await p.evaluate(() => window.__game.loose.activeCount) > 0; k++) await p.waitForTimeout(1000); await p.screenshot({ path: out + '/6-haufen-beide.png' }); }
-    await p.waitForTimeout(1200);
-    console.log('soap', order[s], 'state', await g(), 'swipes', n);
+    if (s === 0) { await p.waitForTimeout(1200); await p.screenshot({ path: out + '/4-haufen.png' }); }
+    if (await g() === 'cutting') await p.locator('#actions button', { hasText: 'Fertig' }).click();
+    await p.waitForFunction(() => window.__game.state === 'shelf', null, { timeout: 30000 }); await p.waitForTimeout(400);
+    console.log('soap', order[s], 'swipes', n, 'mix', await p.evaluate(() => { const g = window.__game; return g.order.mix.map((m) => `${m.soap.name} ${g.pcts[m.soap.id].toFixed(1)}%/${m.pct} Vorrat ${g.stockOf(m.soap.id)}`).join(', ') + ` Form ${g.fillPct.toFixed(1)}`; }));
   }
-  const spread = await p.evaluate(() => { const l = window.__game.loose; let mx = 0, mn = 9, zx = -9, zn = 9; for (let i = 0; i < l.used; i++) { if (l.state[i] !== 2) continue; const x = l.pos[i*3], z = l.pos[i*3+2]; mx = Math.max(mx, x); mn = Math.min(mn, x); zx = Math.max(zx, z); zn = Math.min(zn, z); } let hmax = 0; for (const v of l.heights) hmax = Math.max(hmax, v); let rmax = 0; for (let i = 0; i < l.used; i++) if (l.state[i] === 2) rmax = Math.max(rmax, Math.hypot(l.pos[i*3], l.pos[i*3+2])); return { used: l.used, active: l.activeCount, hmax, rmax, x: [mn, mx], z: [zn, zx], fps: document.getElementById('fps').textContent }; });
+  for (let k = 0; k < 60 && await p.evaluate(() => window.__game.loose.activeCount) > 0; k++) await p.waitForTimeout(1000);
+  await p.screenshot({ path: out + '/6-haufen-beide.png' });
+  const spread = await p.evaluate(() => { const l = window.__game.loose; return { used: l.used, active: l.activeCount, fps: document.getElementById('fps').textContent }; });
   console.log('pile', JSON.stringify(spread));
-  await p.click('#actions button'); // Ofen
-  for (let k = 0; k < 150 && (await g()) !== 'reveal'; k++) { await p.waitForTimeout(1000); if (k % 20 === 0) console.log('oven', await p.evaluate(() => [window.__game.state, window.__game.ovenT])); }
+  // Vorrat im Schrank (Reste sind wieder drin)
+  await p.mouse.click(VW / 2, 12);
+  await p.waitForFunction(() => document.getElementById('cabinet').classList.contains('open')); await p.waitForTimeout(800);
+  await p.screenshot({ path: out + '/27-schrank-vorrat.png' });
+  console.log('drawer stock', await p.evaluate(() => { const g = window.__game; return g.order.soaps.map((s) => s.name + ':' + [...document.querySelectorAll('#cab-grid .drawer.soap')].filter((b) => b._d.soap === s).map((b) => b.querySelector('.stk i').style.width).join('/')).join(' '); }));
+  await p.click('#cab-close'); await p.waitForFunction(() => window.__game.state === 'shelf', null, { timeout: 20000 }); await p.waitForTimeout(400);
+  // Zusätze: Perlen freischalten (Test-Münzen) und zusammen mit Lavendelöl in die Masse
+  await p.evaluate(() => { const g = window.__game; g.coins += 300; g.ui.setCoins(g.coins); });
+  await p.locator('#actions button', { hasText: 'Zusätze' }).click(); await p.waitForTimeout(900);
+  await p.screenshot({ path: out + '/28-zusaetze.png' });
+  const addCard = (nm) => p.locator('#pkg-list .pkg-card', { hasText: nm }).first();
+  await addCard('Perlen in der Seife').scrollIntoViewIfNeeded(); await addCard('Perlen in der Seife').click(); await p.waitForTimeout(400);
+  await p.screenshot({ path: out + '/29-zusatz-freischalten.png' });
+  await p.click('#unlock-buy'); await p.waitForTimeout(300);
+  await addCard('Perlen in der Seife').click(); await p.waitForTimeout(500);
+  await p.locator('#actions button', { hasText: 'Zusätze' }).click(); await p.waitForTimeout(900);
+  await addCard('Lavendelöl').scrollIntoViewIfNeeded(); await addCard('Lavendelöl').click(); await p.waitForTimeout(500);
+  console.log('additives', await p.evaluate(() => window.__game.additives.map((a) => a.id)), 'coins', await p.evaluate(() => window.__game.coins));
+  await p.locator('#actions button', { hasText: 'Ofen' }).click(); await p.waitForTimeout(400);
+  if (await g() === 'addSheet') { await p.click('#pkg-close'); await p.waitForTimeout(300); await p.locator('#actions button', { hasText: 'Ofen' }).click(); }
+  for (let k = 0; k < 150 && (await g()) !== 'reveal'; k++) await p.waitForTimeout(1000);
   console.log('state', await g());
-  await p.click('#actions button'); await p.waitForTimeout(1200);
+  await p.click('#actions button'); await p.waitForTimeout(1500);
   await p.screenshot({ path: out + '/5-fertig.png' });
+  console.log('quality', await p.evaluate(() => { const q = window.__game.quality; return [q.accuracy, q.stars, q.price, q.fill]; }), await p.$eval('#q-title', (e) => e.textContent), 'pearls', await p.evaluate(() => window.__game.pearlMesh.count));
   // Verkaufen -> Schale weg, Seife auf den Tisch
   const waitState = (st) => p.waitForFunction((st) => window.__game.state === st, st, { timeout: 60000 });
   const screenOf = (expr) => p.evaluate((expr) => { const g = window.__game; const v = eval(expr).clone().project(g.camera); return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight }; }, expr);
@@ -114,6 +142,7 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await waitState('picker'); await p.waitForTimeout(600);
   await p.screenshot({ path: out + '/12-paeckchen-auswahl.png' });
   // gesperrt: Freischalt-Dialog; erst zu wenig Münzen, dann (Test-Münzen) kaufen
+  await p.evaluate(() => { const g = window.__game; g.coins = 20; g.ui.setCoins(g.coins); });
   await p.click('#pkg-list .pkg-card >> nth=1'); await p.waitForTimeout(400);
   console.log('locked tap ->', await g(), await p.$eval('#unlock-buy', (e) => [e.disabled, e.textContent]));
   await p.screenshot({ path: out + '/13-freischalten-zu-wenig.png' });

@@ -9,19 +9,19 @@ export const MAX_ADDITIVES = 2;
 const A = (id, cat, name, emoji, cost, bonus, fx) => ({ id, cat, name, emoji, cost, bonus, fx, unlocked: cost === 0 });
 
 export const ADDITIVES = [
-  A('lavendeloel', 'Duft', 'Lavendelöl', '💧', 0, 3, { specks: { colors: ['#8e6cc4'], n: 50, r: [0.6, 1.2] } }),
+  A('lavendeloel', 'Duft', 'Lavendelöl', '💧', 0, 3, { specks: { colors: ['#8e6cc4'], n: 50, r: [1.2, 2.2] } }),
   A('blueten', 'Optik', 'Getrocknete Blüten', '🌸', 0, 3, { specks: { colors: ['#d9486a', '#f2c14e', '#9c6ad0'], n: 90, r: [1.5, 3], petal: true } }),
   A('sheabutter', 'Pflege', 'Sheabutter', '🧈', 40, 5, { sheen: 0.12, tint: ['#fff3d6', 0.18] }),
   A('honig', 'Pflege', 'Honig', '🍯', 50, 5, { sheen: 0.1, tint: ['#e6a23a', 0.2] }),
   A('ziegenmilch', 'Pflege', 'Ziegenmilch', '🥛', 60, 6, { sheen: 0.06, tint: ['#ffffff', 0.3] }),
   A('bienenwachs', 'Pflege', 'Bienenwachs', '🐝', 70, 6, { sheen: 0.18, tint: ['#f2d06b', 0.12] }),
   A('arganoel', 'Pflege', 'Arganöl', '🫒', 80, 7, { sheen: 0.22, tint: ['#d9b45a', 0.08] }),
-  A('rosenoel', 'Duft', 'Rosenöl', '🌹', 90, 7, { specks: { colors: ['#e05a88'], n: 70, r: [0.6, 1.1] }, tint: ['#f6c6de', 0.08] }),
-  A('orangenoel', 'Duft', 'Orangenöl', '🍊', 50, 5, { specks: { colors: ['#f39448'], n: 60, r: [0.6, 1.1] } }),
-  A('mohn', 'Optik', 'Mohnsamen', '⚫', 40, 4, { specks: { colors: ['#20202a', '#3a3a48'], n: 260, r: [0.8, 1.3] } }),
+  A('rosenoel', 'Duft', 'Rosenöl', '🌹', 90, 7, { specks: { colors: ['#e05a88'], n: 70, r: [1.2, 2] }, tint: ['#f6c6de', 0.08] }),
+  A('orangenoel', 'Duft', 'Orangenöl', '🍊', 50, 5, { specks: { colors: ['#f39448'], n: 60, r: [1.2, 2] } }),
+  A('mohn', 'Optik', 'Mohnsamen', '⚫', 40, 4, { specks: { colors: ['#20202a', '#3a3a48'], n: 220, r: [1.2, 1.8] } }),
   A('aktivkohle', 'Optik', 'Aktivkohle-Wirbel', '🖤', 60, 5, { specks: { colors: ['#2a2a30'], n: 26, r: [3, 6] } }),
   A('goldflocken', 'Optik', 'Goldflocken', '✨', 150, 10, { flakes: { color: '#e5c25c', n: 34 } }),
-  A('perlen', 'Optik', 'Perlen in der Seife', '⚪', 120, 9, { pearls: { color: '#fbf6ee', n: 30 } }),
+  A('perlen', 'Optik', 'Perlen in der Seife', '⚪', 120, 9, { pearls: { color: '#fbf6ee', n: 36 } }),
 ];
 export const ADD_BY_ID = Object.fromEntries(ADDITIVES.map((a) => [a.id, a]));
 

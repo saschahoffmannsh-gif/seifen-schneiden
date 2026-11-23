@@ -222,7 +222,7 @@ export class Game {
       save.setStock(soap.id, S + BAR_SLICES);
       if (after) after();
       return true;
-    }, { line: `+${BAR_SLICES} Scheiben (Vorrat jetzt ${S}▮)` + (cost ? '' : ' – geschenkt!'), verb: cost ? 'Kaufen' : 'Mitnehmen' });
+    }, { line: `+${BAR_SLICES} Scheiben (Vorrat jetzt ${S})` + (cost ? '' : ' – geschenkt!'), verb: cost ? 'Kaufen' : 'Mitnehmen' });
   }
 
   /** Vollbild-Schrank: alle Seifen der Bestellung in den Schubladen finden. */
@@ -289,8 +289,8 @@ export class Game {
     if (!this.stocked) this.ui.hint('Tippe auf den Schrank');
     else if (missing.length) {
       const m = this.order.mix.find((x) => x.soap === missing[0]);
-      this.ui.hint(`Tippe im Regal auf ${m.soap.emoji} ${m.soap.name} – Ziel ${m.pct} % = ${m.pct / PCT_PER_SLICE} Scheiben`);
-    } else this.ui.hint(this.order.additive && !this.additives.includes(this.order.additive) ? `Mischung passt! Jetzt ${this.order.additive.emoji} ${this.order.additive.name} dazu` : 'Mischung passt! ✨ Zusätze oder ab in den Ofen');
+      this.ui.hint(`Tippe auf ${m.soap.emoji} ${m.soap.name}: ${m.pct} % = ${m.pct / PCT_PER_SLICE} Scheiben`);
+    } else this.ui.hint(this.order.additive && !this.additives.includes(this.order.additive) ? `Passt! Noch ${this.order.additive.emoji} ${this.order.additive.name} dazu` : 'Mischung passt! Ab in den Ofen');
     const acts = [];
     if (this.stocked) acts.push({ label: '✨ Zusätze', onClick: () => this.openAdditives() });
     if (this.loose.used > 0) acts.push({ label: '🔥 In den Ofen', alt: true, onClick: () => this.toOven() });
@@ -316,7 +316,7 @@ export class Game {
     this.state = 'cutting';
     const m = this.order.mix.find((x) => x.soap === soap);
     const have = Math.round(this.pcts[soap.id] || 0);
-    this.ui.hint(m ? `${soap.name}: Ziel ${m.pct} % (${m.pct / PCT_PER_SLICE} Scheiben)${have ? `, drin: ${have} %` : ''} – wisch hin und her ↔` : 'Wisch hin und her – das Messer sägt sich nach unten ↔');
+    this.ui.hint(m ? `${m.pct / PCT_PER_SLICE - Math.round(have / PCT_PER_SLICE)} Scheiben ${soap.name} – wisch hin und her ↔` : 'Wisch hin und her ↔');
     this.block.load(soap, Math.min(SLICES, save.stock(soap.id)));
     this.ui.actions([{ label: '✋ Fertig mit dieser Seife', onClick: () => this.stopCutting() }]);
     this.loose.blockHalfX = this.block.halfX; this.loose.blockHalfZ = this.block.halfZ;
@@ -515,13 +515,13 @@ export class Game {
       else { out.set((Math.random() - 0.5) * 0.78, (Math.random() - 0.5) * 0.14, 0.33); nrm.set(0, 0, 1); }
     };
     put(this.pearlMesh, pearls ? pearls.fx.pearls.n : 0, (i, m) => {
-      const r = 0.018 + Math.random() * 0.01;
+      const r = 0.026 + Math.random() * 0.012;
       spot(i, Math.random() < 0.72, _a, _b);
       _a.addScaledVector(_b, -r * 0.35);           // halb eingebettet
       m.compose(_a, _qq.identity(), _t.set(r, r, r));
     });
     put(this.flakeMesh, flakes ? flakes.fx.flakes.n : 0, (i, m) => {
-      const r = 0.012 + Math.random() * 0.02;
+      const r = 0.018 + Math.random() * 0.022;
       spot(i, Math.random() < 0.75, _a, _b);
       _qq.setFromUnitVectors(_up, _b);
       _qq.multiply(_qq2.setFromAxisAngle(_up, Math.random() * 6.283));
