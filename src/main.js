@@ -1,3 +1,4 @@
+import './sound.js';   // zuerst: Ton an/aus (vor dem ersten AudioContext)
 import { ADDITIVES } from './additives.js';
 import { DECO_ITEMS } from './decoItems.js';
 // Einstieg: baut alles zusammen und startet die Hauptschleife.
@@ -10,6 +11,7 @@ import { createKnife } from './knife.js';
 import { Confetti } from './confetti.js';
 import { createInput } from './input.js';
 import { createUI } from './ui.js';
+import { createMenu } from './menu.js';
 import { Game } from './game.js';
 import { ShelfSoaps } from './shelfSoaps.js';
 import { Packages } from './packages.js';
@@ -53,6 +55,7 @@ function layoutUI() {
 layoutUI();
 window.addEventListener('resize', layoutUI);
 window.__game = game; // für Tests/Debugging
+window.__menu = createMenu({ getCoins: () => game.coins });
 window.__decoItems = DECO_ITEMS;
 window.__additives = ADDITIVES;
 
