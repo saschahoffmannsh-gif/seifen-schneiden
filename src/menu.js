@@ -6,6 +6,7 @@ import { sound } from './sound.js';
 import { PACKAGE_TYPES } from './decor.js';
 import { DECO_ITEMS } from './decoItems.js';
 import { ADDITIVES } from './additives.js';
+import { SOAP_SHAPES } from './shapes.js';
 import { sndWood } from './audio.js';
 import { createStartScene } from './startscene.js';
 
@@ -34,7 +35,7 @@ export function createMenu({ getCoins }) {
     $('start-new').style.display = prog && !started ? '' : 'none';
     const p = $('st-progress');
     if (prog || started) {
-      const n = PACKAGE_TYPES.filter((t) => t.unlocked).length + DECO_ITEMS.filter((t) => t.unlocked).length + ADDITIVES.filter((t) => t.unlocked).length;
+      const n = PACKAGE_TYPES.filter((t) => t.unlocked).length + DECO_ITEMS.filter((t) => t.unlocked).length + ADDITIVES.filter((t) => t.unlocked).length + SOAP_SHAPES.filter((t) => t.unlocked).length;
       p.innerHTML = `<span class="chip">${ICON.coin}<b>${getCoins()}</b></span><span class="chip-sep"></span><span class="chip">${ICON.sparkle}<b>${n}</b>&nbsp;freigeschaltet</span>`;
       p.style.display = '';
     } else p.style.display = 'none';
@@ -86,6 +87,7 @@ export function createMenu({ getCoins }) {
       ['Verpackungen', ICON.box, PACKAGE_TYPES, 'rose'],
       ['Dekoration', ICON.leaf, DECO_ITEMS, 'honey'],
       ['Zusätze', ICON.drop, ADDITIVES, 'mint'],
+      ['Seifenformen', ICON.heart, SOAP_SHAPES, 'rose'],
     ];
     $('col-rows').innerHTML = rows.map(([name, ic, list, c]) => {
       const n = list.filter((x) => x.unlocked).length, all = list.length;

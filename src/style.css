@@ -647,3 +647,6 @@ body.menu-open #hud * { pointer-events: none; }
 .col-n { font: 500 20px var(--f-display); font-variation-settings: 'SOFT' 100; font-variant-numeric: tabular-nums; } .col-n small { font: 400 12px var(--f-body); color: var(--ink-3); }
 .col-coins { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line); font: 500 14px var(--f-body); color: var(--ink-2); display: flex; align-items: center; justify-content: center; gap: 4px; }
 .col-coins .coin { width: 17px; height: 17px; }
+
+/* Seifenform im großen Zettel */
+.note-row.shape .sh-ic { width: 18px; height: 18px; flex: none; margin-right: 2px; }

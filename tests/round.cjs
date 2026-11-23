@@ -178,7 +178,14 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await p.waitForTimeout(1500); await p.screenshot({ path: out + '/5a-schmelzen.png' }); await chk('schmelzen');
   for (let k = 0; k < 150 && (await g()) !== 'reveal'; k++) await p.waitForTimeout(1000);
   console.log('state', await g());
+  // Ausformen: Seifenform wählen (gewünschte Form der Bestellung)
   await p.click('#actions button');
+  await p.waitForFunction(() => document.getElementById('pkg-picker').classList.contains('open')); await p.waitForTimeout(600);
+  await p.screenshot({ path: out + '/5c-form-auswahl.png' });
+  { const want = await p.evaluate(() => window.__game.order.shape.name);
+    const names = await p.$$eval('#pkg-list .pkg-card .pkg-name', (n) => n.map((x) => x.textContent));
+    console.log('shapes', names.join(','), 'want', want, 'locked', await p.$$eval('#pkg-list .pkg-card.locked', (c) => c.length));
+    await p.locator('#pkg-list .pkg-card').nth(names.indexOf(want)).click(); }
   await p.waitForTimeout(1500);
   await p.screenshot({ path: out + '/5-fertig.png' }); await chk('praesentation');
   console.log('quality', await p.evaluate(() => { const q = window.__game.quality; return [q.accuracy, q.stars, q.price, q.fill]; }), await p.$eval('#q-title', (e) => e.textContent), 'pearls', await p.evaluate(() => window.__game.pearlMesh.count));

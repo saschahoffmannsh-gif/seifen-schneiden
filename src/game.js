@@ -14,7 +14,6 @@ import * as THREE from 'three';
 import { BLOCK, BOWL, CUBE, CUT, OVEN_SECONDS, BLOCK_BASE_Y, SLICES, MOULD_CUBES, PCT_PER_SLICE } from './config.js';
 import { SOAP_LIST, SOAP_BY_ID } from './soaps.js';
 import { makeMarbleTexture } from './marble.js';
-import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { sndCut, sndPaper, sndDrawer, sndWood, sndThump, sndGlass, sndCeramic, sndCardboard, sndLid, sndFabric, sndCoins, sndCreak, haptic } from './audio.js';
 import { PKG, TABLE_SPOT, PKG_SHELF_SCALE, SHADOW_SOAP, SHADOW_LID } from './packages.js';
 import { TABLE_Y, CABINET, SHELF_FRONT_Z } from './setting/wall.js';
@@ -23,6 +22,7 @@ import { makeOrder } from './orders.js';
 import { ADDITIVES, ADD_CATS, MAX_ADDITIVES, additiveThumb } from './additives.js';
 import { cabinetLayout } from './cabinet.js';
 import { save, applyUnlocks, BAR_SLICES, BAR_PRICE, STOCK_MAX } from './save.js';
+import { SOAP_SHAPES, DEFAULT_SHAPE, shapeGeometry, shapeEmboss, shapeIconURL, insideShape, shapeTopY } from './shapes.js';
 import { PKG_CATS, PACKAGE_TYPES } from './decor.js';
 import { Deco } from './deco.js';
 import { Showcase } from './showcase.js';
@@ -106,6 +106,7 @@ export class Game {
     window.addEventListener('pointercancel', (e) => { if (this.showcase.up(e)) return; if (this.drag) this.dragEnd(e, true); else this.swipeEnd(e, true); });
     // Deko: freigeschaltete aus dem Spielstand, 3D-Teile am Päckchen
     applyUnlocks(DECO_ITEMS, 'deco:');
+    applyUnlocks(SOAP_SHAPES, 'shape:');
     this.deco = new Deco(scene, packages);
     this.drag = null; this.armed = null;
     applyUnlocks(PACKAGE_TYPES, 'pkg:');
@@ -130,7 +131,10 @@ export class Game {
 
     // Fertige Seife (Geometrie + Material einmalig; nur die Textur wechselt pro Seife)
     this.barMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0 });
-    this.bar = new THREE.Mesh(new RoundedBoxGeometry(1.0, 0.36, 0.66, 4, 0.1), this.barMat);
+    // Oberseite mit Prägung (Bump je Seifenform), Seiten glatt; Geometrie wechselt mit der Form
+    this.barTopMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0, bumpScale: 7 });
+    this.shape = DEFAULT_SHAPE;
+    this.bar = new THREE.Mesh(shapeGeometry(DEFAULT_SHAPE.id), [this.barTopMat, this.barMat]);
     this.bar.visible = false;
     scene.add(this.bar);
     // geschmolzene Seife in der Schale (Kegelstumpf, Höhe per Skalierung)
@@ -445,6 +449,8 @@ export class Game {
     this.barMat.map = makeMarbleTexture(parts, 256, fx);
     this.barMat.roughness = Math.max(0.12, 0.35 - sheen);
     this.barMat.needsUpdate = true;
+    this.barTopMat.map = this.barMat.map; this.barTopMat.roughness = this.barMat.roughness; this.barTopMat.needsUpdate = true;
+    this.shape = null;   // Form wird erst beim Ausformen gewählt
     this.fill = Math.max(0.08, this.loose.fillHeight());
     this.liquid.visible = true;
     this.liquid.scale.set(BOWL.floorR, 0.001, BOWL.floorR);
@@ -455,11 +461,31 @@ export class Game {
     this.ovenLight.intensity = 0;
     this.bg.copy(this.bgBase);
     sndCeramic();
-    this.ui.hint('Geschmolzen – bereit zum Ausformen');
-    this.ui.actions([{ label: '✨ Aus der Form nehmen', onClick: () => this.unmold() }]);
+    this.ui.hint('Geschmolzen – wähle die Seifenform');
+    this.ui.actions([{ label: '✨ Aus der Form nehmen', onClick: () => this.openShapes() }]);
   }
 
-  unmold() {
+  /** Gussform wählen (gesperrte Formen mit Schloss, wie bei den Päckchen); die gewünschte ist markiert. */
+  openShapes() {
+    if (this.state !== 'reveal') return;
+    const want = this.order && this.order.shape;
+    this.state = 'shapeSheet';
+    const items = SOAP_SHAPES.map((s) => ({ id: s.id, name: s.name, cat: 'Seifenformen', thumb: shapeIconURL(s.id), unlocked: s.unlocked, cost: s.cost, bonus: s.bonus,
+      sub: s === want ? '✔ gewünscht' : (s.bonus ? `+${s.bonus} 🪙` : 'Standard'), shape: s }));
+    this.ui.openSheet(items, {
+      title: want ? `Seifenform – gewünscht: ${want.name}` : 'Seifenform', cats: ['Seifenformen'], startCat: 'Seifenformen', coins: () => this.coins,
+      onBuy: (x) => this.buy(x.cost, 'shape:' + x.id, () => { x.shape.unlocked = true; }),
+      onSelect: (x) => { this.state = 'reveal'; this.unmold(x.shape); },
+      onClose: () => { if (this.state === 'shapeSheet') this.state = 'reveal'; },
+    });
+  }
+
+  unmold(shape = (this.order && this.order.shape) || DEFAULT_SHAPE) {
+    if (this.state !== 'reveal') return;
+    this.shape = shape;
+    this.bar.geometry = shapeGeometry(shape.id);
+    this.barTopMat.bumpMap = shapeEmboss(shape.id); this.barTopMat.needsUpdate = true;
+    this.quality = this.rateMix();
     this.loose.clear();
     this.liquid.visible = false;
     this.bar.visible = true;
@@ -516,12 +542,18 @@ export class Game {
     const accuracy = Math.max(0, Math.round(100 - dev));
     const stars = accuracy >= 90 ? 3 : accuracy >= 70 ? 2 : 1;
     const fill = Math.round(this.fillPct || 0);
-    rows.push({ label: '🫙 Form', value: `${fill} % voll`, cls: Math.abs(fill - 100) <= 5 ? 'good' : Math.abs(fill - 100) > 15 ? 'bad' : '' });
+    rows.push({ label: '🫙 Füllung', value: `${fill} % voll`, cls: Math.abs(fill - 100) <= 5 ? 'good' : Math.abs(fill - 100) > 15 ? 'bad' : '' });
     let price = Math.round(o.reward * [0, 0.7, 1, 1.25][stars]);
     if (o.additive) {
       const ok = this.additives.includes(o.additive);
       rows.push({ label: `${o.additive.emoji} ${o.additive.name}`, value: ok ? '✔ wie gewünscht' : 'fehlt · −20 %', cls: ok ? 'good' : 'bad' });
       if (!ok) price = Math.round(price * 0.8);
+    }
+    // Seifenform: falsche Form -> −30 % (einfach und sichtbar); erst beim Ausformen bekannt
+    if (o.shape && this.shape) {
+      const ok = this.shape === o.shape;
+      rows.push({ label: '◇ Form', value: ok ? `✔ ${o.shape.name}` : `${this.shape.name} statt ${o.shape.name} −30 %`, cls: ok ? 'good' : 'bad' });
+      if (!ok) price = Math.round(price * 0.7);
     }
     let extra = 0;
     for (const a of this.additives) extra += a.bonus;
@@ -540,9 +572,14 @@ export class Game {
       mesh.instanceMatrix.needsUpdate = true;
     };
     // Seife: 1.0 x 0.36 x 0.66, Rundung 0.1 -> Teile nur auf den flachen Bereichen von Oberseite und Vorderseite
+    // je nach Seifenform: oben nur innerhalb des Umrisses (mit Abstand zur Rundung), vorne nur beim Riegel
+    const sid = (this.shape || DEFAULT_SHAPE).id;
     const spot = (i, onTop, out, nrm) => {
-      if (onTop) { out.set((Math.random() - 0.5) * 0.78, 0.18, (Math.random() - 0.5) * 0.44); nrm.set(0, 1, 0); }
-      else { out.set((Math.random() - 0.5) * 0.78, (Math.random() - 0.5) * 0.14, 0.33); nrm.set(0, 0, 1); }
+      if (onTop || sid !== 'klassisch') {
+        let x = 0, z = 0;
+        for (let k = 0; k < 40; k++) { x = (Math.random() - 0.5) * 0.9; z = (Math.random() - 0.5) * 0.64; if (insideShape(sid, x, z, 0.1)) break; }
+        out.set(x, shapeTopY(sid, x, z), z); nrm.set(0, 1, 0);
+      } else { out.set((Math.random() - 0.5) * 0.7, (Math.random() - 0.5) * 0.12, 0.32); nrm.set(0, 0, 1); }
     };
     put(this.pearlMesh, pearls ? pearls.fx.pearls.n : 0, (i, m) => {
       const r = 0.026 + Math.random() * 0.012;

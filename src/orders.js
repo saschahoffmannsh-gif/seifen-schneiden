@@ -4,6 +4,7 @@
 // heute hat jede Bestellung genau ein item, die Felder mix/soaps/additive spiegeln es.
 import { SOAP_LIST, SOAPS } from './soaps.js';
 import { ADDITIVES } from './additives.js';
+import { SOAP_SHAPES, DEFAULT_SHAPE } from './shapes.js';
 
 const CUSTOMERS = ['Anna', 'Ben', 'Clara', 'Emil', 'Frieda', 'Jonas', 'Lea', 'Mila', 'Paul', 'Sophie', 'Greta', 'Oskar', 'Ida', 'Theo'];
 let nextId = 1;
@@ -42,9 +43,13 @@ export function makeOrder({ first = false, avoid = [], avoidRecipes = [] } = {})
     const ok = ADDITIVES.filter((a) => a.unlocked);
     if (ok.length) additive = ok[(Math.random() * ok.length) | 0];
   }
-  const reward = 36 + mix.length * 4 + (additive ? 8 : 0) + ((Math.random() * 4) | 0) * 2;
+  // Seifenform: nur freigeschaltete; Klassisch bleibt häufig, besondere Formen bringen mehr
+  let shape = DEFAULT_SHAPE;
+  const special = SOAP_SHAPES.filter((s) => s.unlocked && s !== DEFAULT_SHAPE);
+  if (!first && special.length && Math.random() < 0.6) shape = special[(Math.random() * special.length) | 0];
+  const reward = 36 + mix.length * 4 + (additive ? 8 : 0) + shape.bonus + ((Math.random() * 4) | 0) * 2;
   const soaps = mix.map((m) => m.soap);
-  return { id: nextId++, customer, mix, soaps, additive, reward, items: [{ mix, additive }] };
+  return { id: nextId++, customer, mix, soaps, additive, shape, reward, items: [{ mix, additive, shape }] };
 }
 
 /** Text wie "Vanille 60 % · Erdbeere 40 %". */

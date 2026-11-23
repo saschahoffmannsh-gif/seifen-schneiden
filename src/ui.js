@@ -2,6 +2,7 @@
 
 import { soapCss } from './cabinet.js';
 import { sndCoins } from './audio.js';
+import { shapeIconURL } from './shapes.js';
 import { ICON, rich, buttonLabel } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
@@ -48,7 +49,7 @@ export function createUI() {
           + `<span class="mx-v">${Math.round(val)}<small>/${target} %</small></span></div>`;
       };
       let h = order.mix.map((m) => row(rich(m.soap.name), soapCss(m.soap), pcts ? pcts[m.soap.id] || 0 : 0, m.pct, 100)).join('');
-      h += row('Form', '#c9a27a', fill, 100, 125, ' total');
+      h += row('Füllung', '#c9a27a', fill, 100, 125, ' total');
       if (adds.length || order.additive) {
         const need = order.additive;
         h += `<div class="mx-add">${ICON.drop}${need ? rich((adds.includes(need) ? '✔ ' : '') + need.name + (adds.includes(need) ? '' : ' gewünscht')) : ''}${rich(adds.filter((a) => a !== need).map((a) => (need ? ' · ' : '') + a.name).join(need ? '' : ' · '))}</div>`;
@@ -190,6 +191,7 @@ export function createUI() {
           return `<div class="note-row"><i class="sw" style="background:${soapCss(m.soap)}"></i><span class="nr-name">${rich(m.soap.name)}</span><b>${m.pct} %</b>`
             + (st != null ? `<small class="${low ? 'low' : ''}">Vorrat ${st}</small>` : '') + '</div>';
         }).join('')
+        + (order.shape ? `<div class="note-row shape"><img class="sh-ic" src="${shapeIconURL(order.shape.id, 64)}" alt=""><span class="nr-name">Form</span><b>${rich(order.shape.name)}</b></div>` : '')
         + (order.additive ? `<div class="note-row add">${ICON.drop}mit ${rich(order.additive.name)}</div>` : '') + '</div>';
       $('note-reward').innerHTML = `<span class="reward-chip">Belohnung bis ${ICON.coin}<b>${Math.round(order.reward * 1.25)}</b></span>`;
       btn.disabled = !canAccept;

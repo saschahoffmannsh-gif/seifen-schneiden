@@ -4,6 +4,7 @@
 // Zettel, wird nur bei Änderungen neu gezeichnet) + EIN InstancedMesh für die Klebestreifen.
 // Antippen: nur beim Tippen, über die Bildschirmnähe.
 import * as THREE from 'three';
+import { drawShapeIcon } from './shapes.js';
 import { MIDDLE_SHELF, WALL_Z, SHELF_FRONT_Z } from './setting/wall.js';
 
 export const NOTE_COUNT = 3;
@@ -126,7 +127,14 @@ export class OrderNotes {
       g.textAlign = 'left'; g.fillStyle = '#4a3628'; g.font = `500 18px ${SANS}`; g.fillText(m.soap.name, 50, y, 140);
       g.textAlign = 'right'; g.fillStyle = '#392920'; g.font = `600 18px ${SANS}`; g.fillText(`${m.pct} %`, w - 26, y);
     });
-    const yy = 154 + o.mix.length * 25;
+    // Seifenform: Symbol + Name als eigene Zeile
+    const fy = 156 + o.mix.length * 25;
+    if (o.shape) {
+      drawShapeIcon(g, o.shape.id, 34, fy - 6, 19, '#e3cba9', 'rgba(90,60,30,0.6)');
+      g.textAlign = 'left'; g.fillStyle = '#4a3628'; g.font = `500 18px ${SANS}`; g.fillText('Form', 50, fy, 90);
+      g.textAlign = 'right'; g.fillStyle = '#392920'; g.font = `600 18px ${SANS}`; g.fillText(o.shape.name, w - 26, fy, 150);
+    }
+    const yy = fy - 2 + (o.shape ? 25 : 0);
     if (o.additive) { g.textAlign = 'center'; g.fillStyle = '#8a6a3e'; g.font = `italic 400 18px ${SERIF}`; g.fillText(`mit ${o.additive.name}`, cx, yy, w - 40); }
     // Trennlinie + Belohnung (Goldmünze)
     g.strokeStyle = 'rgba(184,149,93,0.45)'; g.lineWidth = 1; g.beginPath(); g.moveTo(30, h - 55); g.lineTo(w - 30, h - 55); g.stroke();
