@@ -14,7 +14,7 @@ export function createUI() {
   };
 
   let covered = false, coverTimer = 0;   // Vollbild-Schrank verdeckt die Szene -> nicht rendern
-  const WORDS = ['So satisfying!', 'Entspannend!', 'Wow!', 'Herrlich!', 'Perfekt!', 'Weiter so!', 'Mmmh!'];
+  const WORDS = ['Wunderbar', 'Herrlich', 'Sehr fein', 'Wie Butter', 'Schön gleichmäßig', 'Perfekt', 'So entspannend'];
 
   // Hinweis-Zeile folgt dem Zettel auch bei Höhenänderungen durch reine CSS-Zustände
   if (window.ResizeObserver) {
@@ -28,7 +28,7 @@ export function createUI() {
       $('order').classList.toggle('hidden', !order);
       this._mixKey = '';
       if (!order) { this.layoutOrder(); return; }
-      el.orderText.innerHTML = `<span class="avatar">${rich(order.customer[0])}</span><b>${rich(order.customer)}</b> möchte:`;
+      el.orderText.innerHTML = `<span class="avatar">${rich(order.customer[0])}</span><b>${rich(order.customer)}</b> wünscht sich`;
       this.setMix(order, null, 0, []);
     },
     /**
@@ -44,14 +44,14 @@ export function createUI() {
       const row = (label, col, val, target, scale, cls = '') => {
         const w = Math.min(100, val / scale * 100), t = target / scale * 100;
         const near = Math.abs(val - target) <= 3 ? ' ok' : val > target + 3 ? ' over' : '';
-        return `<div class="mx${cls}${near}"><span class="mx-n">${label}</span><span class="mx-bar"><i style="width:${w}%;background:${col}"></i><b style="left:${t}%"></b></span>`
+        return `<div class="mx${cls}${near}"><span class="mx-n"><i class="sw" style="background:${col}"></i>${label}</span><span class="mx-bar"><i style="width:${w}%;background:${col}"></i><b style="left:${t}%"></b></span>`
           + `<span class="mx-v">${Math.round(val)}<small>/${target} %</small></span></div>`;
       };
-      let h = order.mix.map((m) => row(`${m.soap.emoji} ${m.soap.name}`, soapCss(m.soap), pcts ? pcts[m.soap.id] || 0 : 0, m.pct, 100)).join('');
-      h += row('🫙 Form', '#c9a27a', fill, 100, 125, ' total');
+      let h = order.mix.map((m) => row(rich(m.soap.name), soapCss(m.soap), pcts ? pcts[m.soap.id] || 0 : 0, m.pct, 100)).join('');
+      h += row('Form', '#c9a27a', fill, 100, 125, ' total');
       if (adds.length || order.additive) {
         const need = order.additive;
-        h += `<div class="mx-add">${need ? (adds.includes(need) ? '✔ ' : '○ ') + need.emoji + ' ' + need.name : ''}${adds.filter((a) => a !== need).map((a) => ` · ${a.emoji} ${a.name}`).join('')}</div>`;
+        h += `<div class="mx-add">${ICON.drop}${need ? rich((adds.includes(need) ? '✔ ' : '') + need.name + (adds.includes(need) ? '' : ' gewünscht')) : ''}${rich(adds.filter((a) => a !== need).map((a) => (need ? ' · ' : '') + a.name).join(need ? '' : ' · '))}</div>`;
       }
       el.orderProgress.innerHTML = h;
       this.layoutOrder();
@@ -166,10 +166,10 @@ export function createUI() {
       $('unlock-img').src = it.thumb;
       $('unlock-name').textContent = it.name;
       $('unlock-bonus').innerHTML = rich(o.line || `+${it.bonus} 🪙 pro Verkauf`);
-      $('unlock-have').innerHTML = rich(`Du hast ${coins} 🪙`);
+      $('unlock-have').innerHTML = rich(`Guthaben ${coins} 🪙`);
       const enough = coins >= it.cost;
       btn.disabled = !enough;
-      btn.innerHTML = rich(!it.cost ? (o.verb || 'Nehmen') : enough ? `${o.verb || 'Freischalten'} für ${it.cost} 🪙` : `Zu wenig Münzen (${it.cost} 🪙)`);
+      btn.innerHTML = rich(!it.cost ? (o.verb || 'Nehmen') : enough ? `${o.verb || 'Freischalten'} für ${it.cost} 🪙` : `Zu wenig Münzen · ${it.cost} 🪙`);
       const close = () => { root.classList.remove('open'); btn.onclick = null; root.onclick = null; };
       btn.onclick = () => { if (buy()) { sndOk(); close(); } };
       $('unlock-close').onclick = close;
@@ -187,13 +187,13 @@ export function createUI() {
       $('note-soaps').innerHTML = `<div class="note-pie" style="background:conic-gradient(${pie})"></div><div class="note-mix">`
         + order.mix.map((m) => {
           const st = stock(m.soap.id), need = m.pct / 10, low = st != null && st < need;
-          return `<div class="note-row"><span class="bar-chip" style="background:${soapCss(m.soap)}">${m.soap.emoji}</span><span class="nr-name">${m.soap.name}</span><b>${m.pct} %</b>`
-            + (st != null ? `<small class="${low ? 'low' : ''}">${low ? '⚠ ' : ''}Vorrat ${st}</small>` : '') + '</div>';
+          return `<div class="note-row"><i class="sw" style="background:${soapCss(m.soap)}"></i><span class="nr-name">${rich(m.soap.name)}</span><b>${m.pct} %</b>`
+            + (st != null ? `<small class="${low ? 'low' : ''}">${low ? 'nur ' : ''}${st} auf Vorrat</small>` : '') + '</div>';
         }).join('')
-        + (order.additive ? `<div class="note-row add">${order.additive.emoji} mit ${order.additive.name}</div>` : '') + '</div>';
+        + (order.additive ? `<div class="note-row add">${ICON.drop}mit ${rich(order.additive.name)}</div>` : '') + '</div>';
       $('note-reward').innerHTML = `<span class="reward-chip">Belohnung bis ${ICON.coin}<b>${Math.round(order.reward * 1.25)}</b></span>`;
       btn.disabled = !canAccept;
-      btn.textContent = canAccept ? 'Annehmen' : 'Erst aktuelle Bestellung fertig machen';
+      btn.textContent = canAccept ? 'Bestellung annehmen' : 'Erst die aktuelle Bestellung abschließen';
       const close = () => { root.classList.remove('open'); root.onclick = null; $('note-close').onclick = null; btn.onclick = null; };
       $('note-close').onclick = close;
       root.onclick = (e) => { if (e.target === root) close(); };
@@ -270,8 +270,8 @@ export function createUI() {
       const root = $('quality');
       if (!q) { root.classList.remove('show'); return; }
       $('q-stars').innerHTML = [0, 1, 2].map((k) => `<span class="qs ${k < q.stars ? 'on' : 'off'}" style="animation-delay:${0.25 + k * 0.18}s">${ICON.star}</span>`).join('');
-      $('q-banner').textContent = q.stars === 3 ? 'Perfekt!' : q.stars === 2 ? 'Sehr schön!' : 'Geschafft!';
-      $('q-title').textContent = `Mischung: ${q.accuracy} % genau`;
+      $('q-banner').textContent = q.stars === 3 ? 'Perfekt' : q.stars === 2 ? 'Sehr schön' : 'Geschafft';
+      $('q-title').textContent = `Mischung ${q.accuracy} % genau`;
       $('q-rows').innerHTML = q.rows.map((r) => `<div class="q-row"><span>${rich(r.label)}</span><b class="${r.cls || ''}">${rich(r.value)}</b></div>`).join('');
       root.classList.add('show');
     },
@@ -309,7 +309,7 @@ export function createUI() {
       const pct = Math.round(frac * 100);
       if (pct === this._cutPct) return;
       this._cutPct = pct;
-      el.cutLabel.textContent = `${soap ? soap.emoji + ' ' : ''}Geschnitten: ${pct} %`;
+      el.cutLabel.textContent = `${soap ? soap.name + ' · ' : ''}${pct} % geschnitten`;
       el.cutBar.style.width = `${pct}%`;
     },
     showFps(show) { el.fps.classList.toggle('hidden', !show); },
