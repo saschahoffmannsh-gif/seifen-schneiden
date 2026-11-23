@@ -122,6 +122,12 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await p.click('#actions button'); await p.waitForTimeout(1500);
   await p.screenshot({ path: out + '/5-fertig.png' });
   console.log('quality', await p.evaluate(() => { const q = window.__game.quality; return [q.accuracy, q.stars, q.price, q.fill]; }), await p.$eval('#q-title', (e) => e.textContent), 'pearls', await p.evaluate(() => window.__game.pearlMesh.count));
+  // Präsentation: mit dem Finger drehen (Gieren + Nicken), Schwung danach
+  { const y0 = await p.evaluate(() => window.__game.showcase.yaw); const cx = VW / 2, cy = VH * 0.45;
+    await p.mouse.move(cx - 70, cy); await p.mouse.down();
+    for (let k = 1; k <= 8; k++) { await p.mouse.move(cx - 70 + k * 18, cy + k * 4); await p.waitForTimeout(30); }
+    await p.screenshot({ path: out + '/5b-praesentation-drehen.png' }); await p.mouse.up();
+    console.log('showcase', await p.evaluate(() => [window.__game.showcase.active, document.getElementById('vignette').className]), 'yaw', y0, '->', await p.evaluate(() => window.__game.showcase.yaw), 'state', await g()); }
   // Verkaufen -> Schale weg, Seife auf den Tisch
   const waitState = (st) => p.waitForFunction((st) => window.__game.state === st, st, { timeout: 60000 });
   const screenOf = (expr) => p.evaluate((expr) => { const g = window.__game; const v = eval(expr).clone().project(g.camera); return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight }; }, expr);
@@ -182,40 +188,36 @@ const out = process.argv[3] || '/workspace/seifen-shots';
     await p.mouse.up(); await idle(); await p.waitForTimeout(200);
     console.log('deco drag', name, miss ? '(daneben)' : '', '->', await p.evaluate(() => [window.__game.deco.bonus, window.__game.deco.applied.map((x) => x.id).join(',')]));
   };
-  await tapShelf('flocken');
+  await tapShelf('perlen');
   await p.screenshot({ path: out + '/22-deko-auswahl.png' });
   console.log('deco tabs', await p.$$eval('#pkg-tabs .tab', (t) => t.map((x) => x.textContent + (x.classList.contains('on') ? '*' : ''))), 'cards', await p.$$eval('#pkg-list .pkg-card', (c) => c.length));
-  await dragTo('Seifenflocken bunt', '24-deko-ziehen.png');
-  await tapShelf('flocken'); await dragTo('Seifenflocken bunt', null, true);   // daneben: fällt weg, kostet nichts
-  await tapShelf('flocken'); await dragTo('Seifenflocken bunt');               // gleiche Sorte nochmal: mehr Teile, Bonus nur einmal
+  await dragTo('Perlmutt-Perlen', '24-deko-ziehen.png');
+  await tapShelf('perlen'); await dragTo('Perlmutt-Perlen', null, true);   // daneben: fällt weg, kostet nichts
+  await tapShelf('perlen'); await dragTo('Perlmutt-Perlen');               // gleiche Sorte nochmal: mehr Teile, Bonus nur einmal
   // gesperrte Deko freischalten
-  await tapShelf('perlen');
-  await (await card('Weiße Perlen')).click(); await p.waitForTimeout(400);
+  await tapShelf('blueten');
+  await (await card('Vergissmeinnicht')).click(); await p.waitForTimeout(400);
   await p.screenshot({ path: out + '/23-deko-freischalten.png' });
   await p.click('#unlock-buy'); await p.waitForTimeout(400);
   console.log('deco bought ->', await p.evaluate(() => [window.__game.coins, localStorage.getItem('seifen-save-v1')]));
-  await dragTo('Weiße Perlen');
-  // Antippen = auswählen, dann irgendwo drücken und zum Paket ziehen
-  await tapShelf('fuellung');
-  await (await card('Knisterpapier natur')).click(); await p.waitForTimeout(300);
-  console.log('armed', await p.evaluate(() => window.__game.armed && window.__game.armed.id), await p.$eval('#hint', (e) => e.textContent));
-  { const pk = await p.evaluate(() => window.__game.testPx('pkg')); await p.mouse.move(VW / 2, VH * 0.72); await p.mouse.down();
-    await p.mouse.move(pk.x, pk.y + 40, { steps: 6 }); await p.waitForTimeout(300); await p.mouse.up(); await idle(); }
-  console.log('armed drop ->', await p.evaluate(() => [window.__game.deco.bonus, window.__game.deco.applied.map((x) => x.id).join(',')]));
+  await dragTo('Vergissmeinnicht');
+  // Antippen = fliegt von selbst ins Paket
+  await tapShelf('blueten');
+  await (await card('Margeriten')).click(); await idle(); await p.waitForTimeout(300);
+  console.log('tap place ->', await p.evaluate(() => [window.__game.deco.bonus, window.__game.deco.applied.map((x) => x.id).join(',')]));
   await p.screenshot({ path: out + '/25-deko-gefuellt.png' });
   await p.locator('#actions button', { hasText: 'Rückgängig' }).click(); await p.waitForTimeout(300);
   console.log('undo ->', await p.evaluate(() => [window.__game.deco.bonus, window.__game.deco.applied.map((x) => x.id).join(',')]));
-  // Deckel-Deko ist vor dem Deckel ausgegraut
+  // Schleife bei offenem Paket antippen: Deckel geht von selbst zu, dann kommt die Schleife drauf
   await tapShelf('baender');
   console.log('lid items disabled before lid', await p.$$eval('#pkg-list .pkg-card.disabled', (c) => c.length));
-  await p.click('#pkg-close'); await p.waitForTimeout(300);
-  await p.locator('#actions button', { hasText: 'Deckel drauf' }).click();
-  await waitState('packed'); await p.waitForTimeout(300);
+  await (await card('Bäckerschnur')).click();
+  await p.waitForFunction(() => window.__game.state === 'packed' && !window.__game.deco.busy && !!window.__game.deco.lidItems.baender, null, { timeout: 60000 }); await p.waitForTimeout(300);
   await p.screenshot({ path: out + '/9-paeckchen-zu.png' });
-  await tapShelf('flocken');
+  await tapShelf('perlen');
   console.log('fill items disabled after lid', await p.$$eval('#pkg-list .pkg-card.disabled', (c) => c.length), 'of', await p.$$eval('#pkg-list .pkg-card', (c) => c.length));
   await p.click('#pkg-close'); await p.waitForTimeout(300);
-  await tapShelf('baender'); await dragTo('Bäckerschnur');
+  await tapShelf('anhaenger'); await (await card('Kraft-Anhänger mit Namen')).click(); await idle(); await p.waitForTimeout(300);
   await tapShelf('siegel'); await dragTo('Sticker „Danke“');
   await p.screenshot({ path: out + '/26-deko-deckel.png' });
   const decoTxt = await p.$eval('#order-deco', (e) => e.textContent);
