@@ -42,6 +42,22 @@ export const SHELF_FRONT_Z = WALL_Z + SHELF_D + 0.005; // Vorderkante der Brette
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
 
+/** Premium-Farbgebung: Sättigung etwas zurücknehmen, Ton minimal wärmer (weniger „Spielzeug“). */
+const _hsl = { h: 0, s: 0, l: 0 };
+function soften(c) {
+  c.getHSL(_hsl);
+  return c.setHSL(_hsl.h, _hsl.s * 0.78, _hsl.l * 0.97 + 0.02);
+}
+
+/** Zylinder mit abgerundeten Kanten (Radius 1, Höhe 1, mittig) – für Dosen, Rollen, Siegel. */
+function roundedCylinder(segs = 24, b = 0.12) {
+  const pts = [[0, -0.5], [1 - b, -0.5], [1 - b * 0.3, -0.5 + b * 0.3], [1, -0.5 + b], [1, 0.5 - b], [1 - b * 0.3, 0.5 - b * 0.3], [1 - b, 0.5], [0, 0.5]]
+    .map(([x, y]) => new THREE.Vector2(x, y));
+  const g = new THREE.LatheGeometry(pts, segs);
+  g.computeVertexNormals();
+  return g;
+}
+
 /** Kleiner Helfer: sammelt Instanzen und baut daraus EIN InstancedMesh. */
 function batch(geo, mat, { colors = false } = {}) {
   const items = [];
@@ -53,7 +69,7 @@ function batch(geo, mat, { colors = false } = {}) {
       items.forEach(([x, y, z, sx, sy, sz, rx, ry, rz, color], i) => {
         _q.setFromEuler(_e.set(rx, ry, rz));
         mesh.setMatrixAt(i, _m.compose(_p.set(x, y, z), _q, _s.set(sx, sy, sz)));
-        if (colors) mesh.setColorAt(i, _c.set(color || '#ffffff'));
+        if (colors) mesh.setColorAt(i, soften(_c.set(color || '#ffffff')));
       });
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
@@ -93,7 +109,7 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
 
   // ---------- Ablagen: dicke Holzbretter auf Eisen-Konsolen ----------
   const boardTex = makeBoardTexture({ aniso });
-  const boardMat = new THREE.MeshLambertMaterial({ map: boardTex });
+  const boardMat = new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.72, metalness: 0, envMap: env, envMapIntensity: 0.35 });
   const iron = new THREE.MeshStandardMaterial({ color: 0x2d2622, metalness: 0.6, roughness: 0.55, envMap: env, envMapIntensity: 0.6 });
   const box = new THREE.BoxGeometry(1, 1, 1);
   const brackets = batch(box, iron);
@@ -115,8 +131,8 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
   // ---------- Wandschrank (Seifen-Vorrat): Korpus, Sockelleiste, zwei Türen mit Füllung, Messingknäufe ----------
   {
     const C = CABINET, cz = WALL_Z + C.d / 2;
-    const darkWood = new THREE.MeshLambertMaterial({ map: boardTex, color: 0xb88a62 });
-    const doorWood = new THREE.MeshLambertMaterial({ map: boardTex, color: 0xe0bb92 });
+    const darkWood = new THREE.MeshStandardMaterial({ map: boardTex, color: 0xb88a62, roughness: 0.7, envMap: env, envMapIntensity: 0.3 });
+    const doorWood = new THREE.MeshStandardMaterial({ map: boardTex, color: 0xe0bb92, roughness: 0.66, envMap: env, envMapIntensity: 0.3 });
     const brass = new THREE.MeshStandardMaterial({ color: 0xc9a04a, metalness: 0.85, roughness: 0.32, envMap: env, envMapIntensity: 1.0 });
     const body = new THREE.Mesh(box, darkWood);
     body.scale.set(C.w, C.h, C.d); body.position.set(C.x, C.bottom + C.h / 2, cz);
@@ -139,17 +155,19 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
 
   // ---------- Verpackungs-Deko auf dem unteren Brett (für später freischaltbar, siehe decor.js) ----------
   const r = rng(21);
-  const cyl = new THREE.CylinderGeometry(1, 1, 1, 20);
-  const fillings = batch(cyl, new THREE.MeshLambertMaterial(), { colors: true });
-  const corks = batch(cyl, new THREE.MeshLambertMaterial({ color: 0xb08355 }));
-  const leaves = batch(new THREE.SphereGeometry(1, 10, 8), new THREE.MeshLambertMaterial(), { colors: true });
+  const cyl = roundedCylinder(28);
+  const fillings = batch(cyl, new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0, envMap: env, envMapIntensity: 0.6 }), { colors: true });
+  const corks = batch(cyl, new THREE.MeshStandardMaterial({ color: 0xb08355, roughness: 0.85, envMap: env, envMapIntensity: 0.3 }));
+  const leaves = batch(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshStandardMaterial({ roughness: 0.7, envMap: env, envMapIntensity: 0.4 }), { colors: true });
   const dishPts = [[0, 0], [0.8, 0], [0.97, 0.22], [1, 0.42], [0.93, 0.42], [0.84, 0.12], [0, 0.1]].map(([a, b]) => new THREE.Vector2(a, b));
-  const dishes = batch(new THREE.LatheGeometry(dishPts, 20), new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0, envMap: env, envMapIntensity: 0.5 }), { colors: true });
+  const dishes = batch(new THREE.LatheGeometry(dishPts, 40), new THREE.MeshStandardMaterial({ roughness: 0.22, metalness: 0, envMap: env, envMapIntensity: 0.8 }), { colors: true });   // glasierte Keramik
   const pearls = batch(new THREE.SphereGeometry(1, 10, 8), new THREE.MeshStandardMaterial({ roughness: 0.18, metalness: 0.15, envMap: env, envMapIntensity: 1.0 }), { colors: true });
-  const shelfBlobs = blobs;
+  // Kontaktschatten: weiter weicher Schatten + enger, dunklerer Kern direkt unter dem Ding
+  const shelfBlobs = { add(x, y, z, sx, sy, sz, rx, ry, rz) { blobs.add(x, y, z, sx, sy, sz, rx, ry, rz); blobs.add(x, y + 0.001, z, sx * 0.55, sy * 0.5, sz, rx, ry, rz); } };
   const pick = (a) => a[(r() * a.length) | 0];
   const zMid = WALL_Z + SHELF_D * 0.5;
 
+  const tins = batch(cyl, new THREE.MeshStandardMaterial({ roughness: 0.32, metalness: 0.85, envMap: env, envMapIntensity: 1.1 }), { colors: true });
   const metalPearls = batch(new THREE.SphereGeometry(1, 12, 10), new THREE.MeshStandardMaterial({ roughness: 0.15, metalness: 1, envMap: env, envMapIntensity: 1.4 }), { colors: true });
   const vc = { vertexColors: true, side: THREE.DoubleSide };
   const flowers = batch(flowerGeometry(), new THREE.MeshStandardMaterial({ ...vc, roughness: 0.65 }), { colors: true });
@@ -195,16 +213,19 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
     const C = ['#c8202f', '#f3a5bb', '#d4af37', '#2f6b4a'];
     C.forEach((c, k) => {
       const sx = x - W / 2 + 0.06 + k * 0.08;
-      fillings.add(sx, y + Hr - 0.04, zMid, R, 0.06, R, 0, 0, Math.PI / 2, c);
+      fillings.add(sx, y + Hr - 0.04, zMid, R, 0.052, R, 0, 0, Math.PI / 2, c);
+      // Holz-Flansche links/rechts der Bandrolle
+      for (const fs of [-1, 1]) corks.add(sx + fs * 0.03, y + Hr - 0.04, zMid, R * 1.18, 0.008, R * 1.18, 0, 0, Math.PI / 2);
       blocks.add(sx, y + Hr - 0.04 - R - 0.04, zMid + R * 0.9, 0.05, 0.08 + (k % 2) * 0.03, 0.004, 0.1, 0, 0, c);
     });
     shelfBlobs.add(x, y + 0.002, zMid, 0.5, 0.3, 1, -Math.PI / 2, 0, 0);
   }
 
-  const blocks = batch(box, new THREE.MeshLambertMaterial(), { colors: true });
+  const blocks = batch(new RoundedBoxGeometry(1, 1, 1, 2, 0.14), new THREE.MeshStandardMaterial({ roughness: 0.62, metalness: 0, envMap: env, envMapIntensity: 0.45 }), { colors: true });
   /** Sticker-Dose + Wachssiegel. */
   function sealTin(x, y) {
-    fillings.add(x - 0.04, y + 0.03, zMid, 0.1, 0.06, 0.1, 0, 0, 0, '#9fbfbd');
+    tins.add(x - 0.04, y + 0.03, zMid, 0.1, 0.06, 0.1, 0, 0, 0, '#c9cdca');                    // Blechdose
+    fillings.add(x - 0.04, y + 0.058, zMid, 0.085, 0.006, 0.085, 0, 0, 0, '#9fbfb8');          // Etikett-Deckel
     [['#fff6e8', -0.07, -0.02], ['#e2304d', -0.02, 0.03], ['#c9a173', -0.03, -0.04]].forEach(([c, dx, dz]) => fillings.add(x + dx, y + 0.062, zMid + dz, 0.035, 0.004, 0.035, 0.1, 0, 0.1, c));
     fillings.add(x + 0.1, y + 0.012, zMid + 0.06, 0.045, 0.024, 0.045, 0, 0, 0, '#a3162b');
     fillings.add(x + 0.1, y + 0.026, zMid + 0.06, 0.03, 0.01, 0.03, 0, 0, 0, '#a3162b');
@@ -221,7 +242,10 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
   }
   /** Naturdeko: Orangenscheibe, Zimtstangen, Zapfen. */
   function natur(x, y) {
-    fillings.add(x - 0.07, y + 0.075, zMid, 0.075, 0.014, 0.075, Math.PI / 2 - 0.25, 0.3, 0, '#e47a1e');
+    // getrocknete Orangenscheibe: Schale, helles Fruchtfleisch, Mitte
+    fillings.add(x - 0.07, y + 0.075, zMid, 0.075, 0.012, 0.075, Math.PI / 2 - 0.25, 0.3, 0, '#c9662a');
+    fillings.add(x - 0.07 + 0.002, y + 0.075, zMid + 0.006, 0.064, 0.014, 0.064, Math.PI / 2 - 0.25, 0.3, 0, '#eba459');
+    fillings.add(x - 0.07 + 0.003, y + 0.075, zMid + 0.009, 0.014, 0.015, 0.014, Math.PI / 2 - 0.25, 0.3, 0, '#f6deb0');
     for (const dz of [-0.03, 0.0, 0.03]) fillings.add(x + 0.06, y + 0.018 + (dz === 0 ? 0.03 : 0), zMid + dz + 0.03, 0.017, 0.2, 0.017, 0, 0.4, Math.PI / 2, '#8a4a22');
     leaves.add(x + 0.1, y + 0.04, zMid - 0.07, 0.035, 0.045, 0.035, 0, 0, 0, '#7a4a26');
     shelfBlobs.add(x, y + 0.002, zMid, 0.45, 0.32, 1, -Math.PI / 2, 0, 0);
@@ -248,6 +272,6 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
     else ribbon(x, deco.y, RIBBONS[(k / 3 | 0) % RIBBONS.length]);
   }
 
-  for (const b of [shades, blobs, brackets, fillings, corks, leaves, dishes, pearls, metalPearls, flowers, roses, sprigs, blocks]) b.build(group);
+  for (const b of [shades, blobs, brackets, fillings, corks, tins, leaves, dishes, pearls, metalPearls, flowers, roses, sprigs, blocks]) b.build(group);
   return group;
 }
