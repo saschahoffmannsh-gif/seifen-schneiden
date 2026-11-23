@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { flowerGeometry, roseGeometry, sprigGeometry } from '../decoGeo.js';
-import { makePlasterTexture, makeBoardTexture, makeShadeTexture, makeBlobTexture, rng } from './textures.js';
+import { makeTileTextures, makeBoardTexture, makeShadeTexture, makeBlobTexture, rng } from './textures.js';
 
 export const WALL_Z = -1.75;          // Wand steht direkt hinter der Schale an der Tischkante
 export const TABLE_Y = -0.07;         // Tischplatte
@@ -69,7 +69,11 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
   scene.add(group);
 
   // ---------- Wand ----------
-  const wallMat = new THREE.MeshLambertMaterial({ map: makePlasterTexture({ repeat: [WALL_W / 2.2, WALL_H / 2.2] }) });
+  // Handgemachte Metro-/Zellige-Fliesen: eine Textur-Kachel = 4 x 8 Fliesen (je 0,36 x 0,18)
+  const tileTex = makeTileTextures({ repeat: [WALL_W / 1.44, WALL_H / 1.44], aniso });
+  const wallMat = new THREE.MeshStandardMaterial({
+    ...tileTex, normalScale: new THREE.Vector2(0.32, 0.32), roughness: 1, metalness: 0, envMap: env, envMapIntensity: 0.85, color: 0xffffff,
+  });
   const wall = new THREE.Mesh(new THREE.PlaneGeometry(WALL_W, WALL_H), wallMat);
   wall.position.set(0, TABLE_Y + WALL_H / 2, WALL_Z);
   group.add(wall);

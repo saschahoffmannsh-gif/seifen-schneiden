@@ -211,3 +211,73 @@ export function makeKraftTexture({ withString = false, seed = 31 } = {}) {
   }
   return toTex(c);
 }
+
+/**
+ * Handgemachte Metro-/Zellige-Fliesen (Halbverband) in Creme und warmem Weiß:
+ * jede Fliese mit eigenem Farbton, eigener Glasur-Welligkeit und eigenem Glanz, Glasur an den
+ * Kanten leicht dunkler (wie gelaufen), feine helle Fugen. Liefert Farbe, Rauheit und Normalen
+ * aus EINEM einmal berechneten Höhenfeld (512², kachelbar).
+ */
+export function makeTileTextures({ repeat = [1, 1], aniso = 1 } = {}) {
+  const N = 512, COLS = 4, ROWS = 8, TW = N / COLS, TH = N / ROWS, G = 1.5;
+  const r = rng(29);
+  const tiles = [];
+  const TONES = [[251, 249, 244], [249, 246, 239], [252, 251, 247], [247, 243, 235], [250, 247, 241], [248, 245, 239]];
+  for (let i = 0; i < COLS * ROWS; i++) {
+    const t = TONES[(r() * TONES.length) | 0], j = (r() - 0.5) * 5;
+    tiles.push({
+      c: [t[0] + j, t[1] + j * 0.9, t[2] + j * 0.7 - r() * 4],
+      rough: 0.1 + r() * 0.14,
+      a: 0.03 + r() * 0.05, b: 0.05 + r() * 0.08, p1: r() * 6.28, p2: r() * 6.28, amp: 0.18 + r() * 0.3,
+      tilt: (r() - 0.5) * 0.5, tiltV: (r() - 0.5) * 0.5, ep: r() * 6.28,
+    });
+  }
+  const hgt = new Float32Array(N * N), edge = new Float32Array(N * N), tid = new Uint8Array(N * N);
+  const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  for (let y = 0; y < N; y++) {
+    const row = (y / TH) | 0, v = y - row * TH, off = row % 2 ? TW / 2 : 0;
+    for (let x = 0; x < N; x++) {
+      const xs = (x - off + N) % N, c = (xs / TW) | 0, u = xs - c * TW, ti = row * COLS + c, T = tiles[ti];
+      // Kanten leicht unregelmäßig (handgeformt)
+      const g = G + 0.6 * Math.sin(u * 0.21 + T.ep) * Math.sin(v * 0.37 + T.ep * 2);
+      const e = Math.min(u, TW - 1 - u, v, TH - 1 - v) - g;
+      const k = y * N + x;
+      tid[k] = ti; edge[k] = e;
+      if (e < 0) { hgt[k] = -0.25; continue; }
+      const pillow = ss(0, 6, e);
+      const wave = Math.sin(u * T.a + T.p1) * Math.sin(v * T.b + T.p2) * T.amp + (u / TW - 0.5) * T.tilt + (v / TH - 0.5) * T.tiltV;
+      hgt[k] = pillow * 0.55 + pillow * wave * 0.16;
+    }
+  }
+  const [cc, gc] = canvas(N, N), [rc, gr] = canvas(N, N), [nc, gn] = canvas(N, N);
+  const ci = gc.createImageData(N, N), ri = gr.createImageData(N, N), ni = gn.createImageData(N, N);
+  const S = 1.25;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const k = y * N + x, p = k * 4, e = edge[k], T = tiles[tid[k]];
+    const noise = (r() - 0.5);
+    if (e < 0) {
+      // Fuge: warmes Hellgrau, zur Mitte etwas dunkler
+      const d = 232 + noise * 6 + Math.max(-1, e) * 4;
+      ci.data[p] = d + 4; ci.data[p + 1] = d + 1; ci.data[p + 2] = d - 6;
+      ri.data[p + 1] = 235;
+    } else {
+      const rim = 1 - ss(0, 9, e);                       // Glasur an der Kante dichter/dunkler
+      const hv = hgt[k];
+      const shade = 1 - rim * 0.05 + (hv - 0.55) * 0.06 + noise * 0.01;
+      ci.data[p] = T.c[0] * shade; ci.data[p + 1] = T.c[1] * (shade - rim * 0.008); ci.data[p + 2] = T.c[2] * (shade - rim * 0.02);
+      ri.data[p + 1] = 255 * Math.min(1, T.rough + Math.abs(hv - 0.55) * 0.2 + rim * 0.06 + noise * 0.03);
+    }
+    ci.data[p + 3] = ri.data[p + 3] = ni.data[p + 3] = 255;
+    const hl = hgt[y * N + (x + N - 1) % N], hr = hgt[y * N + (x + 1) % N];
+    const hu = hgt[((y + N - 1) % N) * N + x], hd = hgt[((y + 1) % N) * N + x];
+    let nx = -(hr - hl) * S, ny = (hd - hu) * S, nz = 1;
+    const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+    ni.data[p] = (nx * 0.5 + 0.5) * 255; ni.data[p + 1] = (ny * 0.5 + 0.5) * 255; ni.data[p + 2] = (nz * 0.5 + 0.5) * 255;
+  }
+  gc.putImageData(ci, 0, 0); gr.putImageData(ri, 0, 0); gn.putImageData(ni, 0, 0);
+  return {
+    map: toTex(cc, { repeat, aniso }),
+    roughnessMap: toTex(rc, { repeat, srgb: false, aniso }),
+    normalMap: toTex(nc, { repeat, srgb: false, aniso }),
+  };
+}
