@@ -83,7 +83,7 @@ function frame(now) {
   loose.flush();
   confetti.update(dt);
 
-  if (!ui.sceneCovered()) view.renderer.render(view.scene, view.camera);   // Schrank im Vollbild: Szene sparen
+  if (!ui.sceneCovered() && !(window.__menu && window.__menu.covers())) view.renderer.render(view.scene, view.camera);   // Schrank im Vollbild: Szene sparen
 
   if (showFps) {
     fpsFrames++; fpsTime += dt; worst = Math.max(worst, dt);

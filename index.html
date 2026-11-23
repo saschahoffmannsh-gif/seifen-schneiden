@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#7a4a2b" />
+  <meta name="theme-color" content="#efe6d8" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <title>Seifen-Schneiden</title>
   
 </head>
@@ -13,7 +14,7 @@
 
   <!-- Kopfzeile: Münzen -->
   <div id="hud">
-    <button id="menu-btn" class="round-btn small" aria-label="Menü"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/></svg></button>
+    <button id="menu-btn" class="round-btn small" aria-label="Menü"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 8h14M5 12h14M5 16h9"/></svg></button>
     <div id="coins" class="pill"><i class="coin big" aria-hidden="true"></i><span id="coin-count">0</span></div>
   </div>
 
@@ -26,7 +27,7 @@
 
   <!-- Schneide-Fortschritt der aktuellen Seife -->
   <div id="cut-progress" class="hidden">
-    <div id="cut-label">Geschnitten: 0 %</div>
+    <div id="cut-label">0 % geschnitten</div>
     <div class="bar"><div id="cut-bar"></div></div>
   </div>
 
@@ -35,15 +36,16 @@
 
   <!-- Ofen-Fortschritt -->
   <div id="oven" class="panel hidden">
-    <div class="panel-title"><span class="flame-ic"></span>Schmelzen … die Seife wird flüssig</div>
+    <div class="panel-title">Im Schmelztopf</div>
+    <div class="panel-sub">Die Seife wird langsam flüssig</div>
     <div class="bar"><div id="oven-bar"></div></div>
   </div>
 
   <!-- Päckchen-Auswahl (öffnet sich beim Antippen eines Päckchens im Regal) -->
   <div id="pkg-picker">
     <div class="sheet panel">
-      <button id="pkg-close" class="x-btn" aria-label="Schließen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
-      <div class="panel-title" id="pkg-title">Päckchen wählen</div>
+      <button id="pkg-close" class="x-btn" aria-label="Schließen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
+      <div class="panel-title" id="pkg-title">Verpackung</div>
       <div id="pkg-tabs" class="scroll-x"></div>
       <div id="pkg-list" class="scroll-x"></div>
       <div id="pkg-note">Noch gesperrt</div>
@@ -52,7 +54,8 @@
 
   <!-- Ergebnis nach dem Ausformen: wie genau war die Mischung -->
   <div id="quality">
-    <div id="q-banner" class="banner">Fertig!</div>
+    <div class="eyebrow">Ergebnis</div>
+    <div id="q-banner">Fertig</div>
     <div id="q-stars"></div>
     <div id="q-title"></div>
     <div id="q-rows"></div>
@@ -61,13 +64,13 @@
   <!-- Bestell-Zettel groß (öffnet sich beim Antippen eines Zettels am mittleren Brett) -->
   <div id="note-view">
     <div class="big-note">
-      <div class="tape"></div>
-      <button id="note-close" class="x-btn" aria-label="Schließen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
+      <div class="seal" aria-hidden="true"><span>S</span></div>
+      <button id="note-close" class="x-btn" aria-label="Schließen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
       <div class="note-head">Bestellung</div>
       <div id="note-customer"></div>
       <div id="note-soaps"></div>
       <div id="note-reward"></div>
-      <button id="note-accept" class="btn">Annehmen</button>
+      <button id="note-accept" class="btn alt">Bestellung annehmen</button>
     </div>
   </div>
 
@@ -75,8 +78,8 @@
   <div id="cabinet">
     <div class="cab">
       <div class="cab-top">
-        <div class="cab-title banner">Seifenschrank</div>
-        <button id="cab-close" class="x-btn" aria-label="Schließen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
+        <div class="cab-title">Seifenschrank</div>
+        <button id="cab-close" class="x-btn" aria-label="Schließen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
       </div>
       <div id="cab-find"></div>
       <div id="cab-grid" class="scroll-y"></div>
@@ -89,8 +92,8 @@
   <!-- Freischalten (Päckchen und Deko) -->
   <div id="unlock">
     <div class="unlock-card">
-      <div class="banner">Freischalten</div>
-      <button id="unlock-close" class="x-btn" aria-label="Schließen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
+      <div class="eyebrow">Freischalten</div>
+      <button id="unlock-close" class="x-btn" aria-label="Schließen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
       <div class="unlock-glow"><span class="rays"></span><img id="unlock-img" alt=""></div>
       <div id="unlock-name"></div>
       <div id="unlock-bonus"></div>
@@ -106,39 +109,24 @@
   <div id="popups"></div>
   <div id="fps" class="hidden"></div>
 
-  <!-- Startbildschirm: Logo, Spielen/Fortsetzen, Einstellungen, Sammlung (menu.js) -->
+  <!-- Startbildschirm: 3D-Seifen (startscene.js), Wortmarke, Menü (menu.js) -->
   <div id="start">
     <div class="st-bg"></div>
-    <div class="bubbles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <canvas id="st-canvas" aria-hidden="true"></canvas>
     <div class="st-inner">
       <div class="logo">
-        <svg class="logo-soap" viewBox="0 0 160 110" aria-hidden="true">
-          <defs>
-            <linearGradient id="lgTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd3e0"/><stop offset="1" stop-color="#f6a7bf"/></linearGradient>
-            <linearGradient id="lgSide" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ee86a8"/><stop offset="1" stop-color="#d1638a"/></linearGradient>
-            <radialGradient id="lgBub" cx=".35" cy=".3" r=".7"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".5" stop-color="#e6f6ff" stop-opacity=".45"/><stop offset="1" stop-color="#b9e3ff" stop-opacity=".25"/></radialGradient>
-          </defs>
-          <ellipse cx="80" cy="98" rx="58" ry="8" fill="rgba(60,25,10,.25)"/>
-          <path d="M24 52 L80 30 L136 52 L136 80 L80 102 L24 80 Z" fill="url(#lgSide)"/>
-          <path d="M80 102 L136 80 L136 52 L80 74 Z" fill="#c45780"/>
-          <path d="M24 52 L80 30 L136 52 L80 74 Z" fill="url(#lgTop)"/>
-          <path d="M40 52 C55 44 66 60 80 52 S106 44 120 52" stroke="#fff6ea" stroke-width="5" fill="none" stroke-linecap="round" opacity=".85"/>
-          <path d="M80 47 c-3-5-11-3-9 3 c1 4 9 8 9 8 s8-4 9-8 c2-6-6-8-9-3z" fill="#e2708f" opacity=".7"/>
-          <circle cx="126" cy="24" r="14" fill="url(#lgBub)" stroke="#fff" stroke-opacity=".8" stroke-width="1.5"/>
-          <circle cx="146" cy="44" r="7" fill="url(#lgBub)" stroke="#fff" stroke-opacity=".8" stroke-width="1.2"/>
-          <circle cx="22" cy="30" r="9" fill="url(#lgBub)" stroke="#fff" stroke-opacity=".8" stroke-width="1.2"/>
-        </svg>
-        <div class="logo-top">Seifen</div>
-        <div class="logo-ribbon"><span>Schneiden</span></div>
-        <div class="tagline">Deine kleine Seifenmanufaktur</div>
+        <div class="eyebrow">Die kleine Manufaktur</div>
+        <h1 class="wordmark"><span class="wm-1">Seifen</span><span class="wm-2">schneiden</span></h1>
+        <div class="orn" aria-hidden="true"><i></i><svg viewBox="0 0 24 24"><path d="M12 4c2.2 2.6 3.4 5.2 3.4 8s-1.2 5.4-3.4 8c-2.2-2.6-3.4-5.2-3.4-8S9.8 6.6 12 4z" fill="currentColor"/></svg><i></i></div>
+        <div class="tagline">Mischen · Schneiden · Verpacken</div>
       </div>
       <div class="st-menu">
         <div id="st-progress" class="st-progress"></div>
         <button id="start-play" class="btn go big"></button>
-        <button id="start-new" class="btn ghost">Neu beginnen</button>
+        <button id="start-new" class="btn link">Neu beginnen</button>
         <div class="st-row">
-          <button id="start-settings" class="round-btn" aria-label="Einstellungen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/><circle cx="12" cy="12" r="6.6"/></svg><span>Einstellungen</span></button>
-          <button id="start-collection" class="round-btn" aria-label="Sammlung"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5L12 4l8.5 4.5v8L12 21l-8.5-4.5z"/><path d="M3.5 8.5L12 13l8.5-4.5M12 13v8"/></svg><span>Sammlung</span></button>
+          <button id="start-settings" class="round-btn" aria-label="Einstellungen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.5-2-3.4-2.3.9a7.6 7.6 0 0 0-2.6-1.5L14 2.6h-4l-.5 2.4a7.6 7.6 0 0 0-2.6 1.5l-2.3-.9-2 3.4 2 1.5a7.6 7.6 0 0 0 0 3l-2 1.5 2 3.4 2.3-.9a7.6 7.6 0 0 0 2.6 1.5l.5 2.4h4l.5-2.4a7.6 7.6 0 0 0 2.6-1.5l2.3.9 2-3.4z"/></svg><span>Einstellungen</span></button>
+          <button id="start-collection" class="round-btn" aria-label="Sammlung"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.8 8.2L12 4l8.2 4.2v8L12 20.4l-8.2-4.2z"/><path d="M3.8 8.2L12 12.4l8.2-4.2M12 12.4v8"/></svg><span>Sammlung</span></button>
         </div>
       </div>
     </div>
@@ -147,38 +135,37 @@
   <!-- Einstellungen -->
   <div id="settings" class="modal">
     <div class="m-card">
-      <div class="banner">Einstellungen</div>
-      <button class="x-btn m-close" aria-label="Schließen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
+      <div class="eyebrow">Manufaktur</div><h2 class="m-title">Einstellungen</h2>
+      <button class="x-btn m-close" aria-label="Schließen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
       <div class="set-row">
         <span id="set-sound-ic" class="set-ic"></span><span class="set-lab">Ton</span>
         <button id="set-sound" class="switch" role="switch" aria-checked="true" aria-label="Ton an/aus"><i></i></button>
       </div>
       <div class="set-row">
-        <span class="set-ic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4h4"/></svg></span><span class="set-lab">Fortschritt</span>
-        <button id="set-reset" class="btn small danger">Zurücksetzen</button>
+        <span class="set-ic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 4.5v4h4"/></svg></span><span class="set-lab">Fortschritt</span>
+        <button id="set-reset" class="btn small">Zurücksetzen</button>
       </div>
-      <div class="set-foot">Seifen-Schneiden · mit Liebe von Hand gemacht</div>
+      <div class="set-foot">Seifenschneiden · von Hand gemacht</div>
     </div>
   </div>
 
   <!-- Sicherheitsfrage -->
   <div id="confirm" class="modal">
     <div class="m-card">
-      <div class="banner rose">Wirklich neu?</div>
+      <div class="eyebrow">Fortschritt</div><h2 class="m-title">Neu beginnen?</h2>
       <p class="m-text">Münzen, Freischaltungen und Vorrat werden gelöscht. Das lässt sich nicht rückgängig machen.</p>
-      <div class="m-btns"><button id="confirm-no" class="btn ghost">Abbrechen</button><button id="confirm-yes" class="btn danger">Zurücksetzen</button></div>
+      <div class="m-btns"><button id="confirm-no" class="btn">Abbrechen</button><button id="confirm-yes" class="btn danger">Zurücksetzen</button></div>
     </div>
   </div>
 
   <!-- Sammlung -->
   <div id="collection" class="modal">
     <div class="m-card">
-      <div class="banner honey">Sammlung</div>
-      <button class="x-btn m-close" aria-label="Schließen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
+      <div class="eyebrow">Deine</div><h2 class="m-title">Sammlung</h2>
+      <button class="x-btn m-close" aria-label="Schließen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
       <div id="col-rows"></div>
     </div>
   </div>
-
 
   <script type="module" src="./src/main.js"></script>
 </body>

@@ -1,12 +1,13 @@
 // Startbildschirm (Spielen / Fortsetzen / Neu beginnen), Einstellungen (Ton, Fortschritt zurücksetzen),
 // Sammlung (wie viel schon freigeschaltet ist) und Pause-Menü über den Knopf oben links.
-// Reines DOM, keine Dauer-Animationen außer ein paar CSS-Transforms (Seifenblasen) auf dem Startbildschirm.
+// Hinter dem Startbildschirm laufen 3D-Seifen (startscene.js) – nur solange er offen ist.
 import { ICON, rich } from './icons.js';
 import { sound } from './sound.js';
 import { PACKAGE_TYPES } from './decor.js';
 import { DECO_ITEMS } from './decoItems.js';
 import { ADDITIVES } from './additives.js';
 import { sndPop } from './audio.js';
+import { createStartScene } from './startscene.js';
 
 const SAVE_KEY = 'seifen-save-v1';
 const $ = (id) => document.getElementById(id);
@@ -23,7 +24,8 @@ function closeModal(id) { $(id).classList.remove('open'); }
 
 export function createMenu({ getCoins }) {
   const start = $('start');
-  let started = false;
+  let started = false, openedAt = 0, stopT = 0;
+  const scene3d = createStartScene($('st-canvas'));
 
   function refreshStart() {
     const prog = hasProgress();
@@ -33,7 +35,7 @@ export function createMenu({ getCoins }) {
     const p = $('st-progress');
     if (prog || started) {
       const n = PACKAGE_TYPES.filter((t) => t.unlocked).length + DECO_ITEMS.filter((t) => t.unlocked).length + ADDITIVES.filter((t) => t.unlocked).length;
-      p.innerHTML = `<span class="chip">${ICON.coin}<b>${getCoins()}</b></span><span class="chip">${ICON.sparkle}<b>${n}</b> freigeschaltet</span>`;
+      p.innerHTML = `<span class="chip">${ICON.coin}<b>${getCoins()}</b></span><span class="chip-sep"></span><span class="chip">${ICON.sparkle}<b>${n}</b>&nbsp;freigeschaltet</span>`;
       p.style.display = '';
     } else p.style.display = 'none';
   }
@@ -42,13 +44,15 @@ export function createMenu({ getCoins }) {
     refreshStart();
     document.body.classList.add('menu-open');
     start.classList.remove('gone');
-    requestAnimationFrame(() => start.classList.add('open'));
+    clearTimeout(stopT); scene3d.start();
+    requestAnimationFrame(() => { start.classList.add('open'); openedAt = performance.now(); });
   }
   function hide() {
     started = true;
     start.classList.remove('open');
     document.body.classList.remove('menu-open');
-    setTimeout(() => { if (!start.classList.contains('open')) start.classList.add('gone'); }, 450);
+    clearTimeout(stopT);
+    stopT = setTimeout(() => { if (!start.classList.contains('open')) { start.classList.add('gone'); scene3d.stop(); } }, 650);
   }
 
   // ---------- Einstellungen ----------
@@ -69,14 +73,14 @@ export function createMenu({ getCoins }) {
   // ---------- Sammlung ----------
   function fillCollection() {
     const rows = [
-      ['Päckchen', ICON.box, PACKAGE_TYPES, 'rose'],
-      ['Deko', ICON.heart, DECO_ITEMS, 'honey'],
-      ['Zusätze', ICON.sparkle, ADDITIVES, 'mint'],
+      ['Verpackungen', ICON.box, PACKAGE_TYPES, 'rose'],
+      ['Dekoration', ICON.leaf, DECO_ITEMS, 'honey'],
+      ['Zusätze', ICON.drop, ADDITIVES, 'mint'],
     ];
     $('col-rows').innerHTML = rows.map(([name, ic, list, c]) => {
       const n = list.filter((x) => x.unlocked).length, all = list.length;
       return `<div class="col-row ${c}"><span class="col-ic">${ic}</span><span class="col-txt"><b>${name}</b><span class="col-bar"><i style="width:${Math.round(n / all * 100)}%"></i></span></span><span class="col-n">${n}<small>/${all}</small></span></div>`;
-    }).join('') + `<div class="col-coins">${rich(`Du hast ${getCoins()} 🪙`)}</div>`;
+    }).join('') + `<div class="col-coins">${rich(`Guthaben ${getCoins()} 🪙`)}</div>`;
   }
 
   // ---------- Knöpfe ----------
@@ -94,5 +98,10 @@ export function createMenu({ getCoins }) {
   if (new URLSearchParams(location.search).get('start') === '0') { started = true; start.classList.add('gone'); document.body.classList.remove('menu-open'); }
   else show();
 
-  return { show, hide, get open() { return start.classList.contains('open'); } };
+  return {
+    show, hide,
+    get open() { return start.classList.contains('open'); },
+    /** Startbildschirm deckt das Spiel komplett ab (nach dem Einblenden) -> Spielszene nicht rendern. */
+    covers() { return start.classList.contains('open') && performance.now() - openedAt > 600; },
+  };
 }
