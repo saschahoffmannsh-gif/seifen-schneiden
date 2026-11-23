@@ -120,6 +120,45 @@ export function sndCeramic() {
   modes([[820, 0.18], [1330, 0.12, 0.5], [2150, 0.08, 0.25]], { gain: 0.025 });
 }
 /**
+ * Knarrende Holztür (Schrank öffnen): Stick-Slip-Reibung im Scharnier als unregelmäßige
+ * Impulsfolge, deren Rate mit der Türbewegung steigt und am Ende abbremst; die Impulse regen
+ * gedämpfte Holzresonanzen an (Bandpässe 300–1500 Hz), oben weich begrenzt -> warm, nicht schrill.
+ * Vorweg ein leises Klicken des Schnappers.
+ */
+export function sndCreak() {
+  if (!ctx) return;
+  const SR = ctx.sampleRate, dur = rnd(0.55, 0.66), n = Math.round(SR * dur);
+  const buf = ctx.createBuffer(1, n, SR), d = buf.getChannelData(0);
+  const base = rnd(0.9, 1.1);
+  let t = 0.03 * SR, k = 0;
+  while (t < n) {
+    const x = t / n;                                         // 0..1 über die Bewegung
+    const env = Math.sin(Math.PI * Math.min(1, x * 1.15)) ** 0.7;
+    const rate = base * (26 + 70 * Math.sin(Math.PI * Math.min(1, x * 1.25)) ** 1.4); // Impulse/s
+    const amp = (0.55 + 0.45 * env) * env * rnd(0.6, 1);
+    const i0 = t | 0;
+    for (let j = 0; j < 90 && i0 + j < n; j++) d[i0 + j] += amp * Math.exp(-j / 9) * (j % 2 ? -0.6 : 1) * (0.8 + Math.random() * 0.4);
+    t += SR / rate * rnd(0.82, 1.2);                          // unregelmäßig wie echtes Holz
+    k++;
+  }
+  const src = ctx.createBufferSource(); src.buffer = buf; src.playbackRate.value = rnd(0.96, 1.04);
+  const out = ctx.createGain(); out.gain.value = 0.8;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600; lp.Q.value = 0.4;
+  const t0 = ctx.currentTime;
+  for (const [f, q, g] of [[340, 6, 1], [610, 9, 0.85], [980, 10, 0.55], [1460, 12, 0.3]]) {
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * rnd(0.95, 1.05); bp.Q.value = q;
+    bp.frequency.setValueAtTime(f, t0); bp.frequency.linearRampToValueAtTime(f * 1.06, t0 + dur * 0.6);  // Holz spannt sich
+    const gg = ctx.createGain(); gg.gain.value = g;
+    src.connect(bp); bp.connect(gg); gg.connect(lp);
+  }
+  lp.connect(out); out.connect(bus);
+  src.start(t0 + 0.04);
+  // Schnapper/Scharnier: leiser, kurzer Holzklick vorweg
+  noise({ type: 'bandpass', f: 1300, q: 1.4, gain: 0.03, a: 0.001, d: 0.018 });
+  modes([[420, 0.05], [890, 0.03, 0.5]], { gain: 0.012 });
+}
+
+/**
  * Ein Münz-Anschlag: kurzer Metall-Klick + inharmonische Resonanzen einer dünnen Metallscheibe
  * (je Mode zwei leicht verstimmte Schwinger -> Schwebung/Schimmer), gedämpft durch Kontakt.
  */

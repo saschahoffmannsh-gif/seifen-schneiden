@@ -551,6 +551,7 @@ body:has(#quality.show) #order { display: none; }
 .cab-door .knob { position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%;
   background: radial-gradient(circle at 35% 35%, #fff1c8, #c9a04a 50%, #7a5c22); box-shadow: 0 2px 3px rgba(0, 0, 0, .5); }
 .cab-door.left .knob { right: 16px; } .cab-door.right .knob { left: 16px; }
+#cabinet.open .cab-door { transition-delay: .06s; }
 #cabinet.open .cab-door.left { transform: rotateY(-105deg); opacity: 0; }
 #cabinet.open .cab-door.right { transform: rotateY(105deg); opacity: 0; }
 @media (max-width: 380px) {

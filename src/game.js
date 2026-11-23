@@ -15,7 +15,7 @@ import { BLOCK, BOWL, CUBE, CUT, OVEN_SECONDS, BLOCK_BASE_Y, SLICES, MOULD_CUBES
 import { SOAP_LIST, SOAP_BY_ID } from './soaps.js';
 import { makeMarbleTexture } from './marble.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { sndCut, sndPaper, sndDrawer, sndWood, sndThump, sndGlass, sndCeramic, sndCardboard, sndLid, sndFabric, sndCoins, haptic } from './audio.js';
+import { sndCut, sndPaper, sndDrawer, sndWood, sndThump, sndGlass, sndCeramic, sndCardboard, sndLid, sndFabric, sndCoins, sndCreak, haptic } from './audio.js';
 import { PKG, TABLE_SPOT, PKG_SHELF_SCALE, SHADOW_SOAP, SHADOW_LID } from './packages.js';
 import { TABLE_Y, CABINET, SHELF_FRONT_Z } from './setting/wall.js';
 import { OrderNotes, NOTE_COUNT } from './orderNotes.js';
@@ -234,7 +234,7 @@ export class Game {
   openCabinet() {
     const back = this.state;
     this.state = 'cabinet';
-    haptic(8);
+    sndCreak(); haptic(8);   // Schranktür knarrt, dann gehen die Türen auf
     const o = this.order;
     const findText = () => {
       if (!o) return 'Nimm zuerst eine Bestellung an';
