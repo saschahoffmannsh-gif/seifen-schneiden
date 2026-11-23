@@ -67,6 +67,7 @@ export class ShelfSoaps {
     this.soaps = [];                       // Seife pro Platz (oder null)
     this.home = Array.from({ length: MAX }, () => new THREE.Vector3());
     this.fly = -1; this.flyT = 0; this.onArrive = null;
+    this.back = -1; this.backT = 0;          // Seife fliegt von der Schale zurück ins Regal
     this.ray = new THREE.Raycaster();
     this.bobSlot = -1;
   }
@@ -106,13 +107,14 @@ export class ShelfSoaps {
   /** Antippen: welche Seife wurde getroffen? (nur beim Tippen aufgerufen) */
   pick(ndc, camera, isAvailable, exactOnly = false) {
     this.ray.setFromCamera(ndc, camera);
+    this.body.computeBoundingSphere();   // Instanzen bewegen sich (Flug) -> Hülle nur beim Tippen auffrischen
     const hits = this.ray.intersectObject(this.body, false);
     for (const h of hits) if (this.soaps[h.instanceId] && isAvailable(this.soaps[h.instanceId])) return h.instanceId;
     if (exactOnly) return -1;
     // daneben getippt? Großzügig: nächste Seife in Bildschirmnähe (Finger sind dick)
     let best = -1, bd = 0.13 * 0.13;
     for (let i = 0; i < this.soaps.length; i++) {
-      if (!this.soaps[i] || !isAvailable(this.soaps[i]) || i === this.fly) continue;
+      if (!this.soaps[i] || !isAvailable(this.soaps[i]) || i === this.fly || i === this.back) continue;
       _v.copy(this.home[i]).project(camera);
       const dx = _v.x - ndc.x, dy = (_v.y - ndc.y) * 0.6, d = dx * dx + dy * dy;
       if (d < bd) { bd = d; best = i; }
@@ -126,15 +128,33 @@ export class ShelfSoaps {
     this.blob.setMatrixAt(i, _zero); this.blob.instanceMatrix.needsUpdate = true;
   }
 
+  /** Seife i (gerade über der Schale) fliegt zurück auf ihren Platz im Regal. */
+  flyBack(i) {
+    if (this.back >= 0) this.landBack();
+    this.back = i; this.backT = 0;
+    this.blob.setMatrixAt(i, _zero); this.blob.instanceMatrix.needsUpdate = true;
+    this.flyPose(i, 0);
+  }
+  landBack() {
+    const i = this.back; this.back = -1;
+    if (!this.soaps[i]) return;
+    this.place(i, this.home[i], SHELF_SCALE);
+    _m.compose(_p.set(this.home[i].x, MIDDLE_SHELF.y + 0.003, SHELF_Z), _q.identity(), _s.set(BW * SHELF_SCALE * 1.7, 1, BD * SHELF_SCALE * 2.6));
+    this.blob.setMatrixAt(i, _m); this.blob.instanceMatrix.needsUpdate = true;
+  }
+  /** Position auf der Flugbahn Regal (e=0) -> über der Schale (e=1). */
+  flyPose(i, t) {
+    const e = t * t * (3 - 2 * t), h = this.home[i], ty = BLOCK_BASE_Y + BH / 2;
+    _p.set(h.x * (1 - e), h.y + (ty - h.y) * e + Math.sin(t * Math.PI) * 0.45, h.z * (1 - e));
+    this.place(i, _p, SHELF_SCALE + (1 - SHELF_SCALE) * e);
+  }
+
   /** Pro Frame: Flug animieren, nächste gewünschte Seife leicht hüpfen lassen. Keine Allokationen. */
   update(dt, time, bobSlot) {
     if (this.fly >= 0) {
       this.flyT = Math.min(1, this.flyT + dt / FLY_TIME);
-      const t = this.flyT, e = t * t * (3 - 2 * t);
-      const h = this.home[this.fly];
-      const ty = BLOCK_BASE_Y + BH / 2;
-      _p.set(h.x * (1 - e), h.y + (ty - h.y) * e + Math.sin(t * Math.PI) * 0.45, h.z * (1 - e));
-      this.place(this.fly, _p, SHELF_SCALE + (1 - SHELF_SCALE) * e);
+      const t = this.flyT;
+      this.flyPose(this.fly, t);
       if (t >= 1) {
         const i = this.fly; this.fly = -1;
         this.hide(i);
@@ -142,11 +162,16 @@ export class ShelfSoaps {
         cb && cb();
       }
     }
+    if (this.back >= 0) {
+      this.backT = Math.min(1, this.backT + dt / FLY_TIME);
+      this.flyPose(this.back, 1 - this.backT);
+      if (this.backT >= 1) this.landBack();
+    }
     if (bobSlot !== this.bobSlot) {           // vorher hüpfende Seife zurück auf ihren Platz
-      if (this.bobSlot >= 0 && this.bobSlot !== this.fly && this.soaps[this.bobSlot] && this.isShown(this.bobSlot)) this.place(this.bobSlot, this.home[this.bobSlot], SHELF_SCALE);
+      if (this.bobSlot >= 0 && this.bobSlot !== this.fly && this.bobSlot !== this.back && this.soaps[this.bobSlot] && this.isShown(this.bobSlot)) this.place(this.bobSlot, this.home[this.bobSlot], SHELF_SCALE);
       this.bobSlot = bobSlot;
     }
-    if (bobSlot >= 0 && bobSlot !== this.fly) {
+    if (bobSlot >= 0 && bobSlot !== this.fly && bobSlot !== this.back) {
       const hop = Math.max(0, Math.sin(time * 5)) * 0.035 * (Math.sin(time * 2.5) > 0 ? 1 : 0);
       _p.copy(this.home[bobSlot]); _p.y += hop;
       this.place(bobSlot, _p, SHELF_SCALE);

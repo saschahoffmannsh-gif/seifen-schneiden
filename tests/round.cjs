@@ -79,7 +79,10 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   const mix = await p.evaluate(() => window.__game.order.mix.map((m) => m.pct / 10));
   const shelfPt = (i) => p.evaluate((i) => { const g = window.__game; const v = g.shelf.home[i].clone().project(g.camera); return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight }; }, i);
   for (let s = 0; s < order.length; s++) {
-    { const pt = await shelfPt(s); await p.mouse.click(pt.x, pt.y); }
+    if (s === 0) {
+      const pt = await shelfPt(s);
+      await p.mouse.click(pt.x, pt.y);
+    }
     await p.waitForFunction((id) => window.__game.state === 'cutting' && window.__game.block.soap.name === id, order[s], { timeout: 30000 });
     await p.waitForTimeout(500);
     if (s === 0) await p.screenshot({ path: out + '/2-seife-intakt.png' });
@@ -110,8 +113,18 @@ const out = process.argv[3] || '/workspace/seifen-shots';
       n++;
     }
     if (s === 0) { await p.waitForTimeout(1200); await p.screenshot({ path: out + '/4-haufen.png' }); }
-    if (await g() === 'cutting') await p.locator('#actions button', { hasText: 'Fertig' }).click();
-    await p.waitForFunction(() => window.__game.state === 'shelf', null, { timeout: 30000 }); await p.waitForTimeout(400);
+    if (s === 0) {
+      // Seife wechseln: andere Seife im Regal antippen (aktuelle fliegt zurück)
+      const pt = await shelfPt(1);
+      await p.mouse.click(pt.x, pt.y);
+      await p.waitForTimeout(250);
+      await p.screenshot({ path: out + '/4b-seife-wechseln.png' });
+      console.log('switch ->', await g(), await p.evaluate(() => window.__game.shelf.back));
+    } else {
+      console.log('before finish', await g(), await p.$$eval('#actions button', (b) => b.map((x) => x.textContent)), await p.evaluate(() => [window.__game.slicesCut, window.__game.sliceProgress, window.__game.returning]));
+      if (await g() === 'cutting') await p.locator('#actions button', { hasText: 'Fertig' }).click();
+      await p.waitForFunction(() => window.__game.state === 'shelf', null, { timeout: 30000 }); await p.waitForTimeout(400);
+    }
     console.log('soap', order[s], 'swipes', n, 'mix', await p.evaluate(() => { const g = window.__game; return g.order.mix.map((m) => `${m.soap.name} ${g.pcts[m.soap.id].toFixed(1)}%/${m.pct} Vorrat ${g.stockOf(m.soap.id)}`).join(', ') + ` Form ${g.fillPct.toFixed(1)}`; }));
   }
   for (let k = 0; k < 60 && await p.evaluate(() => window.__game.loose.activeCount) > 0; k++) await p.waitForTimeout(1000);

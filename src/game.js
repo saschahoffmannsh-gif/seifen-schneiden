@@ -77,6 +77,12 @@ export class Game {
         if (st === 'packed') this.swipeStart(e);
         return;
       }
+      // beim Schneiden andere Seife im Regal antippen = Seife wechseln
+      if (st === 'cutting') {
+        const i = this.shelf.pick(this.tapNdc, this.camera, (s) => s !== this.block.soap, true);   // nur direkt getroffen (Wischen beginnt oft in der Nähe)
+        if (i >= 0) this.switchSoap(i);
+        return;
+      }
       if (st !== 'choose' && st !== 'shelf' && st !== 'pickPkg' && st !== 'pickSoap') return;
       // Reihenfolge: Seife direkt getroffen > Zettel (genaues Rechteck) > Seife in der Nähe > Schrank
       if (st === 'shelf' && this.stocked) {
@@ -344,7 +350,13 @@ export class Game {
    * eine angefangene Scheibe zählt als verbraucht (der Rest davon ist Verschnitt). Der Rest des
    * Stücks bleibt im Vorrat (im Regal sichtbar kürzer) für diese und spätere Bestellungen.
    */
-  stopCutting() {
+  /** Andere Seife angetippt: die aktuelle fliegt zurück ins Regal, die neue über die Schale. */
+  switchSoap(slot) {
+    if (this.state !== 'cutting') return;
+    this.stopCutting(slot);
+  }
+
+  stopCutting(next = -1) {
     if (this.state !== 'cutting') return;
     const soap = this.block.soap;
     const used = this.slicesCut + (this.block.rowsCut > 0 ? 1 : 0);
@@ -359,6 +371,10 @@ export class Game {
     if (used) { this.confetti.burst(0, BLOCK_BASE_Y + 0.2, 0.3, 60); this.ui.popup(`${soap.emoji} ${p} %`); }
     sndThump(0.5); haptic(20);
     this.shelf.setSoaps(this.order.soaps, this.shelfFracs());
+    // das Stück fliegt sichtbar zurück auf seinen Platz im Regal
+    const home = this.order.soaps.indexOf(soap);
+    if (home >= 0) this.shelf.flyBack(home);
+    if (next >= 0) { this.toShelf(); this.pickSoap(next); return; }
     this.state = 'between';
     setTimeout(() => this.toShelf(), 600);
   }
