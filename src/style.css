@@ -417,7 +417,8 @@ body.oven-open #actions { bottom: calc(env(safe-area-inset-bottom) + 100px); }
 #q-stars .qs.off { color: #e9dcc6; }
 #quality.show .qs { animation: starIn .5s cubic-bezier(.2,1.8,.4,1) both; }
 @keyframes starIn { from { transform: scale(0) rotate(-40deg); opacity: 0; } }
-#q-title { font: 700 19px var(--f-display); margin: 4px 0 8px; }
+#q-title { font: 700 19px var(--f-display); margin: 4px 0 8px; white-space: nowrap; }
+@media (max-width: 380px) { #q-title { font-size: 17px; } }
 .q-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 13.5px; font-weight: 800; padding: 3px 0; border-bottom: 1px dotted var(--line); }
 .q-row:last-child { border-bottom: 0; font: 600 16px var(--f-display); padding-top: 6px; }
 .q-row b { font-family: var(--f-display); font-weight: 600; }
