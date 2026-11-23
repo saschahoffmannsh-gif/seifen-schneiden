@@ -215,9 +215,15 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await p.screenshot({ path: out + '/25-deko-gefuellt.png' });
   await p.locator('#actions button', { hasText: 'Rückgängig' }).click(); await p.waitForTimeout(300);
   console.log('undo ->', await p.evaluate(() => [window.__game.deco.bonus, window.__game.deco.applied.map((x) => x.id).join(',')]));
-  // Schleife bei offenem Paket antippen: Deckel geht von selbst zu, dann kommt die Schleife drauf
+  // Schleife bei offenem Paket: geht noch nicht – dezenter Hinweis, Deckel wackelt, Paket bleibt offen
+  { const q = await p.evaluate(() => window.__game.testPx('baender')); await p.mouse.click(q.x, q.y); await p.waitForTimeout(250); }
+  await p.screenshot({ path: out + '/25b-deckel-hinweis.png' });
+  console.log('ribbon while open ->', await g(), 'sheet open', await p.evaluate(() => document.getElementById('pkg-picker').classList.contains('open')), 'hint', await p.$eval('#hint', (e) => e.textContent));
+  await p.waitForTimeout(500);
+  // Deckel antippen -> Deckel geht zu
+  { const q = await p.evaluate(() => window.__game.testPx('lid')); console.log('lid at', q); await p.mouse.click(q.x, q.y); }
+  await waitState('packed'); await idle(); await p.waitForTimeout(300);
   await tapShelf('baender');
-  console.log('lid items disabled before lid', await p.$$eval('#pkg-list .pkg-card.disabled', (c) => c.length));
   await (await card('Bäckerschnur')).click();
   await p.waitForFunction(() => window.__game.state === 'packed' && !window.__game.deco.busy && !!window.__game.deco.lidItems.baender, null, { timeout: 60000 }); await p.waitForTimeout(300);
   await p.screenshot({ path: out + '/9-paeckchen-zu.png' });

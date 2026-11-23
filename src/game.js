@@ -69,7 +69,10 @@ export class Game {
         if (this.drag || this.deco.busy) return;
         // Deko-Regal antippen > gewählte Deko ziehen > (zu) Päckchen wegwischen
         const gr = this.pickDecoShelf();
+        if (gr && st === 'decorFill' && groupOf(gr).phase === 'lid') { this.lidFirst(); return; }
         if (gr) { this.openDecoSheet(gr); return; }
+        // Deckel antippen = Deckel drauf (nur so geht er zu)
+        if (st === 'decorFill' && this.hitLid(e)) { this.closeLid(); return; }
         if (this.armed) { this.startDrag(this.armed, e); return; }
         if (st === 'packed') this.swipeStart(e);
         return;
@@ -678,7 +681,8 @@ export class Game {
     this.state = 'decorFill';
     this.deco.customer = this.order ? this.order.customer : '';
     this.armed = null;
-    this.ui.hint('Zeit für Dekoration – wähle sie im Regal');
+    this.ui.hint('Dekoriere – dann auf den Deckel tippen');
+    this.lidT0 = this.now || 0;
     this.decoActions();
   }
 
@@ -686,7 +690,6 @@ export class Game {
     const acts = [];
     const phase = this.state === 'decorFill' ? 'fill' : 'lid';
     if (this.deco.applied.some((it) => phaseOf(it) === phase)) acts.push({ label: '↶ Rückgängig', onClick: () => this.undoDeco(phase) });
-    if (this.state === 'decorFill') acts.push({ label: 'Deckel drauf', alt: true, onClick: () => this.closeLid() });
     this.ui.actions(acts);
     this.ui.setDeco(this.deco.bonus);
   }
@@ -696,6 +699,44 @@ export class Game {
     const it = this.deco.undo(phase, phaseOf);
     if (it) { sndFabric(); this.ui.popup(`${it.name} entfernt`); }
     this.decoActions();
+  }
+
+  /** Schleife/Anhänger/Siegel bei offenem Paket: dezenter Hinweis, Deckel wackelt kurz. */
+  lidFirst() {
+    this.ui.hint('Erst den Deckel schließen – tippe auf den Deckel');
+    this.lidNudge = this.now || 0;
+    haptic(6);
+  }
+
+  /** Bildschirm-Rechteck des daneben liegenden Deckels (großzügig, für Finger). */
+  lidRect() {
+    const L = TABLE_SPOT.lid, [fw, fd] = this.packages.footprint(this.pkgSlot);
+    const hw = fw / 2 + PKG.lidPad, hd = fd / 2 + PKG.lidPad, c = Math.cos(TABLE_SPOT.lidRy), sn = Math.sin(TABLE_SPOT.lidRy);
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    const W = window.innerWidth, H = window.innerHeight;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) for (const y of [0, PKG.lidH]) {
+      const lx = sx * hw, lz = sz * hd;
+      _t.set(L.x + lx * c + lz * sn, TABLE_Y + y, L.z - lx * sn + lz * c).project(this.camera);
+      const px = (_t.x + 1) / 2 * W, py = (1 - _t.y) / 2 * H;
+      x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+    }
+    return { x0, y0, x1, y1, x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
+  }
+  hitLid(e) {
+    const r = this.lidRect(), pad = 16;
+    return e.clientX > r.x0 - pad && e.clientX < r.x1 + pad && e.clientY > r.y0 - pad && e.clientY < r.y1 + pad;
+  }
+
+  /** Deckel liegt offen daneben: hüpft ab und zu leicht (zeigt: antippen); nach Hinweis wackelt er. */
+  updateLidHint(time) {
+    const i = this.pkgSlot; if (i < 0) return;
+    const T = time - (this.lidT0 || 0), N = time - (this.lidNudge ?? -9);
+    let hop = 0, tilt = 0;
+    const ph = (T - 1.2) % 3.2;                      // alle 3,2 s ein kleiner Doppelhüpfer
+    if (T > 1.2 && ph < 0.5) { hop = Math.abs(Math.sin(ph / 0.5 * Math.PI * 2)) * 0.035 * (ph < 0.25 ? 1 : 0.55); tilt = hop * 1.4; }
+    if (N < 0.6) { const k = 1 - N / 0.6; hop = Math.max(hop, Math.abs(Math.sin(N * 18)) * 0.05 * k); tilt = Math.sin(N * 22) * 0.12 * k; }
+    _a.copy(TABLE_SPOT.lid); _a.y += hop;
+    this.packages.setLid(i, _a, tilt, TABLE_SPOT.lidRy, 0, 1);
   }
 
   closeLid(then) {
@@ -725,6 +766,7 @@ export class Game {
   /** Für Tests: Bildschirm-Pixel einer Deko-Stelle im Regal bzw. des Päckchens auf dem Tisch. */
   testPx(what) {
     const s = DECO_SPOTS.find((d) => d.group === what);
+    if (what === 'lid') { const r = this.lidRect(); return { x: r.x, y: r.y }; }
     if (s) _t.set(s.x, DECO_Y + 0.06, SHELF_Z); else _t.copy(TABLE_SPOT.pkg).setY(TABLE_Y + 0.3);
     _t.project(this.camera);
     return { x: (_t.x + 1) / 2 * window.innerWidth, y: (1 - _t.y) / 2 * window.innerHeight };
@@ -780,13 +822,13 @@ export class Game {
    */
   autoPlace(item) {
     if (this.drag || this.deco.busy) return;
-    if (phaseOf(item) === 'lid' && this.state === 'decorFill') { this.closeLid(() => this.autoPlace(item)); return; }
+    if (phaseOf(item) === 'lid' && this.state === 'decorFill') { this.lidFirst(); return; }
     const why = this.decoBlocked(item);
     if (why) { this.ui.hint(why); return; }
     _dragPos.copy(TABLE_SPOT.pkg); _dragPos.y = TABLE_Y + 0.75; _dragPos.z += 0.15;
     this.deco.beginHand(item, _dragPos);
     this.deco.drop(() => { sndFabric(); haptic(10); this.ui.popup(`+${item.bonus} 🪙 ${item.name}`); this.decoActions(); });
-    this.ui.hint(this.state === 'decorFill' ? 'Mehr Deko – oder Deckel drauf' : 'Mehr Deko – oder zum Versenden zur Seite wischen');
+    this.ui.hint(this.state === 'decorFill' ? 'Mehr Deko – oder auf den Deckel tippen' : 'Mehr Deko – oder zum Versenden zur Seite wischen');
   }
 
   /** Deko gewählt (angetippt): beim nächsten Drücken schwebt sie unter dem Finger. */
@@ -825,13 +867,11 @@ export class Game {
     this.drag = null;
     const P = TABLE_SPOT.pkg, [fw, fd] = this.packages.footprint(this.pkgSlot), hp = this.deco.handPos;
     const over = !cancel && Math.abs(hp.x - P.x) < fw / 2 + 0.22 && Math.abs(hp.z - P.z) < fd / 2 + 0.3;
-    if (over && phaseOf(d.item) === 'lid' && this.state === 'decorFill') {
-      this.deco.endHand(); this.closeLid(() => this.autoPlace(d.item)); return;
-    }
+    if (phaseOf(d.item) === 'lid' && this.state === 'decorFill') { this.deco.fallAway(); this.lidFirst(); return; }
     const why = this.decoBlocked(d.item);
     if (over && !why) {
       this.deco.drop(() => { sndFabric(); haptic(10); this.ui.popup(`+${d.item.bonus} 🪙 ${d.item.name}`); this.decoActions(); });
-      this.ui.hint(this.state === 'decorFill' ? 'Mehr Deko – oder Deckel drauf' : 'Zum Versenden zur Seite wischen');
+      this.ui.hint(this.state === 'decorFill' ? 'Mehr Deko – oder auf den Deckel tippen' : 'Zum Versenden zur Seite wischen');
     } else {
       this.deco.fallAway();
       this.ui.hint(why || (this.state === 'decorFill' ? 'Über dem offenen Paket loslassen' : 'Über dem Paket loslassen'));
@@ -914,6 +954,7 @@ export class Game {
 
   // ---------- pro Frame ----------
   update(dt, time) {
+    this.now = time;
     // nächste gewünschte Seife im Regal hüpft leicht (zeigt: hier antippen)
     let bob = -1;
     if (this.state === 'shelf') {
@@ -936,6 +977,7 @@ export class Game {
     this.packages.update(time, pb);
     // Seife auf dem Tisch hüpft leicht, solange man sie antippen soll
     if (this.state === 'pickSoap') this.bar.position.y = this.barBaseY + Math.max(0, Math.sin(time * 5)) * 0.05 * (Math.sin(time * 2.5) > 0 ? 1 : 0);
+    if (this.state === 'decorFill' && !this.deco.busy) this.updateLidHint(time);
     if (this.anims.length) this.runAnims(dt);
     if (this.state === 'cutting') this.updateCutting(dt);
     else if (this.state === 'oven') this.updateOven(dt);
