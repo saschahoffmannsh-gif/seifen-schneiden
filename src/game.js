@@ -781,6 +781,35 @@ export class Game {
     });
   }
 
+  /**
+   * Für Tests/Layout: Bildschirm-Rechtecke (CSS-Pixel) der Dinge, die nie von UI verdeckt werden dürfen
+   * (Seife, Schale, Päckchen, Deckel) – je nach Zustand. Projektion der 8 Ecken der Weltbox.
+   */
+  focusRects() {
+    const out = [], st = this.state, W = window.innerWidth, H = window.innerHeight;
+    const add = (name, box) => {
+      if (box.isEmpty()) return;
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (let k = 0; k < 8; k++) {
+        _t.set(k & 1 ? box.max.x : box.min.x, k & 2 ? box.max.y : box.min.y, k & 4 ? box.max.z : box.min.z).project(this.camera);
+        const px = (_t.x + 1) / 2 * W, py = (1 - _t.y) / 2 * H;
+        x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+      }
+      out.push({ name, x0, y0, x1, y1 });
+    };
+    const box = new THREE.Box3();
+    if (st === 'cutting' && this.block.mesh.visible) add('seife', box.set(_a.set(-this.block.halfX, this.block.bottomY, -this.block.halfZ), _b.set(this.block.halfX, this.block.topY, this.block.halfZ)));
+    // Schale: nur der Bereich, in dem die Würfel/die flüssige Seife liegen (Boden bis halbe Höhe)
+    if ((st === 'shelf' || st === 'cutting' || st === 'oven') && this.bowl.visible) add('schale-innen', box.set(_a.set(-BOWL.floorR, 0, -BOWL.floorR), _b.set(BOWL.floorR, BOWL.height * 0.5, BOWL.floorR)));
+    if ((st === 'reveal' || st === 'unmolded' || st === 'pickPkg' || st === 'picker' || st === 'pickSoap') && this.bar.visible) add('seife', box.setFromObject(this.bar));
+    if ((st === 'pickSoap' || st === 'decorFill' || st === 'packed') && this.pkgSlot >= 0) {
+      const P = TABLE_SPOT.pkg, [fw, fd] = this.packages.footprint(this.pkgSlot);
+      add('paeckchen', box.set(_a.set(P.x - fw / 2, TABLE_Y, P.z - fd / 2), _b.set(P.x + fw / 2, TABLE_Y + PKG.h + (st === 'packed' ? PKG.lidH : 0), P.z + fd / 2)));
+      if (st !== 'packed') { const r = this.lidRect(); out.push({ name: 'deckel', x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }); }
+    }
+    return out;
+  }
+
   /** Für Tests: Bildschirm-Pixel einer Deko-Stelle im Regal bzw. des Päckchens auf dem Tisch. */
   testPx(what) {
     const s = DECO_SPOTS.find((d) => d.group === what);

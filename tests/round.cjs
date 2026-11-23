@@ -22,6 +22,30 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await p.mouse.click(VW / 2, VH * 0.8); await p.waitForTimeout(300);
   console.log('tap on table ->', await p.evaluate(() => window.__game.state));
   const g = () => p.evaluate(() => window.__game.state);
+  // Layout-Prüfung: kein sichtbares UI-Element darf Seife/Schale/Päckchen/Deckel überdecken
+  const overlaps = [];
+  const chk = async (label) => {
+    const r = await p.evaluate(() => {
+      const f = window.__game.focusRects();
+      const sel = ['#coins', '#menu-btn', '#order', '#hint', '#actions', '#quality', '#cut-progress'];
+      const ui = [];
+      for (const s of sel) {
+        const e = document.querySelector(s); if (!e) continue;
+        const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity < 0.05) continue;
+        const b = e.getBoundingClientRect(); if (b.width < 2 || b.height < 2 || !e.textContent.trim() && s === '#hint') continue;
+        if (s === '#actions' && !e.children.length) continue;
+        ui.push({ s, x0: b.left, y0: b.top, x1: b.right, y1: b.bottom });
+      }
+      const hits = [];
+      for (const a of f) for (const u of ui) {
+        const ox = Math.min(a.x1, u.x1) - Math.max(a.x0, u.x0), oy = Math.min(a.y1, u.y1) - Math.max(a.y0, u.y0);
+        if (ox > 2 && oy > 2) hits.push(`${u.s} über ${a.name} (${Math.round(ox)}×${Math.round(oy)} px)`);
+      }
+      return { state: window.__game.state, focus: f.map((a) => a.name).join('+'), hits };
+    });
+    if (r.hits.length) overlaps.push(`${label} [${r.state}]: ${r.hits.join(', ')}`);
+    console.log('overlap', label, r.state, r.focus || '-', r.hits.length ? 'ÜBERLAPPUNG ' + r.hits.join(', ') : 'frei');
+  };
   let midShot = false;
   const noteAt = (i) => p.evaluate((i) => { const v = window.__game.notes.screenPos(i, window.__game.camera); return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight }; }, i);
   console.log('notes', JSON.stringify(await p.evaluate(() => window.__game.notes.orders.map((o) => [o.customer, o.soaps.map((s) => s.name).join('+'), o.reward]))));
@@ -42,7 +66,7 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await p.mouse.click(np.x, np.y); await p.waitForTimeout(450);
   await p.click('#note-accept'); await p.waitForTimeout(500);
   console.log('accepted', await g(), await p.$eval('#hint', (e) => e.textContent), await p.$eval('#order', (e) => e.textContent.trim()));
-  await p.screenshot({ path: out + '/15-bestellung-aktiv.png' });
+  await p.screenshot({ path: out + '/15-bestellung-aktiv.png' }); await chk('auswahl');
   np = await noteAt(1);
   await p.mouse.click(np.x, np.y); await p.waitForTimeout(450);
   console.log('read-only', await p.$eval('#note-accept', (e) => [e.disabled, e.textContent]));
@@ -68,7 +92,7 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await p.waitForFunction(() => window.__game.state === 'shelf', null, { timeout: 60000 });
   await p.waitForTimeout(600);
   console.log('stocked', await p.$eval('#hint', (e) => e.textContent), await p.evaluate(() => window.__game.shelf.soaps.map((s) => s.name)));
-  await p.screenshot({ path: out + '/20-regal-bestueckt.png' });
+  await p.screenshot({ path: out + '/20-regal-bestueckt.png' }); await chk('regal');
   // Zettel bleiben antippbar, Seifen auch (kein Konflikt)
   np = await noteAt(2);
   await p.mouse.click(np.x, np.y); await p.waitForTimeout(400);
@@ -85,16 +109,16 @@ const out = process.argv[3] || '/workspace/seifen-shots';
     }
     await p.waitForFunction((id) => window.__game.state === 'cutting' && window.__game.block.soap.name === id, order[s], { timeout: 30000 });
     await p.waitForTimeout(500);
-    if (s === 0) await p.screenshot({ path: out + '/2-seife-intakt.png' });
+    if (s === 0) await p.screenshot({ path: out + '/2-seife-intakt.png' }); await chk('schneiden-start');
     const stopAt = s === 1 ? mix[s] - 0.4 : mix[s];
-    // Bildschirm-Geometrie: Ruhelage des Messers, Ober- und Unterkante der Seife (Pixel)
-    const geo = await p.evaluate(() => { const g = window.__game; const pr = (y) => { const v = g.knife.position.clone().setY(y).setX(0).project(g.camera); return (1 - v.y) / 2 * innerHeight; }; return { rest: pr(g.block.topY + 0.06), top: pr(g.block.topY), bot: pr(g.block.bottomY) }; });
+    // je Wisch: Ruhelage des Messers, Ober- und Unterkante der aktuellen Scheibe (Pixel)
     let n = 0;
     for (;;) {
       const st = await p.evaluate(() => { const g = window.__game; return [g.state, g.slicesCut + (g.returning ? 0 : g.sliceProgress), g.returning, g.sliceProgress]; });
       if (st[0] !== 'cutting' || st[1] >= stopAt - 1e-3 || n > 200) break;
       if (st[2]) { await p.waitForTimeout(80); continue; }
       const rem = stopAt - st[1], depth = rem >= 1 - st[3] ? 1.08 : st[3] + rem;
+      const geo = await p.evaluate(() => { const g = window.__game; const pr = (y) => { const v = g.knife.position.clone().setY(y).setX(0).setZ(g.block.cutZ).project(g.camera); return (1 - v.y) / 2 * innerHeight; }; return { rest: pr(g.block.topY + 0.06), top: pr(g.block.topY), bot: pr(g.block.bottomY) }; });
       // Wisch von oben nach unten: Finger irgendwo greifen, Messer folgt 1:1
       const x = VW * 0.5, y0 = geo.rest - 12, dy = (geo.top - geo.rest) + depth * (geo.bot - geo.top);
       await p.mouse.move(x, y0); await p.mouse.down();
@@ -108,7 +132,7 @@ const out = process.argv[3] || '/workspace/seifen-shots';
         console.log('knife up: progress', b[0].toFixed(3), '->', a[0].toFixed(3), 'knifeY', b[1].toFixed(3), '->', a[1].toFixed(3));
       }
       await p.mouse.move(x, y0 + dy, { steps: 8 });
-      if (s === 1 && !midShot && st[1] > 1.2) { await p.mouse.move(x, y0 + dy * 0.6, { steps: 2 }); await p.waitForTimeout(150); await p.screenshot({ path: out + '/3-schneiden-mitte.png' }); midShot = true; }
+      if (s === 1 && !midShot && st[1] > 1.2) { await p.mouse.move(x, y0 + dy * 0.6, { steps: 2 }); await p.waitForTimeout(150); await p.screenshot({ path: out + '/3-schneiden-mitte.png' }); await chk('schneiden-mitte'); midShot = true; }
       await p.mouse.up(); await p.waitForTimeout(120);
       n++;
     }
@@ -151,16 +175,18 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   console.log('additives', await p.evaluate(() => window.__game.additives.map((a) => a.id)), 'coins', await p.evaluate(() => window.__game.coins));
   await p.locator('#actions button', { hasText: 'Schmelzen' }).click(); await p.waitForTimeout(400);
   if (await g() === 'addSheet') { await p.click('#pkg-close'); await p.waitForTimeout(300); await p.locator('#actions button', { hasText: 'Schmelzen' }).click(); }
+  await p.waitForTimeout(1500); await p.screenshot({ path: out + '/5a-schmelzen.png' }); await chk('schmelzen');
   for (let k = 0; k < 150 && (await g()) !== 'reveal'; k++) await p.waitForTimeout(1000);
   console.log('state', await g());
-  await p.click('#actions button'); await p.waitForTimeout(1500);
-  await p.screenshot({ path: out + '/5-fertig.png' });
+  await p.click('#actions button');
+  await p.waitForTimeout(1500);
+  await p.screenshot({ path: out + '/5-fertig.png' }); await chk('praesentation');
   console.log('quality', await p.evaluate(() => { const q = window.__game.quality; return [q.accuracy, q.stars, q.price, q.fill]; }), await p.$eval('#q-title', (e) => e.textContent), 'pearls', await p.evaluate(() => window.__game.pearlMesh.count));
   // Präsentation: mit dem Finger drehen (Gieren + Nicken), Schwung danach
   { const y0 = await p.evaluate(() => window.__game.showcase.yaw); const cx = VW / 2, cy = VH * 0.45;
     await p.mouse.move(cx - 70, cy); await p.mouse.down();
     for (let k = 1; k <= 8; k++) { await p.mouse.move(cx - 70 + k * 18, cy + k * 4); await p.waitForTimeout(30); }
-    await p.screenshot({ path: out + '/5b-praesentation-drehen.png' }); await p.mouse.up();
+    await p.screenshot({ path: out + '/5b-praesentation-drehen.png' }); await chk('praesentation-drehen'); await p.mouse.up();
     console.log('showcase', await p.evaluate(() => [window.__game.showcase.active, document.getElementById('vignette').className]), 'yaw', y0, '->', await p.evaluate(() => window.__game.showcase.yaw), 'state', await g()); }
   // Verkaufen -> Schale weg, Seife auf den Tisch
   const waitState = (st) => p.waitForFunction((st) => window.__game.state === st, st, { timeout: 60000 });
@@ -168,7 +194,7 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await p.click('#actions button');
   await waitState('pickPkg'); await p.waitForTimeout(400);
   console.log('bowl visible', await p.evaluate(() => window.__game.bowl.visible), 'coins', await p.evaluate(() => window.__game.coins));
-  await p.screenshot({ path: out + '/7-seife-auf-tisch.png' });
+  await p.screenshot({ path: out + '/7-seife-auf-tisch.png' }); await chk('seife-auf-tisch');
   // Päckchen im Regal antippen
   let pt = await screenOf('g.packages.home[0]');
   await p.mouse.click(pt.x, pt.y);
@@ -199,12 +225,12 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await p.waitForTimeout(300);
   await p.click('#pkg-list .pkg-card >> nth=1');
   await waitState('pickSoap'); await p.waitForTimeout(300);
-  await p.screenshot({ path: out + '/8-paeckchen-offen.png' });
+  await p.screenshot({ path: out + '/8-paeckchen-offen.png' }); await chk('paeckchen-offen');
   // Seife antippen -> ins Päckchen, Deckel drauf
   pt = await screenOf('g.bar.position');
   await p.mouse.click(pt.x, pt.y);
   await waitState('decorFill'); await p.waitForTimeout(300);
-  await p.screenshot({ path: out + '/21-deko-start.png' });
+  await p.screenshot({ path: out + '/21-deko-start.png' }); await chk('deko-start');
   // ---- Deko ----
   const idle = () => p.waitForFunction(() => !window.__game.drag && !window.__game.deco.busy, null, { timeout: 60000 });
   const tapShelf = async (grp) => { const q = await p.evaluate((x) => window.__game.testPx(x), grp); await p.mouse.click(q.x, q.y); await p.waitForFunction(() => document.getElementById('pkg-picker').classList.contains('open')); await p.waitForTimeout(500); };
@@ -239,7 +265,7 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await tapShelf('blueten');
   await (await card('Margeriten')).click(); await idle(); await p.waitForTimeout(300);
   console.log('tap place ->', await p.evaluate(() => [window.__game.deco.bonus, window.__game.deco.applied.map((x) => x.id).join(',')]));
-  await p.screenshot({ path: out + '/25-deko-gefuellt.png' });
+  await p.screenshot({ path: out + '/25-deko-gefuellt.png' }); await chk('deko-gefuellt');
   await p.locator('#actions button', { hasText: 'Rückgängig' }).click(); await p.waitForTimeout(300);
   console.log('undo ->', await p.evaluate(() => [window.__game.deco.bonus, window.__game.deco.applied.map((x) => x.id).join(',')]));
   // Schleife bei offenem Paket: geht noch nicht – dezenter Hinweis, Deckel wackelt, Paket bleibt offen
@@ -253,13 +279,13 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await tapShelf('baender');
   await (await card('Bäckerschnur')).click();
   await p.waitForFunction(() => window.__game.state === 'packed' && !window.__game.deco.busy && !!window.__game.deco.lidItems.baender, null, { timeout: 60000 }); await p.waitForTimeout(300);
-  await p.screenshot({ path: out + '/9-paeckchen-zu.png' });
+  await p.screenshot({ path: out + '/9-paeckchen-zu.png' }); await chk('paeckchen-zu');
   await tapShelf('perlen');
   console.log('fill items disabled after lid', await p.$$eval('#pkg-list .pkg-card.disabled', (c) => c.length), 'of', await p.$$eval('#pkg-list .pkg-card', (c) => c.length));
   await p.click('#pkg-close'); await p.waitForTimeout(300);
   await tapShelf('anhaenger'); await (await card('Kraft-Anhänger mit Namen')).click(); await idle(); await p.waitForTimeout(300);
   await tapShelf('siegel'); await dragTo('Sticker „Danke“');
-  await p.screenshot({ path: out + '/26-deko-deckel.png' });
+  await p.screenshot({ path: out + '/26-deko-deckel.png' }); await chk('deko-deckel');
   const decoTxt = await p.$eval('#order-deco', (e) => e.textContent);
   const before = await p.evaluate(() => [window.__game.coins, window.__game.price, window.__game.pkgType.bonus, window.__game.deco.bonus]);
   console.log('panel', decoTxt, 'before send [coins, price, pkgBonus, deco]', before);
@@ -277,6 +303,7 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   console.log('earned', await p.evaluate(() => window.__game.lastEarned), 'expected', before[1] + before[2] + before[3]);
   console.log('after send', await g(), 'coins', await p.evaluate(() => window.__game.coins), 'hint', await p.$eval('#hint', (e) => e.textContent), 'notes', JSON.stringify(await p.evaluate(() => window.__game.notes.orders.map((o) => o && o.customer))));
   await p.screenshot({ path: out + '/11-naechste-bestellung.png' });
+  console.log('overlaps', JSON.stringify(overlaps));
   console.log('errors', errs);
   await b.close();
 })();
