@@ -77,24 +77,38 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   // Mischung schneiden: je Sorte genau die bestellten Scheiben (10 % = 1 Scheibe); bei der zweiten
   // Sorte mitten in der letzten Scheibe aufhören -> angefangene Scheibe ist Verschnitt, Rest bleibt im Vorrat
   const mix = await p.evaluate(() => window.__game.order.mix.map((m) => m.pct / 10));
+  const shelfPt = (i) => p.evaluate((i) => { const g = window.__game; const v = g.shelf.home[i].clone().project(g.camera); return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight }; }, i);
   for (let s = 0; s < order.length; s++) {
-    const pt = await p.evaluate((i) => { const g = window.__game; const v = g.shelf.home[i].clone().project(g.camera); return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight }; }, s);
-    await p.mouse.click(pt.x, pt.y);
-    await p.waitForFunction(() => window.__game.state === 'cutting', null, { timeout: 30000 });
+    { const pt = await shelfPt(s); await p.mouse.click(pt.x, pt.y); }
+    await p.waitForFunction((id) => window.__game.state === 'cutting' && window.__game.block.soap.name === id, order[s], { timeout: 30000 });
     await p.waitForTimeout(500);
     if (s === 0) await p.screenshot({ path: out + '/2-seife-intakt.png' });
     const stopAt = s === 1 ? mix[s] - 0.4 : mix[s];
-    await p.mouse.move(VW / 2, VH * 0.6); await p.mouse.down();
+    // Bildschirm-Geometrie: Ruhelage des Messers, Ober- und Unterkante der Seife (Pixel)
+    const geo = await p.evaluate(() => { const g = window.__game; const pr = (y) => { const v = g.knife.position.clone().setY(y).setX(0).project(g.camera); return (1 - v.y) / 2 * innerHeight; }; return { rest: pr(g.block.topY + 0.06), top: pr(g.block.topY), bot: pr(g.block.bottomY) }; });
     let n = 0;
     for (;;) {
-      const st = await p.evaluate(() => { const g = window.__game; return [g.state, g.slicesCut + (g.returning ? 0 : g.sliceProgress)]; });
-      if (st[0] !== 'cutting' || st[1] >= stopAt || n > 200) break;
-      const amp = stopAt - st[1] < 1 ? 0.04 : 0.2;   // zum Ende hin feine Wischer -> genau aufhören
-      await p.mouse.move(VW * (0.5 - amp), VH * 0.6, { steps: 3 }); await p.mouse.move(VW * (0.5 + amp), VH * 0.6, { steps: 3 });
+      const st = await p.evaluate(() => { const g = window.__game; return [g.state, g.slicesCut + (g.returning ? 0 : g.sliceProgress), g.returning, g.sliceProgress]; });
+      if (st[0] !== 'cutting' || st[1] >= stopAt - 1e-3 || n > 200) break;
+      if (st[2]) { await p.waitForTimeout(80); continue; }
+      const rem = stopAt - st[1], depth = rem >= 1 - st[3] ? 1.08 : st[3] + rem;
+      // Wisch von oben nach unten: Finger irgendwo greifen, Messer folgt 1:1
+      const x = VW * 0.5, y0 = geo.rest - 12, dy = (geo.top - geo.rest) + depth * (geo.bot - geo.top);
+      await p.mouse.move(x, y0); await p.mouse.down();
+      if (n === 0 && s === 0) {
+        // halb runter, dann hoch: Messer geht mit hoch, schneidet dabei aber nicht; dann weiter runter
+        await p.mouse.move(x, y0 + dy * 0.55, { steps: 6 }); await p.waitForTimeout(150);
+        const b = await p.evaluate(() => [window.__game.sliceProgress, window.__game.knifeY]);
+        await p.mouse.move(x, y0 + dy * 0.2, { steps: 4 }); await p.waitForTimeout(200);
+        const a = await p.evaluate(() => [window.__game.sliceProgress, window.__game.knifeY]);
+        await p.screenshot({ path: out + '/3a-messer-hoch.png' });
+        console.log('knife up: progress', b[0].toFixed(3), '->', a[0].toFixed(3), 'knifeY', b[1].toFixed(3), '->', a[1].toFixed(3));
+      }
+      await p.mouse.move(x, y0 + dy, { steps: 8 });
+      if (s === 1 && !midShot && st[1] > 1.2) { await p.mouse.move(x, y0 + dy * 0.6, { steps: 2 }); await p.waitForTimeout(150); await p.screenshot({ path: out + '/3-schneiden-mitte.png' }); midShot = true; }
+      await p.mouse.up(); await p.waitForTimeout(120);
       n++;
-      if (s === 1 && !midShot && st[1] > 1.2) { await p.mouse.up(); await p.waitForTimeout(150); await p.screenshot({ path: out + '/3-schneiden-mitte.png' }); midShot = true; await p.mouse.down(); }
     }
-    await p.mouse.up();
     if (s === 0) { await p.waitForTimeout(1200); await p.screenshot({ path: out + '/4-haufen.png' }); }
     if (await g() === 'cutting') await p.locator('#actions button', { hasText: 'Fertig' }).click();
     await p.waitForFunction(() => window.__game.state === 'shelf', null, { timeout: 30000 }); await p.waitForTimeout(400);

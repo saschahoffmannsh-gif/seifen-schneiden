@@ -31,11 +31,9 @@ export const PHYS = {
   maxCubes: 10000,        // vorab reservierter Pool loser Würfel (reicht für 3 Seifen à 2880)
 };
 
-// Schneiden: wie weit (Welt-Einheiten) ein Wisch mindestens gehen muss, damit er zählt
+// Schneiden
 export const CUT = {
-  // Hin-und-her-Wischen treibt das Messer durch die vorderste Scheibe nach unten:
-  strokePerSlice: 1.3,    // so viel Wischweg (Welt-Einheiten) braucht eine ganze Scheibe (oben -> unten)
-  knifeRange: 0.32,       // Messer darf sich +- so weit seitlich bewegen
+  // Das Messer folgt dem Finger senkrecht; nur abwärts schneidet es (Tiefe = Fortschritt der Scheibe).
   returnSpeed: 9,         // wie schnell das Messer nach einer Scheibe wieder hochfährt
 };
 

@@ -115,7 +115,7 @@ export class Game {
     this.bgHot = new THREE.Color('#ffd2b0');
 
     // Messer-Zustand
-    this.knifeX = 0; this.knifeTargetX = 0; this.prevKnifeX = 0;
+    this.knifeX = 0; this.knifeTargetY = 0; this.cutHeld = false; this.cutGrab = 0;
     this.knifeY = 2; this.knifeZ = 0; this.knifeTilt = 0;
     this.sliceProgress = 0; this.returning = false; this.slicesCut = 0;
     knife.position.set(0, 2.2, BLOCK.nz * CUBE / 2 + 0.03);
@@ -324,7 +324,7 @@ export class Game {
     this.state = 'cutting';
     const m = this.order.mix.find((x) => x.soap === soap);
     const have = Math.round(this.pcts[soap.id] || 0);
-    this.ui.hint(m ? `Noch ${m.pct / PCT_PER_SLICE - Math.round(have / PCT_PER_SLICE)} Scheiben ${soap.name} – sanft hin und her wischen` : 'Sanft hin und her wischen');
+    this.ui.hint(m ? `Noch ${m.pct / PCT_PER_SLICE - Math.round(have / PCT_PER_SLICE)} Scheiben ${soap.name} – von oben nach unten wischen` : 'Von oben nach unten wischen');
     this.block.load(soap, Math.min(SLICES, save.stock(soap.id)));
     this.ui.actions([{ label: '✋ Fertig mit dieser Seife', onClick: () => this.stopCutting() }]);
     this.loose.blockHalfX = this.block.halfX; this.loose.blockHalfZ = this.block.halfZ;
@@ -332,6 +332,8 @@ export class Game {
     this.knife.visible = true;
     this.knifeY = this.block.topY + 0.6;
     this.knifeZ = this.block.cutZ;
+    this.knifeX = 0; this.knifeTilt = 0;
+    this.cutHeld = this.input.down ? 'stale' : false;   // Finger vom Antippen im Regal schneidet nicht
     this.sliceProgress = 0; this.returning = false; this.slicesCut = 0;
     this.loose.blockTop = -1; // Würfel fallen vorne weg, keine Kollision mit der Blockoberseite nötig
     haptic(8);
@@ -989,41 +991,51 @@ export class Game {
    * treibt es nach unten, die Würfel der Scheibe lösen sich dabei von oben nach unten.
    * Unten angekommen ist die Scheibe fertig, das Messer fährt hoch zur nächsten Scheibe dahinter.
    */
+  /**
+   * Schneiden: Das Messer steht an seinem Platz und folgt dem Finger 1:1 senkrecht (runter UND hoch).
+   * Nur die Abwärtsbewegung schneidet: Fortschritt der Scheibe = tiefste erreichte Messerposition.
+   * Unten angekommen ist die Scheibe ab; Messer fährt hoch und eine Scheibe nach hinten.
+   * Loslassen mittendrin: Messer gleitet zurück nach oben, das Angeschnittene bleibt angeschnitten.
+   */
   updateCutting(dt) {
     const inp = this.input;
-    if (inp.down) {
+    const top = this.block.topY, height = top - this.block.bottomY, rest = top + 0.06;
+    if (!inp.down) this.cutHeld = false;
+    let follow = false;
+    if (inp.down && this.cutHeld !== 'stale' && !this.returning) {
       _ndc.set(inp.x, inp.y);
       _ray.setFromCamera(_ndc, this.camera);
+      _plane.constant = -this.knifeZ;
       if (_ray.ray.intersectPlane(_plane, _hit)) {
-        // Finger etwas verstärken, damit kleine Wischer reichen
-        this.knifeTargetX = THREE.MathUtils.clamp(_hit.x * 1.3, -CUT.knifeRange, CUT.knifeRange);
+        // Griffpunkt merken: das Messer springt nicht zum Finger, sondern bewegt sich mit ihm
+        if (!this.cutHeld) { this.cutHeld = true; this.cutGrab = this.knifeY - _hit.y; }
+        this.knifeTargetY = THREE.MathUtils.clamp(_hit.y + this.cutGrab, top - height, top + 0.55);
+        follow = true;
       }
     }
-    this.prevKnifeX = this.knifeX;
-    this.knifeX = damp(this.knifeX, this.knifeTargetX, 28, dt);
-    const dx = this.knifeX - this.prevKnifeX;
-    const top = this.block.topY, height = top - this.block.bottomY;
-
+    const prevY = this.knifeY;
     if (this.returning) {
       // automatisch hochfahren und eine Scheibe nach hinten wechseln
-      this.knifeY = damp(this.knifeY, top + 0.06, CUT.returnSpeed, dt);
+      this.knifeY = damp(this.knifeY, rest, CUT.returnSpeed, dt);
       this.knifeZ = damp(this.knifeZ, this.block.cutZ, CUT.returnSpeed, dt);
-      if (top + 0.06 - this.knifeY < 0.02) { this.returning = false; this.sliceProgress = 0; }
-    } else if (this.block.active) {
-      if (inp.down && Math.abs(dx) > 1e-4) {
-        // Jeder Wischweg (egal welche Richtung) treibt das Messer tiefer
-        this.sliceProgress = Math.min(1, this.sliceProgress + Math.abs(dx) / CUT.strokePerSlice);
-        const n = this.block.cutTo(this.sliceProgress, this.onCube);
-        if (n) { sndCut(); haptic(5); }
-        if (this.sliceProgress >= 1) this.completeSlice();
-      }
-      if (!this.returning) {
-        this.knifeY = damp(this.knifeY, top - height * this.sliceProgress, 16, dt);
-        this.knifeZ = damp(this.knifeZ, this.block.cutZ, 16, dt);
+      if (rest - this.knifeY < 0.02) { this.returning = false; this.sliceProgress = 0; this.cutHeld = inp.down ? false : this.cutHeld; }
+    } else {
+      // 1:1 dem Finger nach; ohne Finger gleitet es sanft zurück nach oben
+      this.knifeY = follow ? this.knifeTargetY : damp(this.knifeY, rest, 7, dt);
+      this.knifeZ = damp(this.knifeZ, this.block.cutZ, 16, dt);
+      if (this.block.active && follow && this.knifeY < prevY - 1e-4) {
+        // nur abwärts: Tiefe der Schneide in der Seife = Fortschritt (hoch schneidet nicht)
+        const depth = THREE.MathUtils.clamp((top - this.knifeY) / height, 0, 1);
+        if (depth > this.sliceProgress) {
+          this.sliceProgress = depth >= 0.985 ? 1 : depth;
+          const n = this.block.cutTo(this.sliceProgress, this.onCube);
+          if (n) { sndCut(); haptic(5); }
+          if (this.sliceProgress >= 1) this.completeSlice();
+        }
       }
     }
-
-    this.knifeTilt = damp(this.knifeTilt, THREE.MathUtils.clamp(-dx / Math.max(dt, 1e-3) * 0.03, -0.12, 0.12), 10, dt);
+    // Messer neigt sich kaum: ruhige, gerade Führung
+    this.knifeTilt = damp(this.knifeTilt, 0, 10, dt);
     this.refreshMix();   // Mischungs-Balken live (DOM nur bei Änderung)
     this.knife.position.set(this.knifeX, this.knifeY, this.knifeZ);
     this.knife.rotation.z = this.knifeTilt;
