@@ -1,15 +1,17 @@
-// Wand direkt an der hinteren Tischkante mit drei Holzbrettern als Ablagen und ein paar
-// rustikalen Sachen darauf (Seifenstücke, Gläser, kleine Pflanzen, Tuch).
+// Wand direkt an der hinteren Tischkante mit drei Holzbrettern als Ablagen:
+//   oben   = Päckchen (siehe packages.js)
+//   Mitte  = Seifen fürs aktuelle Rezept (siehe shelfSoaps.js)
+//   unten  = Verpackungs-Deko (Blüten, Schälchen mit Perlen / Seifenflocken, Schleifenband)
 //
 // Alles ist echte 3D-Geometrie in der Hauptszene: gleiches Licht, gleiche Schärfe, gleiche
 // Materialien wie Tisch und Schale ("aus einem Guss"). Billig gehalten:
 //  * Texturen einmalig per Canvas, gemeinsam genutzte Materialien
-//  * wiederholte Dinge (Seifenstücke, Blätter, Töpfe, Gläser, Konsolen, Schatten) als
-//    InstancedMesh -> ein Draw-Call pro Sorte
+//  * wiederholte Dinge (Blätter, Perlen, Schälchen, Konsolen, Schatten) als InstancedMesh
+//    -> ein Draw-Call pro Sorte
 //  * keine Shadow-Maps, nur weiche Fake-Schatten (Verlaufs-Texturen)
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { makePlasterTexture, makeBoardTexture, makeClothTexture, makeShadeTexture, makeBlobTexture, rng } from './textures.js';
+import { makePlasterTexture, makeBoardTexture, makeShadeTexture, makeBlobTexture, rng } from './textures.js';
 
 export const WALL_Z = -1.75;          // Wand steht direkt hinter der Schale an der Tischkante
 export const TABLE_Y = -0.07;         // Tischplatte
@@ -17,13 +19,14 @@ const WALL_W = 24, WALL_H = 7;
 // Ablagen: Höhe der Oberkante, Breite, Mitte x. Die Höhen sind so gewählt, dass die Bretter aus der
 // Spielkamera zwischen den Anzeigen sichtbar sind (knapp über dem Schalenrand, zwischen
 // Fortschritt und Hinweis, rechts neben der Bestellung).
+// Breite Bretter (14 Einheiten): reichen auch im Querformat über das ganze Bild.
 const SHELVES = [
-  { y: 0.6, w: 9.0, x: -0.4 },
-  { y: 1.6, w: 9.0, x: -0.4 },
-  { y: 2.5, w: 9.0, x: -0.4 },
+  { y: 0.6, w: 14.0, x: -0.4 },
+  { y: 1.6, w: 14.0, x: -0.4 },
+  { y: 2.5, w: 14.0, x: -0.4 },
 ];
-// mittleres Brett bleibt frei: dort stehen die Seifen fürs aktuelle Rezept (siehe shelfSoaps.js)
-export const MIDDLE_SHELF = SHELVES[1];
+export const MIDDLE_SHELF = SHELVES[1];   // Rezept-Seifen
+export const TOP_SHELF = SHELVES[2];      // Päckchen
 const K = 1.3;                        // Größe der Deko-Sachen
 const SHELF_D = 0.36, SHELF_T = 0.07;
 export const SHELF_Z = WALL_Z + SHELF_D * 0.5;  // Mitte der Bretttiefe
@@ -90,84 +93,25 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
     b.position.set(sh.x, sh.y - SHELF_T / 2, WALL_Z + SHELF_D / 2 + 0.005);
     group.add(b);
     // L-Konsolen: senkrechter Arm an der Wand + waagerechter Arm unter dem Brett + Strebe
-    for (const bx of [sh.x - sh.w / 2 + 0.6, sh.x - 1.2, sh.x + 1.9, sh.x + sh.w / 2 - 0.6]) {
+    for (const bx of [sh.x - sh.w / 2 + 0.6, sh.x - 4.1, sh.x - 1.2, sh.x + 1.9, sh.x + 4.8, sh.x + sh.w / 2 - 0.6]) {
       brackets.add(bx, sh.y - SHELF_T - 0.13, WALL_Z + 0.015, 0.035, 0.26, 0.03);
       brackets.add(bx, sh.y - SHELF_T - 0.012, WALL_Z + SHELF_D * 0.42, 0.035, 0.024, SHELF_D * 0.8);
       brackets.add(bx, sh.y - SHELF_T - 0.09, WALL_Z + 0.1, 0.03, 0.022, 0.24, Math.PI / 4, 0, 0);
     }
   }
 
-  // ---------- Sachen auf den Ablagen ----------
+  // ---------- Verpackungs-Deko auf dem unteren Brett (für später freischaltbar, siehe decor.js) ----------
   const r = rng(21);
-  const soapGeo = new RoundedBoxGeometry(1, 1, 1, 2, 0.22);
-  const soapMat = new THREE.MeshStandardMaterial({ roughness: 0.45, metalness: 0, envMap: env, envMapIntensity: 0.35 });
-  const soaps = batch(soapGeo, soapMat, { colors: true });
-  const twine = batch(box, new THREE.MeshLambertMaterial({ color: 0xc9a66b }));
   const cyl = new THREE.CylinderGeometry(1, 1, 1, 20);
-  const glassMat = new THREE.MeshStandardMaterial({ color: 0xe3efe9, roughness: 0.08, metalness: 0, transparent: true, opacity: 0.42, envMap: env, envMapIntensity: 0.9, depthWrite: false });
-  const glasses = batch(cyl, glassMat);
   const fillings = batch(cyl, new THREE.MeshLambertMaterial(), { colors: true });
-  const lids = batch(cyl, new THREE.MeshStandardMaterial({ color: 0xb7b0a4, metalness: 0.8, roughness: 0.35, envMap: env, envMapIntensity: 0.8 }));
-  const corkMat = new THREE.MeshLambertMaterial({ color: 0xb08355 });
-  const corks = batch(cyl, corkMat);
-  const potGeo = new THREE.CylinderGeometry(1, 0.76, 1, 18);
-  const pots = batch(potGeo, new THREE.MeshLambertMaterial({ color: 0xb8693f }));
-  const leafGeo = new THREE.SphereGeometry(1, 10, 8);
-  const leaves = batch(leafGeo, new THREE.MeshLambertMaterial(), { colors: true });
-  const clothMat = new THREE.MeshLambertMaterial({ map: makeClothTexture('#b8453a') });
-  const cloths = batch(new RoundedBoxGeometry(1, 1, 1, 2, 0.2), clothMat);
-  const shelfBlobs = blobs;
-  // Verpackungs-Deko (für später freischaltbar, siehe decor.js): Schälchen, Perlen, Blüten, Flocken, Band
+  const corks = batch(cyl, new THREE.MeshLambertMaterial({ color: 0xb08355 }));
+  const leaves = batch(new THREE.SphereGeometry(1, 10, 8), new THREE.MeshLambertMaterial(), { colors: true });
   const dishPts = [[0, 0], [0.8, 0], [0.97, 0.22], [1, 0.42], [0.93, 0.42], [0.84, 0.12], [0, 0.1]].map(([a, b]) => new THREE.Vector2(a, b));
   const dishes = batch(new THREE.LatheGeometry(dishPts, 20), new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0, envMap: env, envMapIntensity: 0.5 }), { colors: true });
   const pearls = batch(new THREE.SphereGeometry(1, 10, 8), new THREE.MeshStandardMaterial({ roughness: 0.18, metalness: 0.15, envMap: env, envMapIntensity: 1.0 }), { colors: true });
-
-  const SOAP_COLORS = ['#f2789a', '#f6e0a0', '#b79be0', '#8fe3c5', '#f4c6a5', '#fff6e6'];
-  const FILL = ['#e9d9b0', '#c58a4a', '#f2ecdc', '#d7a13a', '#8a3b2e', '#a5b86a', '#7a4a2a'];
-  const GREENS = ['#5f8f4e', '#4e7d41', '#7aa35c', '#6b9450'];
+  const shelfBlobs = blobs;
   const pick = (a) => a[(r() * a.length) | 0];
   const zMid = WALL_Z + SHELF_D * 0.5;
-
-  function soapStack(x, y, n = 2 + (r() * 2 | 0)) {
-    const w = 0.24 * K, h = 0.075 * K, d = 0.16 * K;
-    for (let i = 0; i < n; i++) soaps.add(x + (r() - 0.5) * 0.02, y + h / 2 + i * h, zMid, w, h * 0.96, d, 0, (r() - 0.5) * 0.2, 0, pick(SOAP_COLORS));
-    twine.add(x, y + n * h / 2, zMid, 0.014, n * h + 0.004, d + 0.006);
-    shelfBlobs.add(x, y + 0.002, zMid, w * 1.6, d * 1.9, 1, -Math.PI / 2, 0, 0);
-    return w;
-  }
-  function jar(x, y, tall) {
-    const rad = (tall ? 0.085 : 0.11) * K, h = (tall ? 0.34 : 0.22) * K, fill = 0.55 + r() * 0.35;
-    fillings.add(x, y + h * fill / 2 + 0.005, zMid, rad * 0.9, h * fill, rad * 0.9, 0, 0, 0, pick(FILL));
-    glasses.add(x, y + h / 2, zMid, rad, h, rad);
-    (r() < 0.6 ? lids : corks).add(x, y + h + 0.018, zMid, rad * 1.04, 0.036, rad * 1.04);
-    shelfBlobs.add(x, y + 0.002, zMid, rad * 3.2, rad * 3.2, 1, -Math.PI / 2, 0, 0);
-    return rad * 2;
-  }
-  function plant(x, y, big) {
-    const pr = (big ? 0.13 : 0.095) * K, ph = pr * 1.25;
-    pots.add(x, y + ph / 2, zMid, pr, ph, pr);
-    pots.add(x, y + ph, zMid, pr * 1.1, 0.035, pr * 1.1);
-    // Blätter: flache, längliche Ellipsoide, rund um die Mitte nach außen geneigt
-    const n = big ? 11 : 7;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * 6.28 + r() * 0.4;
-      const len = pr * (big ? 1.9 : 1.4) * (0.75 + r() * 0.45);
-      const tilt = 0.2 + r() * 0.6;               // wie weit das Blatt nach außen kippt
-      const cx = Math.sin(tilt) * len * 0.5, cy = Math.cos(tilt) * len * 0.5;
-      _e.set(0, 0, 0);
-      leaves.add(x + Math.cos(a) * cx, y + ph + cy * 0.95, zMid + Math.sin(a) * cx,
-        len * 0.32, len * 0.5, len * 0.09,
-        Math.sin(a) * tilt, -a + Math.PI / 2, -Math.cos(a) * tilt, pick(GREENS));
-    }
-    shelfBlobs.add(x, y + 0.002, zMid, pr * 3.2, pr * 3.2, 1, -Math.PI / 2, 0, 0);
-    return pr * 2.2;
-  }
-  function cloth(x, y) {
-    const w = 0.32 * K, h = 0.045 * K;
-    for (let i = 0; i < 3; i++) cloths.add(x + (r() - 0.5) * 0.03, y + h / 2 + i * h, zMid, w, h * 0.95, 0.24 * K, 0, (r() - 0.5) * 0.12, 0);
-    shelfBlobs.add(x, y + 0.002, zMid, w * 1.5, 0.4, 1, -Math.PI / 2, 0, 0);
-    return w;
-  }
 
   /** Schälchen (Keramik) mit Inhalt: 'pearls' oder 'flakes'. */
   function dish(x, y, kind) {
@@ -187,7 +131,6 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
       }
     }
     shelfBlobs.add(x, y + 0.002, zMid, R * 3, R * 3, 1, -Math.PI / 2, 0, 0);
-    return R * 2;
   }
   /** Ein paar Deko-Blüten (5 Blütenblätter + Perlen-Mitte), liegen locker auf dem Brett. */
   function blossoms(x, y) {
@@ -198,46 +141,34 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
       const cx = x + dx * K, cz = zMid + dz * 0.8, cy = y + 0.014 + k * 0.014;
       for (let i = 0; i < 5; i++) {
         const a = i / 5 * 6.28 + k;
-        leaves.add(cx + Math.cos(a) * pr * 0.75, cy, cz + Math.sin(a) * pr * 0.75, pr * 0.62, 0.014, pr * 0.42, 0.35, -a, 0, pc);
+        leaves.add(cx + Math.cos(a) * pr * 0.7, cy, cz + Math.sin(a) * pr * 0.7, pr * 0.62, 0.014, pr * 0.42, 0.35, -a, 0, pc);
       }
       pearls.add(cx, cy + 0.008, cz, pr * 0.28, pr * 0.2, pr * 0.28, 0, 0, 0, cc);
     });
     shelfBlobs.add(x, y + 0.002, zMid, 0.5, 0.36, 1, -Math.PI / 2, 0, 0);
-    return 0.3 * K;
   }
-  /** Rolle Schleifenband (liegend) mit kurzem Ende. */
-  function ribbon(x, y) {
+  /** Rolle Schleifenband (Achse zur Kamera) mit kurzem Ende. */
+  function ribbon(x, y, color) {
     const R = 0.075 * K, W = 0.09 * K;
-    // Achse zur Kamera: man sieht die runde Seite der Rolle
-    fillings.add(x, y + R, zMid, R, W, R, Math.PI / 2, 0, 0, '#c0392b');
+    fillings.add(x, y + R, zMid, R, W, R, Math.PI / 2, 0, 0, color);
     corks.add(x, y + R, zMid, R * 0.42, W * 1.06, R * 0.42, Math.PI / 2, 0, 0);
-    fillings.add(x + R * 0.55, y + 0.004, zMid + W * 0.5 + 0.035, 0.03, 0.004, 0.05, 0, 0.5, 0, '#c0392b');
+    fillings.add(x + R * 0.55, y + 0.004, zMid + W * 0.5 + 0.035, 0.03, 0.004, 0.05, 0, 0.5, 0, color);
     shelfBlobs.add(x, y + 0.002, zMid, R * 3.4, R * 3, 1, -Math.PI / 2, 0, 0);
-    return R * 2;
   }
 
-  // Von links nach rechts locker aufreihen (Breite kommt vom jeweiligen Ding zurück)
-  const S = soapStack, J = jar, P = plant, C = cloth, D = dish, B = blossoms, R = ribbon;
-  // aufgeräumt: gleichmäßige Abstände, im sichtbaren Mittelteil Verpackungs-Deko
-  const rows = [
-    [[P, 1], [J, 1], [S, 3], [J, 0], [C], [P, 0], [J, 1], [S, 2], [D, 'pearls'], [B], [D, 'flakes'], [R], [J, 1], [S, 3], [P, 1], [C]],
-    [],   // mittleres Brett: frei für die Rezept-Seifen und Päckchen
-    [[S, 2], [J, 1], [P, 1], [C], [J, 0], [S, 3], [P, 0], [J, 1], [D, 'flakes'], [S, 2], [B], [P, 1], [D, 'pearls'], [J, 0], [R], [S, 3]],
-  ];
-  const halfOf = (f, arg) => f === soapStack ? 0.16 * K : f === jar ? (arg ? 0.085 : 0.11) * K : f === plant ? (arg ? 0.15 : 0.11) * K
-    : f === dish ? 0.155 * K : f === blossoms ? 0.16 * K : f === ribbon ? 0.08 * K : 0.17 * K;
-  rows.forEach((row, ri) => {
-    const sh = SHELVES[ri];
-    let x = sh.x - sh.w / 2 + 0.3 + ri * 0.1;
-    for (const it of row) {
-      const [f, arg] = it;
-      const half = halfOf(f, arg);
-      x += half;
-      if (f === soapStack || f === dish) f(x, sh.y, arg); else if (f === cloth || f === blossoms || f === ribbon) f(x, sh.y); else f(x, sh.y, !!arg);
-      x += half + 0.15;
-    }
-  });
+  // Unteres Brett: nur Deko, gleichmäßig im Wechsel über die ganze Breite
+  const RIBBONS = ['#c0392b', '#e8a0b4', '#d4af37', '#7fb8a4'];
+  const deco = SHELVES[0];
+  const STEP = 0.5;
+  let k = 0;
+  for (let x = deco.x - deco.w / 2 + 0.4; x <= deco.x + deco.w / 2 - 0.3; x += STEP, k++) {
+    const kind = k % 4;
+    if (kind === 0) dish(x, deco.y, 'pearls');
+    else if (kind === 1) blossoms(x, deco.y);
+    else if (kind === 2) dish(x, deco.y, 'flakes');
+    else ribbon(x, deco.y, RIBBONS[(k >> 2) % RIBBONS.length]);
+  }
 
-  for (const b of [shades, blobs, brackets, soaps, twine, fillings, glasses, lids, corks, pots, leaves, cloths, dishes, pearls]) b.build(group);
+  for (const b of [shades, blobs, brackets, fillings, corks, leaves, dishes, pearls]) b.build(group);
   return group;
 }

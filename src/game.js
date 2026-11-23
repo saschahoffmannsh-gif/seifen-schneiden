@@ -14,7 +14,7 @@ import { SOAP_LIST, SOAP_BY_ID } from './soaps.js';
 import { makeMarbleTexture } from './marble.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { sndCut, sndPop, sndCoin, sndDing, haptic } from './audio.js';
-import { PKG, TABLE_SPOT, PKG_SHELF_SCALE, SHADOW_SOAP } from './packages.js';
+import { PKG, TABLE_SPOT, PKG_SHELF_SCALE, SHADOW_SOAP, SHADOW_LID } from './packages.js';
 import { TABLE_Y } from './setting/wall.js';
 
 const BAR_TABLE_SCALE = 0.85;                       // Seife auf dem Tisch / im Päckchen
@@ -221,6 +221,7 @@ export class Game {
   sell() {
     if (this.state !== 'unmolded') return;
     this.state = 'toTable';
+    document.body.classList.add('table-mode');
     this.ui.actions([]);
     this.ui.hint('');
     const bar = this.bar;
@@ -255,11 +256,24 @@ export class Game {
     }, () => { if (this.state === 'picker') this.state = 'pickPkg'; });
   }
 
-  /** Päckchen fliegt vom Regal auf den Tisch, der Deckel geht ab und landet dahinter. */
+  /** Kontaktschatten des Päckchens auf dem Tisch an Position x/z (0 = ausblenden). */
+  pkgShadow(i, x, z) {
+    const [fw, fd] = this.packages.footprint(i);
+    this.packages.setBlob(i, x, TABLE_Y + 0.003, z, fw * 1.45, fd * 1.6);
+  }
+
+  lidShadow(show) {
+    const L = TABLE_SPOT.lid, [fw, fd] = this.packages.footprint(this.pkgSlot);
+    if (show) this.packages.setBlob(SHADOW_LID, L.x, TABLE_Y + 0.004, L.z, (fw + 2 * PKG.lidPad) * 1.35, (fd + 2 * PKG.lidPad) * 1.5, TABLE_SPOT.lidRy);
+    else this.packages.setBlob(SHADOW_LID, 0, 0, 0, 0, 0);
+  }
+
+  /** Päckchen fliegt vom Regal auf den Tisch; der Deckel geht ab und liegt flach vorne daneben. */
   flyPackage(i) {
     this.state = 'packing';
     this.pkgSlot = i;
     this.ui.hint('');
+    this.packages.setActive(i);
     this.packages.onShelf[i] = 0;
     this.packages.update(0, -1);
     this.packages.setBlob(i, 0, 0, 0, 0, 0);
@@ -269,15 +283,16 @@ export class Game {
       _a.lerpVectors(from, to, e); _a.y += Math.sin(t * Math.PI) * 0.6;
       this.packages.setClosed(i, _a, 0, PKG_SHELF_SCALE + (1 - PKG_SHELF_SCALE) * e);
     }, () => {
-      this.packages.setBlob(i, to.x, TABLE_Y + 0.003, to.z, PKG.w * 1.45, PKG.d * 1.6);
+      this.pkgShadow(i, to.x, to.z);
       sndPop();
-      // Deckel abheben und hinter das Päckchen legen
-      _b.copy(to); _b.y += PKG.h - PKG.lidOver;
+      // Deckel abheben und mit Abstand flach vorne neben das Päckchen legen
+      _b.copy(to); _b.y += this.packages.lidY;
       const lid0 = _b.clone();
-      this.play(0.5, (e, t) => {
+      this.play(0.55, (e, t) => {
         _a.lerpVectors(lid0, lidTo, e); _a.y += Math.sin(t * Math.PI) * 0.45;
-        this.packages.setLid(i, _a, -Math.sin(t * Math.PI) * 0.5, 0, 0, 1);
+        this.packages.setLid(i, _a, Math.sin(t * Math.PI) * 0.35, TABLE_SPOT.lidRy * e, 0, 1);
       }, () => {
+        this.lidShadow(true);
         this.state = 'pickSoap';
         this.barBaseY = this.bar.position.y;
         this.ui.hint('Tippe auf die Seife');
@@ -309,11 +324,12 @@ export class Game {
     }, () => {
       sndPop();
       const lidFrom = TABLE_SPOT.lid;
-      _b.copy(to); _b.y += PKG.h - PKG.lidOver;
+      _b.copy(to); _b.y += this.packages.lidY;
       const lidTo = _b.clone();
-      this.play(0.45, (e, t) => {
+      this.lidShadow(false);
+      this.play(0.5, (e, t) => {
         _a.lerpVectors(lidFrom, lidTo, e); _a.y += Math.sin(t * Math.PI) * 0.5;
-        this.packages.setLid(i, _a, -Math.sin(t * Math.PI) * 0.5, 0, 0, 1);
+        this.packages.setLid(i, _a, Math.sin(t * Math.PI) * 0.35, TABLE_SPOT.lidRy * (1 - e), 0, 1);
       }, () => {
         bar.visible = false;
         sndPop(); haptic(15);
@@ -335,7 +351,7 @@ export class Game {
     // Päckchen folgt dem Finger (Bildschirmbreite ~ 3,2 Welt-Einheiten)
     _a.copy(TABLE_SPOT.pkg); _a.x += sw.dx / window.innerWidth * 3.2;
     this.packages.setClosed(this.pkgSlot, _a, -sw.dx / window.innerWidth * 0.3, 1);
-    this.packages.setBlob(this.pkgSlot, _a.x, TABLE_Y + 0.003, _a.z, PKG.w * 1.45, PKG.d * 1.6);
+    this.pkgShadow(this.pkgSlot, _a.x, _a.z);
   }
   swipeEnd(e, cancel) {
     const sw = this.swipe;
@@ -352,7 +368,7 @@ export class Game {
     this.play(0.25, (k) => {
       _a.copy(TABLE_SPOT.pkg); _a.x = x0 + (TABLE_SPOT.pkg.x - x0) * k;
       this.packages.setClosed(this.pkgSlot, _a, 0, 1);
-      this.packages.setBlob(this.pkgSlot, _a.x, TABLE_Y + 0.003, _a.z, PKG.w * 1.45, PKG.d * 1.6);
+      this.pkgShadow(this.pkgSlot, _a.x, _a.z);
     }, null, easeOut);
   }
 
@@ -364,7 +380,7 @@ export class Game {
     this.play(0.45, (e) => {
       _a.copy(TABLE_SPOT.pkg); _a.x = x0 + (x1 - x0) * e;
       this.packages.setClosed(i, _a, -dir * 0.15 * e, 1);
-      this.packages.setBlob(i, _a.x, TABLE_Y + 0.003, _a.z, PKG.w * 1.45, PKG.d * 1.6);
+      this.pkgShadow(i, _a.x, _a.z);
     }, () => {
       this.packages.hide(i);
       const earned = this.price + (this.pkgType ? this.pkgType.bonus : 0);
@@ -380,6 +396,7 @@ export class Game {
         this.bowlShadow.scale.set(k, k, k);
       }, null, easeOut);
       this.packages.reset();
+      document.body.classList.remove('table-mode');
       this.newOrder();
       this.toShelf();
     }, (t) => t * t);

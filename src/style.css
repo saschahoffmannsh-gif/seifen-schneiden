@@ -17,7 +17,7 @@ html, body {
 }
 /* schmaler Zettel, mittig unter der Schale */
 #order {
-  position: fixed; left: 50%; transform: translateX(-50%); top: calc(var(--bowl-bottom, 70vh) + 6px);
+  position: fixed; left: 50%; transform: translateX(-50%); top: calc(var(--bowl-bottom, 70vh) + 6px + var(--ui-shift, 0px));
   width: max-content; max-width: min(78vw, 320px); text-align: center; pointer-events: none;
 }
 #order-text { font-weight: 700; font-size: 13px; opacity: .8; }
@@ -32,15 +32,16 @@ body.landscape #order { left: 12px; transform: none; top: auto; bottom: calc(env
 }
 .pill.bump { transform: scale(1.25); }
 
+/* Hinweis: kleine Pille unter dem Bestell-Zettel (oben bleibt das Päckchen-Brett frei) */
 #hint {
-  position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 16px); text-align: center; color: #6b4436;
+  position: fixed; left: 0; right: 0; top: calc(var(--bowl-bottom, 70vh) + 64px + var(--ui-shift, 0px)); text-align: center; color: #6b4436;
   font-weight: 700; font-size: 16px; pointer-events: none;
   text-shadow: 0 1px 0 rgba(255,255,255,.6);
 }
 #hint:not(:empty) {
   left: 50%; right: auto; transform: translateX(-50%); width: max-content;
-  max-width: calc(100vw - 170px);
-  background: rgba(255, 248, 236, .82); padding: 6px 14px; border-radius: 14px;
+  max-width: min(86vw, 340px); font-size: 14px;
+  background: rgba(255, 248, 236, .9); padding: 5px 12px; border-radius: 14px;
   box-shadow: 0 3px 10px rgba(70, 40, 20, .2);
 }
 
@@ -155,3 +156,10 @@ body.oven-open #actions { bottom: calc(env(safe-area-inset-bottom) + 90px); }
   font-weight: 800; font-size: 13px; padding: 4px 12px; border-radius: 999px; opacity: 0; transition: opacity .2s; pointer-events: none;
 }
 #pkg-note.show { opacity: 1; }
+
+/* Querformat: Zettel unten links, Hinweis unten rechts */
+body.landscape #hint { top: auto; bottom: calc(env(safe-area-inset-bottom) + 14px); }
+body.landscape #hint:not(:empty) { left: auto; right: 12px; transform: none; max-width: 34vw; }
+/* Schale ist weg (Verpacken): Zettel + Hinweis etwas tiefer, damit der Deckel daneben Platz hat */
+body.table-mode { --ui-shift: 48px; }
+#order, #hint { transition: top .3s ease; }

@@ -5,13 +5,14 @@ const out = process.argv[3] || '/workspace/seifen-shots';
 (async () => {
   require('fs').mkdirSync(out, { recursive: true });
   const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-  const p = await b.newPage({ viewport: { width: 420, height: 860 }, deviceScaleFactor: 2 });
+  const [VW, VH] = (process.env.VIEW || '420x860').split('x').map(Number);
+  const p = await b.newPage({ viewport: { width: VW, height: VH }, deviceScaleFactor: 2 });
   const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
   await p.goto(url + '?fps=1');
   await p.waitForTimeout(1500);
   await p.screenshot({ path: out + '/1-regal.png' });
   // Mitten auf den Tisch tippen darf nichts auswählen
-  await p.mouse.click(210, 700); await p.waitForTimeout(300);
+  await p.mouse.click(VW / 2, VH * 0.8); await p.waitForTimeout(300);
   console.log('tap on table ->', await p.evaluate(() => window.__game.state));
   const g = () => p.evaluate(() => window.__game.state);
   let midShot = false;
@@ -78,7 +79,7 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await waitState('packed'); await p.waitForTimeout(300);
   await p.screenshot({ path: out + '/9-paeckchen-zu.png' });
   // zu kurzer Wisch: federt zurück, nichts passiert
-  pt = await screenOf('g.packages.body.position.clone().set(0.74, 0.1, 0.2)');
+  pt = await screenOf('g.packages.home[0].clone().set(0.5, 0.1, -0.34)');
   await p.mouse.move(pt.x, pt.y); await p.mouse.down(); await p.mouse.move(pt.x + 20, pt.y, { steps: 2 }); await p.mouse.up();
   await p.waitForTimeout(600);
   console.log('after short swipe', await g());
