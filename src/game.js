@@ -23,6 +23,14 @@ import { makeOrder } from './orders.js';
 import { cabinetLayout } from './cabinet.js';
 import { save, applyUnlocks } from './save.js';
 import { PKG_CATS, PACKAGE_TYPES } from './decor.js';
+import { Deco } from './deco.js';
+import { DECO_ITEMS, DECO_GROUPS, phaseOf, groupOf } from './decoItems.js';
+import { DECO_SPOTS, DECO_Y, SHELF_Z } from './setting/wall.js';
+
+const FILL_CAP = 40, FILL_MAX_KINDS = 4;     // Teile pro Füllungs-Sorte, verschiedene Füllungen
+const DRAG_LIFT = 55;                        // px: Deko schwebt so weit über dem Finger
+const _dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(TABLE_Y + 0.75));
+const _dragPos = new THREE.Vector3(), _dragTarget = new THREE.Vector3();
 
 const BAR_TABLE_SCALE = 0.85;                       // Seife auf dem Tisch / im Päckchen
 const BAR_HALF_H = 0.18 * BAR_TABLE_SCALE;          // halbe Höhe der liegenden Seife
@@ -49,10 +57,18 @@ export class Game {
     this.isAvailable = (s) => !this.cutIds.has(s.id);
     canvas.addEventListener('pointerdown', (e) => {
       const st = this.state;
-      if (st === 'packed') { this.swipeStart(e); return; }
-      if (st !== 'choose' && st !== 'shelf' && st !== 'pickPkg' && st !== 'pickSoap') return;
       const r = canvas.getBoundingClientRect();
       this.tapNdc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      if (st === 'decorFill' || st === 'packed') {
+        if (this.drag || this.deco.busy) return;
+        // Deko-Regal antippen > gewählte Deko ziehen > (zu) Päckchen wegwischen
+        const gr = this.pickDecoShelf();
+        if (gr) { this.openDecoSheet(gr); return; }
+        if (this.armed) { this.startDrag(this.armed, e); return; }
+        if (st === 'packed') this.swipeStart(e);
+        return;
+      }
+      if (st !== 'choose' && st !== 'shelf' && st !== 'pickPkg' && st !== 'pickSoap') return;
       // Reihenfolge: Seife direkt getroffen > Zettel (genaues Rechteck) > Seife in der Nähe > Schrank
       if (st === 'shelf' && this.stocked) {
         const i = this.shelf.pick(this.tapNdc, this.camera, this.isAvailable, true);
@@ -70,9 +86,13 @@ export class Game {
         if (this.packages.pick(this.tapNdc, this.camera) >= 0) this.openPicker();
       } else if (this.hitBar()) this.soapIntoPackage();
     });
-    window.addEventListener('pointermove', (e) => this.swipeMove(e));
-    window.addEventListener('pointerup', (e) => this.swipeEnd(e));
-    window.addEventListener('pointercancel', (e) => this.swipeEnd(e, true));
+    window.addEventListener('pointermove', (e) => { if (this.drag) this.dragMove(e); else this.swipeMove(e); });
+    window.addEventListener('pointerup', (e) => { if (this.drag) this.dragEnd(e); else this.swipeEnd(e); });
+    window.addEventListener('pointercancel', (e) => { if (this.drag) this.dragEnd(e, true); else this.swipeEnd(e, true); });
+    // Deko: freigeschaltete aus dem Spielstand, 3D-Teile am Päckchen
+    applyUnlocks(DECO_ITEMS, 'deco:');
+    this.deco = new Deco(scene, packages);
+    this.drag = null; this.armed = null;
     applyUnlocks(PACKAGE_TYPES, 'pkg:');
     this.coins = save.coins;     // Münzen bleiben gespeichert (localStorage)
     ui.setCoins(this.coins);
@@ -447,20 +467,155 @@ export class Game {
       bar.rotation.set(Math.sin(t * Math.PI) * 0.25, ry0 + (ry1 - ry0) * e, 0);
     }, () => {
       sndPop();
-      const lidFrom = TABLE_SPOT.lid;
-      _b.copy(to); _b.y += this.packages.lidY;
-      const lidTo = _b.clone();
-      this.lidShadow(false);
-      this.play(0.5, (e, t) => {
-        _a.lerpVectors(lidFrom, lidTo, e); _a.y += Math.sin(t * Math.PI) * 0.5;
-        this.packages.setLid(i, _a, Math.sin(t * Math.PI) * 0.35, TABLE_SPOT.lidRy * (1 - e), 0, 1);
-      }, () => {
-        bar.visible = false;
-        sndPop(); haptic(15);
-        this.state = 'packed';
-        this.ui.hint('Wische das Paket zur Seite');
-      });
+      this.toDecorFill();
     });
+  }
+
+  // ---------- Dekorieren ----------
+  /** Seife liegt im offenen Päckchen: Füllungen/Perlen/Blüten aus dem unteren Regal hineinziehen. */
+  toDecorFill() {
+    this.state = 'decorFill';
+    this.armed = null;
+    this.ui.hint('Dekoriere dein Paket – tippe auf die Deko im Regal');
+    this.decoActions();
+  }
+
+  decoActions() {
+    const acts = [];
+    const phase = this.state === 'decorFill' ? 'fill' : 'lid';
+    if (this.deco.applied.some((it) => phaseOf(it) === phase)) acts.push({ label: '↶ Rückgängig', onClick: () => this.undoDeco(phase) });
+    if (this.state === 'decorFill') acts.push({ label: 'Deckel drauf', alt: true, onClick: () => this.closeLid() });
+    this.ui.actions(acts);
+    this.ui.setDeco(this.deco.bonus);
+  }
+
+  undoDeco(phase) {
+    if (this.drag || this.deco.busy) return;
+    const it = this.deco.undo(phase, phaseOf);
+    if (it) { sndPop(); this.ui.popup(`${it.name} entfernt`); }
+    this.decoActions();
+  }
+
+  closeLid() {
+    if (this.state !== 'decorFill' || this.drag || this.deco.busy) return;
+    this.state = 'packing';
+    this.armed = null;
+    this.ui.actions([]);
+    this.ui.hint('');
+    const i = this.pkgSlot, to = TABLE_SPOT.pkg;
+    const lidFrom = TABLE_SPOT.lid;
+    _b.copy(to); _b.y += this.packages.lidY;
+    const lidTo = _b.clone();
+    this.lidShadow(false);
+    this.play(0.5, (e, t) => {
+      _a.lerpVectors(lidFrom, lidTo, e); _a.y += Math.sin(t * Math.PI) * 0.5;
+      this.packages.setLid(i, _a, Math.sin(t * Math.PI) * 0.35, TABLE_SPOT.lidRy * (1 - e), 0, 1);
+    }, () => {
+      this.bar.visible = false;
+      sndPop(); haptic(15);
+      this.state = 'packed';
+      this.ui.hint('Schleife, Siegel & Co. aus dem Regal – oder Paket zur Seite wischen');
+      this.decoActions();
+    });
+  }
+
+  /** Für Tests: Bildschirm-Pixel einer Deko-Stelle im Regal bzw. des Päckchens auf dem Tisch. */
+  testPx(what) {
+    const s = DECO_SPOTS.find((d) => d.group === what);
+    if (s) _t.set(s.x, DECO_Y + 0.06, SHELF_Z); else _t.copy(TABLE_SPOT.pkg).setY(TABLE_Y + 0.3);
+    _t.project(this.camera);
+    return { x: (_t.x + 1) / 2 * window.innerWidth, y: (1 - _t.y) / 2 * window.innerHeight };
+  }
+
+  /** Antippen des unteren Regals: welche Deko-Gruppe? (nur beim Tippen) */
+  pickDecoShelf() {
+    let best = null, bd = 0.1 * 0.1;
+    for (const s of DECO_SPOTS) {
+      _t.set(s.x, DECO_Y + 0.06, SHELF_Z).project(this.camera);
+      const dx = _t.x - this.tapNdc.x, dy = (_t.y - this.tapNdc.y) * 0.7, d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = s.group; }
+    }
+    return best;
+  }
+
+  /** Warum diese Deko gerade nicht geht (oder null). */
+  decoBlocked(it) {
+    const ph = phaseOf(it);
+    if (ph === 'lid' && this.state === 'decorFill') return 'Erst Deckel drauf';
+    if (ph === 'fill' && this.state === 'packed') return 'Der Deckel ist schon zu';
+    if (ph === 'fill') {
+      if (this.deco.countOf(it) >= FILL_CAP) return 'Davon ist genug drin';
+      const kinds = this.deco.applied.filter((x) => phaseOf(x) === 'fill');
+      if (!kinds.includes(it) && kinds.length >= FILL_MAX_KINDS) return `Höchstens ${FILL_MAX_KINDS} Füllungen`;
+    }
+    return null;
+  }
+
+  /** Auswahl einer Deko-Gruppe (wie bei den Päckchen); Reiter zeigen die Nachbar-Gruppen. */
+  openDecoSheet(groupId) {
+    const back = this.state;
+    const phase = groupOf(groupId).phase;
+    const thumbs = this.deco.makeThumbs(this.renderer, DECO_ITEMS);
+    const items = DECO_ITEMS.filter((it) => phaseOf(it) === phase).map((it) => ({
+      id: it.id, name: it.name, cat: groupOf(it.group).name, thumb: thumbs[it.id], unlocked: it.unlocked, cost: it.cost, bonus: it.bonus,
+      sub: (this.deco.has(it) ? '✔ ' : '') + `+${it.bonus} 🪙`, disabled: this.decoBlocked(it), item: it,
+    }));
+    this.state = 'decoSheet';
+    this.armed = null;
+    this.ui.openSheet(items, {
+      title: groupOf(groupId).name, cats: DECO_GROUPS.filter((g) => g.phase === phase).map((g) => g.name), startCat: groupOf(groupId).name,
+      coins: () => this.coins,
+      onBuy: (x) => this.buy(x.cost, 'deco:' + x.id, () => { x.item.unlocked = true; }),
+      onSelect: (x) => { this.state = back; this.arm(x.item); },
+      onHold: (x, ev) => { this.state = back; this.startDrag(x.item, ev); },
+      onClose: () => { this.state = back; },
+    });
+  }
+
+  /** Deko gewählt (angetippt): beim nächsten Drücken schwebt sie unter dem Finger. */
+  arm(item) {
+    this.armed = item;
+    this.ui.hint(`${item.name}: Finger drauf halten und zum Paket ziehen`);
+  }
+
+  startDrag(item, e) {
+    this.armed = null;
+    this.drag = { item, id: e.pointerId, x: e.clientX, y: e.clientY };
+    this.swipe.active = false;
+    this.dragTarget(_dragPos);
+    this.deco.beginHand(item, _dragPos);
+    haptic(8);
+    this.ui.hint('Über dem Paket loslassen');
+  }
+
+  /** Zielpunkt der schwebenden Deko: etwas über dem Finger, auf einer Ebene über dem Tisch. */
+  dragTarget(out) {
+    const W = window.innerWidth, H = window.innerHeight;
+    _ndc.set(this.drag.x / W * 2 - 1, -((this.drag.y - DRAG_LIFT) / H) * 2 + 1);
+    _ray.setFromCamera(_ndc, this.camera);
+    if (!_ray.ray.intersectPlane(_dragPlane, out)) out.copy(TABLE_SPOT.pkg);
+    return out;
+  }
+
+  dragMove(e) {
+    if (e.pointerId !== this.drag.id) return;
+    this.drag.x = e.clientX; this.drag.y = e.clientY;
+  }
+
+  dragEnd(e, cancel) {
+    const d = this.drag;
+    if (!d || e.pointerId !== d.id) return;
+    this.drag = null;
+    const P = TABLE_SPOT.pkg, [fw, fd] = this.packages.footprint(this.pkgSlot), hp = this.deco.handPos;
+    const over = !cancel && Math.abs(hp.x - P.x) < fw / 2 + 0.22 && Math.abs(hp.z - P.z) < fd / 2 + 0.3;
+    const why = this.decoBlocked(d.item);
+    if (over && !why) {
+      this.deco.drop(() => { sndPop(); haptic(10); this.ui.popup(`+${d.item.bonus} 🪙 ${d.item.name}`); this.decoActions(); });
+      this.ui.hint(this.state === 'decorFill' ? 'Noch mehr Deko? Tippe aufs Regal – oder „Deckel drauf“' : 'Paket zur Seite wischen zum Verschicken');
+    } else {
+      this.deco.fallAway();
+      this.ui.hint(why || (this.state === 'decorFill' ? 'Über dem offenen Paket loslassen' : 'Über dem Paket loslassen'));
+    }
   }
 
   // ---------- Wischen zum Verschicken (Touch + Maus über Pointer Events) ----------
@@ -507,11 +662,14 @@ export class Game {
       this.pkgShadow(i, _a.x, _a.z);
     }, () => {
       this.packages.hide(i);
-      const earned = this.price + (this.pkgType ? this.pkgType.bonus : 0);
+      const earned = this.price + (this.pkgType ? this.pkgType.bonus : 0) + this.deco.bonus;
+      this.lastEarned = earned;
+      this.deco.reset(); this.ui.setDeco(0);
       this.coins += earned; save.coins = this.coins;
       this.ui.setCoins(this.coins, true);
       sndCoin(); haptic(20);
-      this.ui.popup(`+${earned} 🪙`);
+      const db = earned - this.price - (this.pkgType ? this.pkgType.bonus : 0);
+      this.ui.popup(db > 0 ? `+${earned} 🪙 (Deko +${db})` : `+${earned} 🪙`);
       // Schale kommt zurück, Päckchen wieder ins Regal, neue Bestellung
       this.bowl.visible = true; this.bowlShadow.visible = true;
       this.play(0.45, (e) => {
@@ -543,6 +701,13 @@ export class Game {
     }
     this.shelf.update(dt, time, bob);
     this.notes.update(dt, time, this.state === 'choose');
+    // schwebende Deko folgt dem Finger (geglättet) und schaukelt leicht
+    if (this.drag) {
+      this.dragTarget(_dragTarget);
+      _dragPos.lerp(_dragTarget, 1 - Math.exp(-16 * dt));
+      this.deco.moveHand(_dragPos, time);
+    }
+    this.deco.update(dt);
     let pb = -1;
     if (this.state === 'pickPkg') pb = 0;   // Standard-Päckchen hüpft
     this.packages.update(time, pb);

@@ -32,6 +32,10 @@ const SHELF_D = 0.36, SHELF_T = 0.07;
 export const SHELF_Z = WALL_Z + SHELF_D * 0.5;  // Mitte der Bretttiefe
 // Wandschrank mit Türen über dem obersten Brett: im Spiel ist nur der untere Teil zu sehen
 export const CABINET = { x: -0.27, w: 2.9, bottom: 2.98, h: 1.7, d: 0.42 };
+// Deko-Einstiege auf dem unteren Brett (sichtbarer Bereich): eine Sache je Deko-Gruppe
+export const DECO_SPOTS = ['fuellung', 'perlen', 'flocken', 'blueten', 'baender', 'siegel', 'anhaenger', 'natur']
+  .map((group, k) => ({ group, x: -1.62 + k * 0.42 }));
+export const DECO_Y = 0.6;
 export const SHELF_FRONT_Z = WALL_Z + SHELF_D + 0.005; // Vorderkante der Bretter
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
@@ -184,12 +188,54 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
     shelfBlobs.add(x, y + 0.002, zMid, R * 3.4, R * 3, 1, -Math.PI / 2, 0, 0);
   }
 
-  // Unteres Brett: nur Deko, gleichmäßig im Wechsel über die ganze Breite
+  const blocks = batch(box, new THREE.MeshLambertMaterial(), { colors: true });
+  /** Kistchen mit Holzwolle/Knisterpapier. */
+  function crate(x, y) {
+    const W = 0.26, D = 0.2, H = 0.1;
+    blocks.add(x, y + 0.006, zMid, W, 0.012, D, 0, 0, 0, '#b98a58');
+    for (const s of [-1, 1]) { blocks.add(x + s * W / 2, y + H / 2, zMid, 0.014, H, D, 0, 0, 0, '#c99a60'); blocks.add(x, y + H / 2, zMid + s * D / 2, W, H, 0.014, 0, 0, 0, '#d3a56c'); }
+    for (let i = 0; i < 26; i++) fillings.add(x + (r() - 0.5) * W * 0.8, y + H * 0.75 + r() * 0.035, zMid + (r() - 0.5) * D * 0.8, 0.005, 0.09, 0.005, r() * 3, r() * 3, r() * 3, pick(['#e3c48f', '#d6b17a', '#f4a9bd']));
+    shelfBlobs.add(x, y + 0.002, zMid, 0.45, 0.34, 1, -Math.PI / 2, 0, 0);
+  }
+  /** Sticker-Dose + Wachssiegel. */
+  function sealTin(x, y) {
+    fillings.add(x - 0.04, y + 0.03, zMid, 0.1, 0.06, 0.1, 0, 0, 0, '#9fbfbd');
+    [['#fff6e8', -0.07, -0.02], ['#e2304d', -0.02, 0.03], ['#c9a173', -0.03, -0.04]].forEach(([c, dx, dz]) => fillings.add(x + dx, y + 0.062, zMid + dz, 0.035, 0.004, 0.035, 0.1, 0, 0.1, c));
+    fillings.add(x + 0.1, y + 0.012, zMid + 0.06, 0.045, 0.024, 0.045, 0, 0, 0, '#a3162b');
+    fillings.add(x + 0.1, y + 0.026, zMid + 0.06, 0.03, 0.01, 0.03, 0, 0, 0, '#a3162b');
+    shelfBlobs.add(x, y + 0.002, zMid, 0.42, 0.3, 1, -Math.PI / 2, 0, 0);
+  }
+  /** Anhänger (Kraftpapier) mit Schnur, angelehnt. */
+  function tags(x, y) {
+    for (let i = 0; i < 3; i++) blocks.add(x - 0.06 + i * 0.06, y + 0.07, zMid - 0.04 + i * 0.02, 0.08, 0.13, 0.004, -0.25, (i - 1) * 0.3, (i - 1) * 0.12, i === 1 ? '#fffaf0' : '#c9a173');
+    fillings.add(x, y + 0.006, zMid + 0.07, 0.04, 0.012, 0.04, 0, 0, 0, '#d9c7a8');
+    shelfBlobs.add(x, y + 0.002, zMid, 0.38, 0.28, 1, -Math.PI / 2, 0, 0);
+  }
+  /** Naturdeko: Orangenscheibe, Zimtstangen, Zapfen. */
+  function natur(x, y) {
+    fillings.add(x - 0.07, y + 0.075, zMid, 0.075, 0.014, 0.075, Math.PI / 2 - 0.25, 0.3, 0, '#e47a1e');
+    for (const dz of [-0.03, 0.0, 0.03]) fillings.add(x + 0.06, y + 0.018 + (dz === 0 ? 0.03 : 0), zMid + dz + 0.03, 0.017, 0.2, 0.017, 0, 0.4, Math.PI / 2, '#8a4a22');
+    leaves.add(x + 0.1, y + 0.04, zMid - 0.07, 0.035, 0.045, 0.035, 0, 0, 0, '#7a4a26');
+    shelfBlobs.add(x, y + 0.002, zMid, 0.45, 0.32, 1, -Math.PI / 2, 0, 0);
+  }
+
+  // Unteres Brett: im sichtbaren Bereich je Deko-Gruppe eine Sache (Antippen öffnet die Auswahl),
+  // links und rechts davon (außerhalb des Bildes) die bisherige Deko-Reihe.
   const RIBBONS = ['#c0392b', '#e8a0b4', '#d4af37', '#7fb8a4'];
   const deco = SHELVES[0];
-  const STEP = 0.5;
+  for (const { group: gname, x } of DECO_SPOTS) {
+    if (gname === 'fuellung') crate(x, deco.y);
+    else if (gname === 'perlen') dish(x, deco.y, 'pearls');
+    else if (gname === 'flocken') dish(x, deco.y, 'flakes');
+    else if (gname === 'blueten') blossoms(x, deco.y);
+    else if (gname === 'baender') ribbon(x, deco.y, RIBBONS[0]);
+    else if (gname === 'siegel') sealTin(x, deco.y);
+    else if (gname === 'anhaenger') tags(x, deco.y);
+    else natur(x, deco.y);
+  }
   let k = 0;
-  for (let x = deco.x - deco.w / 2 + 0.4; x <= deco.x + deco.w / 2 - 0.3; x += STEP, k++) {
+  for (let x = deco.x - deco.w / 2 + 0.4; x <= deco.x + deco.w / 2 - 0.3; x += 0.5, k++) {
+    if (x > DECO_SPOTS[0].x - 0.45 && x < DECO_SPOTS[DECO_SPOTS.length - 1].x + 0.45) continue;
     const kind = k % 4;
     if (kind === 0) dish(x, deco.y, 'pearls');
     else if (kind === 1) blossoms(x, deco.y);
@@ -197,6 +243,6 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
     else ribbon(x, deco.y, RIBBONS[(k >> 2) % RIBBONS.length]);
   }
 
-  for (const b of [shades, blobs, brackets, fillings, corks, leaves, dishes, pearls]) b.build(group);
+  for (const b of [shades, blobs, brackets, fillings, corks, leaves, dishes, pearls, blocks]) b.build(group);
   return group;
 }

@@ -1,3 +1,4 @@
+import { DECO_ITEMS } from './decoItems.js';
 // Einstieg: baut alles zusammen und startet die Hauptschleife.
 import * as THREE from 'three';
 import './style.css';
@@ -51,6 +52,7 @@ function layoutUI() {
 layoutUI();
 window.addEventListener('resize', layoutUI);
 window.__game = game; // für Tests/Debugging
+window.__decoItems = DECO_ITEMS;
 
 // FPS-Anzeige mit ?fps=1
 const showFps = new URLSearchParams(location.search).get('fps') === '1';

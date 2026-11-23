@@ -28,6 +28,12 @@ export function createUI() {
       el.coins.textContent = n;
       if (bump) { el.coinPill.classList.add('bump'); setTimeout(() => el.coinPill.classList.remove('bump'), 200); }
     },
+    /** Deko-Bonus auf dem Bestell-Zettel ('+15 🪙 Deko'). */
+    setDeco(n) {
+      const d = $('order-deco');
+      d.textContent = n > 0 ? `+${n} 🪙 Deko` : '';
+      d.classList.toggle('hidden', !(n > 0));
+    },
     hint(text) { el.hint.textContent = text || ''; },
     /**
      * Auswahl-Sheet (Päckchen und Deko): unten, waagerecht scrollbar, Reiter je Kategorie.
@@ -107,8 +113,8 @@ export function createUI() {
       list.onscroll = mark;
       $('pkg-close').onclick = () => close(true);
       root.onclick = (e) => { if (e.target === root) close(true); }; // Tipp neben das Fenster
-      list.scrollLeft = 0; mark();
       root.classList.add('open');
+      list.scrollLeft = o.startCat && firstOf[o.startCat] ? Math.max(0, firstOf[o.startCat].offsetLeft - 4) : 0; mark();
       return { close };
     },
     /** Freischalt-Dialog: Kosten, Bonus und Knopf (geht nur mit genug Münzen). */

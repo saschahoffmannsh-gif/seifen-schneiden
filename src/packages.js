@@ -218,6 +218,10 @@ export class Packages {
       scene.add(m);
     }
     scene.add(this.tissue);
+    // Deko-Inhalt folgt dem gewählten Päckchen (Schachtel-Raum) bzw. seinem Deckel
+    this.content = new THREE.Group(); this.lidContent = new THREE.Group();
+    for (const g of [this.content, this.lidContent]) { g.matrixAutoUpdate = false; g.visible = false; scene.add(g); }
+    this.suppressBow = false;
     const ns = shelfIds.length;
     this.shelfSlot = this.types.map((ty) => shelfIds.indexOf(ty));
     this.home = this.types.map((ty, i) => {
@@ -237,6 +241,17 @@ export class Packages {
   footprint(i) { return this.slots[i].fam.foot; }
   /** Wie die Seife in Päckchen i liegt: { s, dz }. */
   fit(i) { return this.slots[i].fit; }
+  /** Eine Deko-Schleife ersetzt die Schleife der Päckchen-Sorte (am gewählten Päckchen). */
+  setBowHidden(h) {
+    this.suppressBow = h;
+    const sl = this.slots[this.active];
+    if (!sl || sl.bow < 0) return;
+    if (h) this.bow.setMatrixAt(sl.bow, _zero);
+    else { sl.fam.lidMesh.getMatrixAt(sl.inst, _m); this.bow.setMatrixAt(sl.bow, _m2.multiplyMatrices(_m, this.bowOffset)); }
+    this.bow.instanceMatrix.needsUpdate = true;
+  }
+  /** Höhe der Deckel-Oberseite über der Deckel-Unterkante. */
+  lidTop(i) { return this.types[i].shape === 'heart' ? PKG.lidH + 0.024 : PKG.lidH; }
 
   /** Alle Päckchen (zu) zurück ins Regal. */
   reset() {
@@ -256,6 +271,7 @@ export class Packages {
   setActive(i) {
     this.active = i;
     this.tissue.visible = i >= 0;
+    this.content.visible = this.lidContent.visible = i >= 0;
     if (i < 0) return;
     this.tissue.geometry = this.slots[i].fam.tissue;
     this.tissue.material.color.set(this.types[i].tissue || '#ffffff');
@@ -267,7 +283,10 @@ export class Packages {
     _m.compose(pos, _q, _s.set(scale, scale, scale));
     const sl = this.slots[i];
     sl.fam.bodyMesh.setMatrixAt(sl.inst, _m); sl.fam.bodyMesh.instanceMatrix.needsUpdate = true;
-    if (i === this.active) { this.tissue.matrix.copy(_m); this.tissue.matrixWorldNeedsUpdate = true; }
+    if (i === this.active) {
+      this.tissue.matrix.copy(_m); this.tissue.matrixWorldNeedsUpdate = true;
+      this.content.matrix.copy(_m); this.content.matrixWorldNeedsUpdate = true;
+    }
   }
   /** Deckel i: Unterkante bei pos, Drehung (x/z kippen beim Auf-/Zuklappen). */
   setLid(i, pos, rx, ry, rz, scale) {
@@ -275,7 +294,13 @@ export class Packages {
     _m.compose(pos, _q, _s.set(scale, scale, scale));
     const sl = this.slots[i];
     sl.fam.lidMesh.setMatrixAt(sl.inst, _m); sl.fam.lidMesh.instanceMatrix.needsUpdate = true;
-    if (sl.bow >= 0) { this.bow.setMatrixAt(sl.bow, _m2.multiplyMatrices(_m, this.bowOffset)); this.bow.instanceMatrix.needsUpdate = true; }
+    if (sl.bow >= 0) {
+      // eine Deko-Schleife ersetzt die Schleife der Päckchen-Sorte
+      if (i === this.active && this.suppressBow) this.bow.setMatrixAt(sl.bow, _zero);
+      else this.bow.setMatrixAt(sl.bow, _m2.multiplyMatrices(_m, this.bowOffset));
+      this.bow.instanceMatrix.needsUpdate = true;
+    }
+    if (i === this.active) { this.lidContent.matrix.copy(_m); this.lidContent.matrixWorldNeedsUpdate = true; }
   }
   /** Höhe der Deckel-Unterkante über der Schachtel-Unterkante, wenn geschlossen. */
   get lidY() { return PKG.h - PKG.lidOver; }

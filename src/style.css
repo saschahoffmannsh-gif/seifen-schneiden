@@ -23,6 +23,8 @@ html, body {
 #order-text { font-weight: 700; font-size: 13px; opacity: .8; }
 #order-progress { font-size: 14px; font-weight: 700; margin-top: 1px; white-space: nowrap; }
 #order-progress span { margin: 0 4px; }
+#order-deco { font-size: 13px; font-weight: 800; color: #a86a12; margin-top: 2px; }
+#order-deco.hidden { display: none; }
 /* Querformat: unter der Schale ist kein Platz -> Zettel unten links neben die Schale */
 body.landscape #order { left: 12px; transform: none; top: auto; bottom: calc(env(safe-area-inset-bottom) + 12px); }
 .done { color: #2e9b5f; }
