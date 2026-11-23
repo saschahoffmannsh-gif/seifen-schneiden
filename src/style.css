@@ -8,6 +8,7 @@
 @import './fonts.css';
 
 :root {
+  --sa-top: env(safe-area-inset-top, 0px); --sa-bottom: env(safe-area-inset-bottom, 0px); --sa-left: env(safe-area-inset-left, 0px); --sa-right: env(safe-area-inset-right, 0px);
   --ivory: #fcf9f4; --paper: #f6f0e6; --linen: #ede4d6; --sand: #dccbb2; --line: rgba(140, 105, 60, .16);
   --ink: #392920; --ink-2: #6a5444; --ink-3: #9a8574;
   --gold: #b8955d; --gold-l: #dcc59b; --gold-d: #8a6a3e;
@@ -131,7 +132,7 @@ button { font-family: inherit; }
 
 /* ---------- Kopfzeile: Menü links, Münzen rechts ---------- */
 #hud {
-  position: fixed; top: calc(env(safe-area-inset-top) + 12px); left: calc(env(safe-area-inset-left) + 12px); right: calc(env(safe-area-inset-right) + 12px);
+  position: fixed; top: calc(var(--sa-top) + 12px); left: calc(var(--sa-left) + 12px); right: calc(var(--sa-right) + 12px);
   display: flex; justify-content: space-between; align-items: center; pointer-events: none; z-index: 8;
   transition: opacity .4s var(--ease), transform .4s var(--ease);
 }
@@ -189,7 +190,7 @@ button { font-family: inherit; }
 .mini-stars .on { color: var(--gold); } .mini-stars .off { color: #e5dccd; }
 body.table-mode #order-progress .mx { font-size: 11px; }
 .done { color: var(--sage-d); }
-body.landscape #order { left: 12px; transform: none; top: auto; bottom: calc(env(safe-area-inset-bottom) + 12px); }
+body.landscape #order { left: 12px; transform: none; top: auto; bottom: calc(var(--sa-bottom) + 12px); }
 
 /* ---------- Hinweis ---------- */
 #hint {
@@ -223,16 +224,16 @@ body.has-actions #actions .btn { min-height: 48px; }
   body.has-actions #order-progress .mx { line-height: 12px; margin: 1px 0; }
   body.has-actions #order-text { display: none; }
   body.has-actions #actions .btn { min-height: 44px; padding: 0 20px; font-size: 15px; }
-  body.has-actions #actions { bottom: calc(env(safe-area-inset-bottom) + 10px); }
+  body.has-actions #actions { bottom: calc(var(--sa-bottom) + 10px); }
   body.table-mode.has-actions:not(.landscape) { --ui-shift: 0px; }
 }
-body.landscape #hint { top: auto; bottom: calc(env(safe-area-inset-bottom) + 14px); }
+body.landscape #hint { top: auto; bottom: calc(var(--sa-bottom) + 14px); }
 body.landscape #hint:not(:empty) { left: auto; right: 12px; transform: none; max-width: 34vw; }
 body.table-mode { --ui-shift: 48px; }
 
 /* ---------- Schmelzen ---------- */
 .panel {
-  position: fixed; left: 14px; right: 14px; bottom: calc(env(safe-area-inset-bottom) + 16px); max-width: 420px; margin: 0 auto;
+  position: fixed; left: 14px; right: 14px; bottom: calc(var(--sa-bottom) + 16px); max-width: 420px; margin: 0 auto;
   border-radius: var(--r-card); padding: 16px 20px 18px; text-align: center;
   transition: transform .5s var(--ease), opacity .3s var(--ease);
 }
@@ -252,10 +253,10 @@ body.table-mode { --ui-shift: 48px; }
 }
 #oven.hidden #oven-bar::after { animation: none; }
 @keyframes sheen { from { transform: translateX(-60px); } to { transform: translateX(420px); } }
-body.oven-open #actions { bottom: calc(env(safe-area-inset-bottom) + 110px); }
+body.oven-open #actions { bottom: calc(var(--sa-bottom) + 110px); }
 
 #cut-progress {
-  position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top) + 128px);
+  position: fixed; left: 50%; transform: translateX(-50%); top: calc(var(--sa-top) + 128px);
   width: min(74vw, 320px); border-radius: 16px; padding: 9px 16px 11px; pointer-events: none; text-align: center;
 }
 #cut-label { font: 500 13px var(--f-body); color: var(--ink-2); margin-bottom: 7px; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
@@ -264,7 +265,7 @@ body.oven-open #actions { bottom: calc(env(safe-area-inset-bottom) + 110px); }
 
 /* ---------- Aktions-Knöpfe ---------- */
 #actions {
-  position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 14px);
+  position: fixed; left: 0; right: 0; bottom: calc(var(--sa-bottom) + 14px);
   display: flex; justify-content: center; gap: 10px; pointer-events: none; padding: 0 14px; z-index: 7;
   transition: opacity .3s;
 }
@@ -299,7 +300,7 @@ body.oven-open #actions { bottom: calc(env(safe-area-inset-bottom) + 110px); }
 }
 #pkg-picker.open { background: rgba(46, 32, 22, .4); pointer-events: auto; }
 #pkg-picker .sheet {
-  position: fixed; left: 10px; right: 10px; bottom: calc(env(safe-area-inset-bottom) + 10px); max-width: 640px; margin: 0 auto;
+  position: fixed; left: 10px; right: 10px; bottom: calc(var(--sa-bottom) + 10px); max-width: 640px; margin: 0 auto;
   padding: 20px 10px 12px; text-align: center; border-radius: 26px; box-shadow: inset 0 1px 0 #fff, var(--sh-3);
   transform: translateY(110%); opacity: 0; transition: transform .5s var(--ease), opacity .3s var(--ease);
 }
@@ -440,7 +441,7 @@ body.oven-open #actions { bottom: calc(env(safe-area-inset-bottom) + 110px); }
 
 /* ---------- Ergebnis-/Präsentationskarte ---------- */
 #quality {
-  position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 68px); z-index: 6; width: min(84vw, 300px);
+  position: fixed; left: 50%; top: calc(var(--sa-top) + 68px); z-index: 6; width: min(84vw, 300px);
   padding: 20px 22px 14px; text-align: center; pointer-events: none; border-radius: var(--r-card);
   transform: translate(-50%, -12px); opacity: 0; transition: opacity .4s var(--ease), transform .6s var(--ease);
 }
@@ -465,7 +466,7 @@ body.oven-open #actions { bottom: calc(env(safe-area-inset-bottom) + 110px); }
 
 /* ---------- Seifenschrank (Vollbild, Walnuss mit Messing) ---------- */
 #cabinet {
-  position: fixed; inset: 0; z-index: 24; display: none; padding: calc(env(safe-area-inset-top) + 30px) 10px calc(env(safe-area-inset-bottom) + 10px);
+  position: fixed; inset: 0; z-index: 24; display: none; padding: calc(var(--sa-top) + 30px) 10px calc(var(--sa-bottom) + 10px);
   background: rgba(36, 24, 16, .62);
 }
 #cabinet.show { display: block; }
@@ -559,7 +560,7 @@ body.oven-open #actions { bottom: calc(env(safe-area-inset-bottom) + 110px); }
 /* ---------- Startbildschirm ---------- */
 #start {
   position: fixed; inset: 0; z-index: 40; display: flex; justify-content: center; overflow: hidden;
-  padding: calc(env(safe-area-inset-top) + 20px) 22px calc(env(safe-area-inset-bottom) + 22px);
+  padding: calc(var(--sa-top) + 20px) 22px calc(var(--sa-bottom) + 22px);
   opacity: 0; pointer-events: none; transition: opacity .55s var(--ease);
 }
 #start.open { opacity: 1; pointer-events: auto; }

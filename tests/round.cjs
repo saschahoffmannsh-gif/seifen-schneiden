@@ -7,6 +7,8 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const [VW, VH] = (process.env.VIEW || '420x860').split('x').map(Number);
   const p = await b.newPage({ viewport: { width: VW, height: VH }, deviceScaleFactor: 2 });
+  // Safe-Area simulieren (iPhone): SAFE=oben,unten in px, z. B. SAFE=47,34
+  if (process.env.SAFE) { const [st, sb] = process.env.SAFE.split(',').map(Number); await p.addInitScript(([st, sb]) => { document.addEventListener('DOMContentLoaded', () => { document.documentElement.style.setProperty('--sa-top', st + 'px'); document.documentElement.style.setProperty('--sa-bottom', sb + 'px'); }); }, [st, sb]); }
   const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
   await p.goto(url + '?fps=1');
   await p.waitForTimeout(2500);
