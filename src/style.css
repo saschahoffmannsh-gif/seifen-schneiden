@@ -359,3 +359,8 @@ body.table-mode #order-progress .mx { font-size: 11px; }
 #order-progress .mx-sum { letter-spacing: .3px; }
 .note-row { white-space: nowrap; }
 .note-pie { width: 64px; height: 64px; }
+
+/* Präsentation der fertigen Seife: dezente Vignette + warmer Schein in der Mitte */
+#vignette { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .8s ease;
+  background: radial-gradient(ellipse 60% 42% at 50% 40%, rgba(255,236,200,.18) 0%, rgba(255,236,200,0) 55%, rgba(40,22,10,.38) 100%); }
+#vignette.show { opacity: 1; }

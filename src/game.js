@@ -25,6 +25,7 @@ import { cabinetLayout } from './cabinet.js';
 import { save, applyUnlocks, BAR_SLICES, BAR_PRICE, STOCK_MAX } from './save.js';
 import { PKG_CATS, PACKAGE_TYPES } from './decor.js';
 import { Deco } from './deco.js';
+import { Showcase } from './showcase.js';
 import { DECO_ITEMS, DECO_GROUPS, phaseOf, groupOf } from './decoItems.js';
 import { DECO_SPOTS, DECO_Y, SHELF_Z } from './setting/wall.js';
 
@@ -62,6 +63,7 @@ export class Game {
       const st = this.state;
       const r = canvas.getBoundingClientRect();
       this.tapNdc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      if (st === 'unmolded') { this.showcase.down(e); return; }
       if (st === 'decorFill' || st === 'packed') {
         if (this.drag || this.deco.busy) return;
         // Deko-Regal antippen > gewählte Deko ziehen > (zu) Päckchen wegwischen
@@ -89,9 +91,9 @@ export class Game {
         if (this.packages.pick(this.tapNdc, this.camera) >= 0) this.openPicker();
       } else if (this.hitBar()) this.soapIntoPackage();
     });
-    window.addEventListener('pointermove', (e) => { if (this.drag) this.dragMove(e); else this.swipeMove(e); });
-    window.addEventListener('pointerup', (e) => { if (this.drag) this.dragEnd(e); else this.swipeEnd(e); });
-    window.addEventListener('pointercancel', (e) => { if (this.drag) this.dragEnd(e, true); else this.swipeEnd(e, true); });
+    window.addEventListener('pointermove', (e) => { if (this.showcase.move(e)) return; if (this.drag) this.dragMove(e); else this.swipeMove(e); });
+    window.addEventListener('pointerup', (e) => { if (this.showcase.up(e)) return; if (this.drag) this.dragEnd(e); else this.swipeEnd(e); });
+    window.addEventListener('pointercancel', (e) => { if (this.showcase.up(e)) return; if (this.drag) this.dragEnd(e, true); else this.swipeEnd(e, true); });
     // Deko: freigeschaltete aus dem Spielstand, 3D-Teile am Päckchen
     applyUnlocks(DECO_ITEMS, 'deco:');
     this.deco = new Deco(scene, packages);
@@ -130,6 +132,7 @@ export class Game {
       iridescence: 1, iridescenceIOR: 1.6, iridescenceThicknessRange: [180, 520], sheen: 0.6, sheenColor: 0xfff2f6, envMapIntensity: 1.6 }), 48);
     this.flakeMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 6), new THREE.MeshStandardMaterial({ color: '#e5c25c', roughness: 0.28, metalness: 1 }), 48);
     for (const m of [this.pearlMesh, this.flakeMesh]) { m.count = 0; m.frustumCulled = false; this.bar.add(m); }
+    this.showcase = new Showcase(scene);
 
     // Klick-Geräusch, wenn Würfel landen
     this.onCube = (x, y, z, r, g, b, id) => loose.spawn(x, y, z, r, g, b, id);
@@ -448,7 +451,8 @@ export class Game {
     this.price = q.price;
     this.buildBarBits();
     this.ui.showQuality(q);
-    this.ui.hint(q.stars === 3 ? `${this.order.customer} ist begeistert!` : q.stars === 2 ? 'Schöne Seife!' : 'Nicht ganz die Mischung …');
+    this.ui.hint((q.stars === 3 ? 'Perfekt!' : q.stars === 2 ? 'Schöne Seife!' : 'Fast …') + ' Dreh sie mit dem Finger 👆');
+    this.showcase.start(this.bar);
     this.ui.actions([{ label: `🪙 Verkaufen für ${this.price}`, alt: true, onClick: () => this.sell() }]);
     this.bar.scale.set(0.6, 0.6, 0.6); this.bar.rotation.set(0, 0, 0);
     this.state = 'unmolded';
@@ -534,6 +538,7 @@ export class Game {
   /** "Verkaufen": Schale verschwindet, die fertige Seife legt sich auf den Tisch. */
   sell() {
     if (this.state !== 'unmolded') return;
+    this.showcase.stop();
     this.ui.showQuality(null);
     if (this.quality) this.ui.setMixSummary(this.quality);
     this.state = 'toTable';
@@ -1004,13 +1009,16 @@ export class Game {
     if (t >= 1) this.toReveal();
   }
 
-  /** Fertige Seife hebt sich weich aus der Schale und dreht sich langsam. */
+  /** Präsentation: fertige Seife steigt in die Bildmitte, Licht + Funkeln, mit dem Finger drehbar. */
   updateBar(dt, time) {
-    this.barT = Math.min(1, this.barT + dt * 1.6);
+    this.barT = Math.min(1, this.barT + dt * 1.3);
     const e = 1 - Math.pow(1 - this.barT, 3);
-    const s = 0.6 + 0.4 * e + Math.sin(this.barT * Math.PI) * 0.08;
+    const s = 0.6 + 0.65 * e + Math.sin(this.barT * Math.PI) * 0.08;
     this.bar.scale.set(s, s, s);
-    this.bar.position.set(0, 0.25 + e * 1.0, 0.1);
-    this.bar.rotation.set(0.35 * e, time * 0.6, 0);
+    const y = 0.25 + e * 1.05 + Math.sin(time * 1.6) * 0.025 * e;
+    this.bar.position.set(0, y, 0.1);
+    const sc = this.showcase;
+    sc.update(dt, time, 0, y, 0.1);
+    this.bar.rotation.set(sc.pitch * e, sc.yaw, 0, 'YXZ');
   }
 }
