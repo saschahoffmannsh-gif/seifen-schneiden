@@ -1256,7 +1256,7 @@ export class Game {
       const mode = this.zoomTarget ? 1 : 0;
       if (mode !== this.vsMode) { this.vsMode = mode; this.vsKeep = 0; }
       this.vsKeep = (work || present) ? Math.max(this.vsKeep || 0, need) : 0;
-      this.viewShiftTarget = present ? -Math.min(this.vsKeep, H * 0.2) : Math.min(this.vsKeep, H * (mode ? 0.16 : 0.1));   // Nahaufnahme: etwas mehr Spielraum (Landestelle der Würfel)
+      this.viewShiftTarget = present ? -Math.min(this.vsKeep, H * 0.2) : Math.min(this.vsKeep, H * (mode ? 0.16 : 0.12));   // 0.12: Platz für höhere Zettel (Mehr-Seifen + Zusatz); Nahaufnahme: etwas mehr Spielraum (Landestelle der Würfel)
     }
     const prev = this.viewShift || 0;
     this.viewShift = damp(prev, this.viewShiftTarget || 0, 10, dt);

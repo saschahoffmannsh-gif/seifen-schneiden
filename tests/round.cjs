@@ -80,6 +80,11 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await p.waitForFunction(() => document.getElementById('cabinet').classList.contains('open'));
   await p.waitForTimeout(700);
   await p.screenshot({ path: out + '/17-schrank-offen.png' });
+  { const sc = await p.evaluate(() => { const gr = document.getElementById('cab-grid'), n = gr.querySelectorAll('.drawer').length, names = [...gr.querySelectorAll('.drawer')].map((b) => b.querySelector('.nm').textContent);
+      const sorted = names.slice().sort(new Intl.Collator('de', { sensitivity: 'base' }).compare);
+      const r0 = gr.scrollLeft; gr.scrollLeft = 1e5; const r1 = gr.scrollLeft; gr.scrollLeft = r0;
+      return { n, scrollW: gr.scrollWidth, w: gr.clientWidth, canScroll: r1 > 0, az: names.join() === sorted.join(), more: getComputedStyle(document.querySelector('.cab-more.right')).opacity }; });
+    console.log('cabinet scroll', JSON.stringify(sc)); if (!sc.canScroll || !sc.az) note('Schrank scroll/A–Z ' + JSON.stringify(sc)); }
   const wrong = await p.evaluate(() => { const g = window.__game; return [...document.querySelectorAll('#cab-grid .drawer.soap')].findIndex((b) => !g.order.soaps.includes(b._d.soap)); });
   await p.click(`#cab-grid .drawer.soap >> nth=${wrong}`); await p.waitForTimeout(150);
   console.log('wrong drawer ->', await p.$eval('#cab-msg', (e) => e.textContent));
@@ -94,17 +99,14 @@ const out = process.argv[3] || '/workspace/seifen-shots';
     console.log('picked', order[s], '->', await p.$eval('#cab-find', (e) => e.textContent));
     if (s === 0) {
       await p.screenshot({ path: out + '/19-schublade-gefunden.png' });
-      expect('1x', await cnt(idx), { badge: '1', take: 1, minus: true, ok: true, done: 'aus' });
-      const bars = await p.evaluate((idx) => { const b = document.querySelectorAll('#cab-grid .drawer')[idx]; return window.__game.barsInStock(b._d.soap); }, idx);
+      expect('1x', await cnt(idx), { badge: '1', take: 1, minus: true, done: 'an' });
+      // Schrank ist unendlich: kein Maximum aus dem Vorrat, weiter tippen zählt hoch
       await p.click(`#cab-grid .drawer >> nth=${idx}`); await p.waitForTimeout(500);
       await p.screenshot({ path: out + '/19b-zaehler-2.png' });
-      expect('2x', await cnt(idx), bars >= 2 ? { badge: '2', take: 2 } : { badge: '1', take: 1 });
-      for (let k = 2; k < bars; k++) { await p.click(`#cab-grid .drawer >> nth=${idx}`); await p.waitForTimeout(300); }
-      await p.click(`#cab-grid .drawer >> nth=${idx}`); await p.waitForTimeout(250);   // mehr als im Schrank liegt: Hinweis, Zähler bleibt
-      expect('max', await cnt(idx), { badge: String(bars), take: bars });
-      console.log('counter max msg', (await cnt(idx)).msg);
-      await p.waitForTimeout(1300);
-      for (let k = bars; k > 1; k--) { await p.click(`#cab-grid .drawer >> nth=${idx} >> .cnt-minus`); await p.waitForTimeout(350); }
+      expect('2x', await cnt(idx), { badge: '2', take: 2 });
+      await p.click(`#cab-grid .drawer >> nth=${idx}`); await p.waitForTimeout(400);
+      expect('3x', await cnt(idx), { badge: '3', take: 3, msg: '' });
+      for (let k = 3; k > 1; k--) { await p.click(`#cab-grid .drawer >> nth=${idx} >> .cnt-minus`); await p.waitForTimeout(350); }
       expect('minus', await cnt(idx), { badge: '1', take: 1 });
       await p.click(`#cab-grid .drawer >> nth=${idx} >> .cnt-minus`); await p.waitForTimeout(350);
       expect('null', await cnt(idx), { badge: '', take: 0, minus: false });
@@ -177,18 +179,17 @@ const out = process.argv[3] || '/workspace/seifen-shots';
       if (await g() === 'cutting') await p.locator('#actions button', { hasText: 'Fertig' }).click();
       await p.waitForFunction(() => window.__game.state === 'shelf', null, { timeout: 30000 }); await p.waitForTimeout(400);
     }
-    console.log('soap', order[s], 'swipes', n, 'mix', await p.evaluate(() => { const g = window.__game; return g.order.mix.map((m) => `${m.soap.name} ${g.pcts[m.soap.id].toFixed(1)}%/${m.pct} Vorrat ${g.stockOf(m.soap.id)}`).join(', ') + ` Form ${g.fillPct.toFixed(1)}`; }));
+    console.log('soap', order[s], 'swipes', n, 'mix', await p.evaluate(() => { const g = window.__game; return g.order.mix.map((m) => `${m.soap.name} ${g.pcts[m.soap.id].toFixed(1)}%/${m.pct} Regal ${g.slicesLeft(m.soap.id)} Scheiben`).join(', ') + ` Form ${g.fillPct.toFixed(1)}`; }));
   }
   for (let k = 0; k < 60 && await p.evaluate(() => window.__game.loose.activeCount) > 0; k++) await p.waitForTimeout(1000);
   await p.screenshot({ path: out + '/6-haufen-beide.png' });
   const spread = await p.evaluate(() => { const l = window.__game.loose; return { used: l.used, active: l.activeCount, fps: document.getElementById('fps').textContent }; });
   console.log('pile', JSON.stringify(spread));
-  // Vorrat im Schrank (Reste sind wieder drin)
-  await p.mouse.click(VW / 2, 12);
-  await p.waitForFunction(() => document.getElementById('cabinet').classList.contains('open')); await p.waitForTimeout(800);
-  await p.screenshot({ path: out + '/27-schrank-vorrat.png' });
-  console.log('drawer stock', await p.evaluate(() => { const g = window.__game; return g.order.soaps.map((s) => s.name + ':' + [...document.querySelectorAll('#cab-grid .drawer.soap')].filter((b) => b._d.soap === s).map((b) => b.querySelector('.stk i').style.width).join('/')).join(' '); }));
-  await p.click('#cab-close'); await p.waitForFunction(() => window.__game.state === 'shelf', null, { timeout: 20000 }); await p.waitForTimeout(400);
+  // Schrank ist nach „Ins Regal stellen“ für diesen Auftrag zu: sanfter Hinweis, kein Öffnen
+  await p.mouse.click(VW / 2, 12); await p.waitForTimeout(700);
+  { const lk = await p.evaluate(() => [document.getElementById('cabinet').classList.contains('open'), window.__game.state, document.getElementById('hint').textContent]);
+    console.log('cabinet locked after cut', JSON.stringify(lk)); if (lk[0] || !/Erst nach diesem Auftrag/.test(lk[2])) note('Schrank nicht gesperrt ' + JSON.stringify(lk)); }
+  await p.screenshot({ path: out + '/27-schrank-zu.png' });
   // Zusätze: Perlen freischalten (Test-Münzen) und zusammen mit Lavendelöl in die Masse
   await p.evaluate(() => { const g = window.__game; g.coins += 300; g.ui.setCoins(g.coins); });
   await p.locator('#actions button', { hasText: 'Zusätze' }).click(); await p.waitForTimeout(900);
@@ -338,6 +339,110 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   console.log('earned', await p.evaluate(() => window.__game.lastEarned), 'expected', before[1] + before[2] + before[3]);
   console.log('after send', await g(), 'coins', await p.evaluate(() => window.__game.coins), 'hint', await p.$eval('#hint', (e) => e.textContent), 'notes', JSON.stringify(await p.evaluate(() => window.__game.notes.orders.map((o) => o && o.customer))));
   await p.screenshot({ path: out + '/11-naechste-bestellung.png' });
+
+  // ---------- Auftrag mit 2+ Seifen gewinnen ----------
+  const shelfPtM = (i) => p.evaluate((i) => { const g = window.__game; const v = g.shelf.home[i].clone().project(g.camera); return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight }; }, i);
+  const drawerIdx = (name) => p.evaluate((name) => [...document.querySelectorAll('#cab-grid .drawer')].findIndex((b) => b._d.kind === 'soap' && b._d.soap.name === name), name);
+  const takeFromCab = async (list) => {
+    await p.mouse.click(VW / 2, 12); await p.waitForFunction(() => document.getElementById('cabinet').classList.contains('open')); await p.waitForTimeout(700);
+    for (const [name, n] of list) { const i = await drawerIdx(name); await p.$eval(`#cab-grid .drawer:nth-child(${i + 1})`, (e) => e.scrollIntoView({ block: 'center', inline: 'center' })); await p.waitForTimeout(300);
+      for (let k = 0; k < n; k++) { await p.click(`#cab-grid .drawer >> nth=${i}`); await p.waitForTimeout(300); } }
+    await p.click('#cab-done');
+  };
+  const cutSort = async (shelfIdx, slices) => {
+    const pt = await shelfPtM(shelfIdx); await p.mouse.click(pt.x, pt.y);
+    await p.waitForFunction(() => window.__game.state === 'cutting', null, { timeout: 30000 });
+    await p.waitForFunction(() => { const c = window.__game.testCutPx(); return c.zoom >= 1 && c.tilt >= 1; }, null, { timeout: 30000 }); await p.waitForTimeout(300);
+    for (let n = 0, t0 = Date.now(); n < 60 && Date.now() - t0 < 240000;) {   // n = Wische (Warten aufs Messer zählt nicht)
+      const st = await p.evaluate(() => { const g = window.__game; return [g.state, g.slicesCut + (g.returning ? 0 : g.sliceProgress), g.returning]; });
+      if (st[0] !== 'cutting' || st[1] >= slices - 1e-3) break;
+      if (st[2]) { await p.waitForTimeout(80); continue; }
+      n++;
+      const geo = await p.evaluate(() => window.__game.testCutPx());
+      const lx = (yy) => geo.restX + (geo.botX - geo.restX) * (yy - geo.rest) / (geo.bot - geo.rest), y0 = geo.rest - 12, dy = (geo.top - geo.rest) + 1.08 * (geo.bot - geo.top);
+      await p.mouse.move(lx(y0), y0); await p.mouse.down(); await p.mouse.move(lx(y0 + dy), y0 + dy, { steps: 8 }); await p.mouse.up(); await p.waitForTimeout(120);
+    }
+    if (await g() === 'cutting') await p.locator('#actions button', { hasText: 'Fertig' }).click();
+    await p.waitForFunction(() => ['shelf', 'failed'].includes(window.__game.state), null, { timeout: 30000 });
+    await p.waitForFunction(() => { const g = window.__game; return g.shelf.back < 0 && g.testCutPx().zoom <= 0.001 && Math.abs((g.viewShift || 0) - (g.viewShiftTarget || 0)) < 1; }, null, { timeout: 30000 }).catch(() => {});
+    await p.waitForTimeout(400);
+    const sc = await p.evaluate(() => [window.__game.state, JSON.stringify([...window.__game.supply])]); console.log(' cut ->', sc.join(' '));
+  };
+  const finishItem = async (k) => {
+    for (let q = 0; q < 60 && await p.evaluate(() => window.__game.loose.activeCount) > 0; q++) await p.waitForTimeout(1000);
+    await p.locator('#actions button', { hasText: 'Schmelzen' }).click(); await p.waitForTimeout(500);
+    if (await g() === 'addSheet') {   // gewünschter Zusatz: aus dem Blatt nehmen, dann schmelzen
+      const want = await p.evaluate(() => window.__game.order.additive && window.__game.order.additive.name);
+      const c = p.locator('#pkg-list .pkg-card', { hasText: want || '###' }).first();
+      if (want && await c.count()) { await c.scrollIntoViewIfNeeded(); await c.click(); await p.waitForTimeout(600); } else { await p.click('#pkg-close'); await p.waitForTimeout(300); }
+      if (await g() === 'addSheet') { await p.click('#pkg-close'); await p.waitForTimeout(300); }
+      await p.locator('#actions button', { hasText: 'Schmelzen' }).click(); await p.waitForTimeout(500);
+    }
+    for (let q = 0; q < 150 && (await g()) !== 'reveal'; q++) await p.waitForTimeout(1000);
+    await p.click('#actions button'); await p.waitForFunction(() => document.getElementById('pkg-picker').classList.contains('open')); await p.waitForTimeout(500);
+    { const want = await p.evaluate(() => window.__game.order.shape.name); const names = await p.$$eval('#pkg-list .pkg-card .pkg-name', (n) => n.map((x) => x.textContent));
+      await p.locator('#pkg-list .pkg-card').nth(names.indexOf(want)).click(); }
+    await p.waitForTimeout(1500);
+    if (k === 0) { await p.screenshot({ path: out + '/31-multi-seife1-fertig.png' }); await chk('multi-praesentation'); }
+    await p.click('#actions button'); await waitState('pickPkg'); await p.waitForTimeout(400);
+    let q = await screenOf('g.packages.home[0]'); await p.mouse.click(q.x, q.y); await waitState('picker'); await p.waitForTimeout(500);
+    await p.click('#pkg-list .pkg-card:not(.locked) >> nth=0'); await waitState('pickSoap'); await p.waitForTimeout(300);
+    q = await screenOf('g.bar.position'); await p.mouse.click(q.x, q.y); await waitState('decorFill'); await p.waitForTimeout(400);
+    q = await p.evaluate(() => window.__game.testPx('lid')); await p.mouse.click(q.x, q.y); await waitState('packed'); await p.waitForTimeout(500);
+    const val = await p.evaluate(() => window.__game.price + window.__game.pkgType.bonus + window.__game.deco.bonus);
+    q = await screenOf('g.packages.home[0].clone().set(0.5, 0.1, -0.34)');
+    await p.mouse.move(q.x, q.y); await p.mouse.down(); await p.mouse.move(q.x - 60, q.y, { steps: 4 }); await p.mouse.move(q.x - 200, q.y + 10, { steps: 4 }); await p.mouse.up();
+    return val;
+  };
+  {
+    const mi = await p.evaluate(() => window.__game.notes.orders.findIndex((o) => o && o.items.length > 1));
+    const info = await p.evaluate((i) => { const o = window.__game.notes.orders[i]; return { items: o.items.map((it) => it.mix.map((m) => `${m.soap.name} ${m.pct}`).join('+')), total: o.total }; }, mi);
+    console.log('multi order', mi, JSON.stringify(info)); if (mi < 0) note('kein Mehr-Seifen-Auftrag am Brett');
+    np = await noteAt(mi); await p.mouse.click(np.x, np.y); await p.waitForTimeout(500);
+    await p.screenshot({ path: out + '/30-multi-zettel.png' });
+    await p.click('#note-accept'); await p.waitForTimeout(600);
+    const need = await p.evaluate(() => { const g = window.__game; return [...window.__barsNeeded(g.order)].map(([id, n]) => [g.order.items.flatMap((it) => it.mix).find((m) => m.soap.id === id).soap.name, n]); });
+    console.log('multi need', JSON.stringify(need));
+    const coins0 = await p.evaluate(() => window.__game.coins);
+    await takeFromCab(need);
+    await p.waitForFunction(() => window.__game.state === 'shelf', null, { timeout: 60000 }); await p.waitForTimeout(600);
+    await p.screenshot({ path: out + '/30b-multi-regal.png' }); await chk('multi-regal');
+    const n = await p.evaluate(() => window.__game.order.items.length); let sum = 0;
+    for (let k = 0; k < n; k++) {
+      const plan = await p.evaluate(() => { const g = window.__game; return g.order.mix.map((m) => [g.shelf.soaps.indexOf(m.soap), m.pct, m.soap.name, m.soap.id]); });
+      console.log('multi soap', k + 1, 'plan', JSON.stringify(plan), 'order', await p.$eval('#order', (e) => e.textContent.replace(/\s+/g, ' ').trim()));
+      // je Sorte schneiden, bis der Anteil stimmt; ist das vorderste Stück alle, rückt das nächste nach -> erneut antippen
+      for (const [si, pct, , id] of plan) for (let r = 0; r < 3; r++) {
+        const have = await p.evaluate((id) => window.__game.pcts[id] || 0, id);
+        if (have >= pct - 4 || await g() !== 'shelf') break;
+        await cutSort(si, Math.ceil((pct - have - 4) / 10));
+      }
+      if (await g() === 'failed') { note('Mehr-Seifen-Auftrag gescheitert ' + await p.$eval('#fail-why', (e) => e.textContent)); break; }
+      if (k === 0) { await p.mouse.click(VW / 2, 12); await p.waitForTimeout(600); console.log('multi cabinet still locked', !(await p.evaluate(() => document.getElementById('cabinet').classList.contains('open')))); }
+      sum += await finishItem(k);
+      if (k < n - 1) { await waitState('shelf'); await p.waitForTimeout(800); console.log('multi next', await p.$eval('#hint', (e) => e.textContent), 'pending', await p.evaluate(() => window.__game.pending)); if (k === 0) await p.screenshot({ path: out + '/32-multi-seife2.png' }); }
+    }
+    await waitState('choose'); await p.waitForTimeout(1200);
+    const res = await p.evaluate(() => [window.__game.lastEarned, window.__game.coins]);
+    console.log('multi earned', res[0], 'expected', sum, 'coins', coins0, '->', res[1], res[0] === sum && res[1] - coins0 === sum ? 'ok' : 'FEHLER');
+    if (res[0] !== sum) note('Mehr-Seifen-Auszahlung');
+    await p.screenshot({ path: out + '/33-multi-gewonnen.png' });
+  }
+  // ---------- Fehlschlag: zu wenig Seife genommen ----------
+  {
+    const mi = await p.evaluate(() => window.__game.notes.orders.findIndex((o) => o && o.items.length > 1));
+    np = await noteAt(mi); await p.mouse.click(np.x, np.y); await p.waitForTimeout(500); await p.click('#note-accept'); await p.waitForTimeout(600);
+    const first = await p.evaluate(() => window.__game.order.items[0].mix[0].soap.name);
+    await takeFromCab([[first, 1]]);
+    await p.waitForFunction(() => document.getElementById('fail').classList.contains('open'), null, { timeout: 30000 }); await p.waitForTimeout(700);
+    const f = await p.evaluate(() => [window.__game.state, document.getElementById('fail-title').textContent, document.getElementById('fail-why').textContent]);
+    console.log('fail', JSON.stringify(f)); if (f[0] !== 'failed') note('kein Fehlschlag');
+    await p.screenshot({ path: out + '/34-nicht-genug.png' });
+    await p.click('#fail-retry'); await p.waitForTimeout(900);
+    const r = await p.evaluate(() => [window.__game.state, window.__game.stocked, window.__game.take.size, window.__game.order && window.__game.order.cur]);
+    console.log('retry', JSON.stringify(r)); if (r[1] || r[2]) note('Nochmal versuchen setzt nicht zurück');
+    await p.screenshot({ path: out + '/35-nochmal.png' }); await chk('nochmal');
+  }
   console.log('overlaps', JSON.stringify(overlaps));
   console.log('errors', errs);
   await b.close();
