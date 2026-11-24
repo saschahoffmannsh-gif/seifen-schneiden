@@ -83,7 +83,7 @@ html, body { background: #ffd9ea; font-family: var(--f-body); color: var(--ol); 
 .btn.link::before { display: none; }
 .btn.link:active { transform: scale(.96); box-shadow: none; }
 .btn.small { min-height: 44px; padding: 0 18px 2px; font-size: 16px; }
-.btn.big { width: min(100%, 310px); min-height: 64px; font-size: 24px; letter-spacing: .03em; }
+.btn.big { width: min(100%, 310px); min-height: 64px; font-size: clamp(19px, 6.2vw, 24px); letter-spacing: .02em; white-space: nowrap; }
 .btn.big .ic { width: 22px; height: 22px; }
 #actions .btn { animation: btnPop .5s var(--ease-back) both; }
 @keyframes btnPop { 0% { transform: translateY(18px) scale(.7); opacity: 0; } 100% { transform: none; opacity: 1; } }
@@ -393,3 +393,16 @@ body.has-actions #hint:not(:empty) { padding: 4px 13px 5px; font-size: 13px; }
 .col-bar i { border-radius: 6px; box-shadow: inset 0 0 0 2px var(--ol); }
 .col-n { font: 400 22px var(--f-display); color: var(--ol); }
 .col-coins { font: 600 15px var(--f-body); color: var(--ol); border-top: 2px dashed var(--ol-b); }
+
+/* ---------- Feinschliff nach Screenshots (390) ---------- */
+.m-card, .unlock-card, .big-note, #quality, #pkg-picker .sheet, .fail-card { isolation: isolate; }   /* Ribbon-Enden immer sichtbar */
+.set-ic { flex-shrink: 0; }
+.switch { position: relative; }
+.switch::after { content: ''; position: absolute; inset: -8px -4px; }                 /* Trefferfläche ≥ 44 px */
+.drawer.cnt-edit .cnt-minus::before { inset: -8px; }                                  /* 44 × 44 */
+#pkg-tabs .tab { min-height: 44px; }
+#q-stars .qs { width: 62px; height: 62px; }
+#q-stars .qs:nth-child(2) { width: 82px; height: 82px; margin-bottom: 12px; }
+.set-lab { flex: 1; min-width: 0; }
+#set-reset { flex-shrink: 0; padding: 0 14px 2px; font-size: 15px; }
+@media (max-width: 370px) { .set-row { gap: 9px; } .set-lab { font-size: 17px; } }
