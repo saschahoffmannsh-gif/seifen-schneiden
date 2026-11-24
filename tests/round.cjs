@@ -25,6 +25,8 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   // Layout-Prüfung: kein sichtbares UI-Element darf Seife/Schale/Päckchen/Deckel überdecken
   const overlaps = [];
   const chk = async (label) => {
+    // Ruhelage abwarten: das Bild gleitet weich aus dem Weg (viewShift gedämpft), geprüft wird der Endzustand
+    await p.waitForFunction(() => { const g = window.__game; return Math.abs((g.viewShift || 0) - (g.viewShiftTarget || 0)) < 1; }, null, { timeout: 4000 }).catch(() => {});
     const r = await p.evaluate(() => {
       const f = window.__game.focusRects();
       const sel = ['#coins', '#menu-btn', '#order', '#hint', '#actions', '#quality', '#cut-progress'];
