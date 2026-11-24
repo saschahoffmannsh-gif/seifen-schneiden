@@ -27,7 +27,7 @@ function init(c) {
   noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
   const d = noiseBuf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-  rain = null; voices.length = 0; lastGrain = -1; lastCut = -1; rate = 0; rateT = 0;
+  rain = null; slide = null; slideQuiet = 0; voices.length = 0; lastGrain = -1; lastCut = -1; rate = 0; rateT = 0;
 }
 
 /** Nur für Tests/Aufnahmen: eigenen (z. B. Offline-)Kontext verwenden. */
@@ -242,6 +242,36 @@ export function sndTick() {
     lastGrain = now;
     noise({ type: 'bandpass', f: rnd(450, 800), q: 1.2, gain: 0.03, a: 0.004, d: rnd(0.04, 0.06), lp: 1200 });
   }
+}
+
+/**
+ * Würfel rutschen über die schräge Seife: ganz leises, weiches Schaben (eine Rauschquelle, Pegel folgt
+ * der Anzahl rutschender Würfel, sättigt). Pro Bild aufgerufen; ohne Rutschen verstummt es und stoppt.
+ */
+let slide = null, slideQuiet = 0;
+export function sndSlide(n) {
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  if (n <= 0) {
+    if (!slide) return;
+    if (!slideQuiet) { slideQuiet = now; slide.g.gain.setTargetAtTime(0, now, 0.06); }
+    else if (now - slideQuiet > 0.5) { try { slide.src.stop(); } catch { /* schon gestoppt */ } slide = null; slideQuiet = 0; }
+    return;
+  }
+  slideQuiet = 0;
+  if (!slide) {
+    const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+    src.playbackRate.value = 0.9 + Math.random() * 0.2;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1300; bp.Q.value = 0.6;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400;
+    const g = ctx.createGain(); g.gain.value = 0;
+    src.connect(bp); bp.connect(lp); lp.connect(g); g.connect(bus);
+    src.start();
+    slide = { src, g, bp };
+  }
+  const level = 0.0042 * (1 - Math.exp(-n / 60));             // deutlich unter Schnitt und Rieseln
+  slide.g.gain.setTargetAtTime(level, now, 0.05);
+  slide.bp.frequency.setTargetAtTime(1150 + Math.min(n, 200) * 1.5, now, 0.1);   // mehr Würfel = minimal heller
 }
 
 /** Messer löst eine Reihe: weiches, dumpfes „Schff“ – mit Mindestabstand und Stimmenlimit. */

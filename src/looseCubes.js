@@ -110,6 +110,7 @@ export class LooseCubes {
 
   /** Ein fester Physik-Schritt der Länge h für alle fliegenden Würfel. */
   step(h) {
+    this.slideN = 0;                     // Würfel, die gerade über die Schräge rutschen (für das leise Rutschgeräusch)
     if (this.activeCount === 0) return;
     const P = this.pos, V = this.vel, R = this.rot, S = this.spin;
     const g = PHYS.gravity * h;
@@ -142,6 +143,7 @@ export class LooseCubes {
           const f = Math.max(this.surfZ(ly - HALF * 0.8), this.surfZ(ly + HALF * 0.8));
           if (f > -1e8 && lz < f + HALF && lz > f - 0.3) {
             const m = sl.m;
+            this.slideN++;
             // Normale (Block +z) und Rutschrichtung (Block -y) in Weltkoordinaten
             const nx = m[8], ny = m[9], nz = m[10];
             const pen = f + HALF - lz;
@@ -153,7 +155,7 @@ export class LooseCubes {
             }
             // Gleitreibung (je Würfel etwas anders: manche rutschen, manche bremsen und kippen)
             const r01 = ((i * 0.6180339) % 1);
-            const mu = 0.22 + 0.3 * r01;
+            const mu = 0.15 + 0.72 * r01 * r01;                    // meist glatt, einige bremsen deutlich
             const ux = -m[4], uy = -m[5], uz = -m[6];             // hangabwärts
             const vt = V[o] * ux + V[o + 1] * uy + V[o + 2] * uz;
             const fr = mu * PHYS.gravity * h * Math.abs(ny);      // Normalkraft ~ g·cos(Neigung)
