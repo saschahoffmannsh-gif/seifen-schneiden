@@ -27,7 +27,9 @@ export function createBlockMaterial() {
     uRelief: { value: makeReliefTexture() },
     uReliefSlope: { value: RELIEF_SLOPE },
     uSnap: { value: CUBE / 2 },
+    uReliefOn: { value: 1 },          // 0 = keine Prägung (Motiv-Seifen)
   };
+  mat.userData.uniforms = uniforms;
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
@@ -84,11 +86,11 @@ export function createBlockMaterial() {
         if (useWorld) { mvPosition = modelViewMatrix * vec4(snapWorld, 1.0); gl_Position = projectionMatrix * mvPosition; }`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
-        uniform sampler2D uRelief; uniform float uReliefSlope;
+        uniform sampler2D uRelief; uniform float uReliefSlope; uniform float uReliefOn;
         varying float vShell; varying float vFront; varying vec2 vCubeUv; varying vec2 vFaceUv;`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         vec4 rel = vec4(0.5, 0.5, 0.0, 1.0);
-        if (vFront > 0.5) rel = texture2D(uRelief, vFaceUv);
+        if (vFront > 0.5 && uReliefOn > 0.5) rel = texture2D(uRelief, vFaceUv);
         // ganz leichte Licht-Verdeckung tief in der Mulde (Umgebungslicht kommt schlechter hinein)
         diffuseColor.rgb *= 1.0 - 0.05 * rel.b;
         // ganz feine Fugen: Würfelkanten nur minimal abgedunkelt (Raster ahnt man, sieht es aber kaum)

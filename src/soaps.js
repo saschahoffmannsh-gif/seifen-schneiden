@@ -1,4 +1,4 @@
-// Seifensorten: Farben und Muster für das Innenleben der Würfel.
+// Seifensorten: Name, Grundfarbe (UI, Mischfarbe) – Muster/Motive siehe soapLooks.js.
 
 
 const hex = (h) => [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
@@ -68,7 +68,3 @@ export const SOAPS = {
 export const SOAP_LIST = Object.values(SOAPS);
 export const SOAP_BY_ID = SOAP_LIST.slice().sort((a, b) => a.id - b.id);
 
-/** Jede Seife hat genau EINE Farbe (keine Marmorierung, keine Sprenkel). Schreibt sRGB in out. */
-export function cubeColor(soap, out) {
-  out[0] = soap.base[0]; out[1] = soap.base[1]; out[2] = soap.base[2];
-}

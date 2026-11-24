@@ -2,7 +2,7 @@
 // Geschnittene Würfel werden nur auf Skalierung 0 gesetzt (kein Erzeugen/Löschen von Meshes).
 import * as THREE from 'three';
 import { BLOCK, CUBE, BLOCK_BASE_Y, SLICES, SLICE_DEPTH } from './config.js';
-import { cubeColor } from './soaps.js';
+import { lookColor, hasMotif, lookRough } from './soapLooks.js';
 
 const _m = new THREE.Matrix4();
 const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -60,7 +60,7 @@ export class SoapBlock {
       if (k >= kz) { this.released[n] = 1; this.mesh.setMatrixAt(n, _zero); continue; }
       _m.makeScale(s, s, s).setPosition(this.cubeX(i), this.cubeY(j), this.cubeZ(k));
       this.mesh.setMatrixAt(n, _m);
-      cubeColor(soap, _rgb);
+      lookColor(soap, i, j, k, _rgb);   // Muster/Motiv der Sorte (Querschnitt läuft durchs ganze Stück)
       _c.setRGB(_rgb[0], _rgb[1], _rgb[2], THREE.SRGBColorSpace);
       this.mesh.setColorAt(n, _c);
       this.colors[n * 3] = _c.r; this.colors[n * 3 + 1] = _c.g; this.colors[n * 3 + 2] = _c.b;
@@ -71,6 +71,10 @@ export class SoapBlock {
         | (j > 0 ? 8 : 0) | (k < kz - 1 ? 16 : 0) | (k > 0 ? 32 : 0);
     }
     this.hidden.needsUpdate = true;
+    // Glanz je Sorte (Honig glänzt, Aktivkohle matt); Motiv-Seifen ohne Prägung (das Motiv ist die Vorderseite)
+    const mat = this.mesh.material;
+    mat.roughness = lookRough(soap);
+    if (mat.userData.uniforms) mat.userData.uniforms.uReliefOn.value = hasMotif(soap) ? 0 : 1;
     this.mesh.instanceMatrix.needsUpdate = true;
     this.mesh.instanceColor.needsUpdate = true;
     this.slice = kz / SLICE_DEPTH - 1;  // vorderste vorhandene Scheibe (Kamera-Seite)

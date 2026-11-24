@@ -1,6 +1,7 @@
 // DOM-Oberfläche: Bestellung (unter der Schale), Münzen, Knöpfe, schwebende Texte, FPS.
 
 import { soapCss } from './cabinet.js';
+import { soapThumb } from './soapLooks.js';
 import { sndCoins } from './audio.js';
 import { shapeIconURL } from './shapes.js';
 import { ICON, rich, buttonLabel } from './icons.js';
@@ -262,7 +263,7 @@ export function createUI() {
           b.className = 'drawer ' + d.kind;
           const col = d.kind === 'soap' ? soapCss(d.soap) : d.kind === 'locked' ? d.color : 'transparent';
           const name = d.kind === 'soap' ? d.soap.name : d.kind === 'locked' ? d.name : 'leer';
-          const look = d.kind === 'soap' && this.soapThumb ? `url(${this.soapThumb(d.soap)})` : col;   // Seifen-Look (Muster/Motiv) als Bildchen
+          const look = d.kind === 'soap' ? `url(${soapThumb(d.soap)})` : col;   // Seifen-Look (Muster/Motiv) als Bildchen
           b.innerHTML = `<span class="soap-pop" style="background:${look}"></span><span class="lab"><span class="dot" style="background:${look}"></span><span class="nm${name.length > 9 ? ' long' : ''}">${name}</span>`
             + '</span><span class="pull"></span>'
             + (d.kind === 'soap' ? '<span class="cnt" aria-live="polite"><small>×</small><b>0</b></span><span class="cnt-minus" role="button" aria-label="Ein Stück zurücklegen"></span>' : '');

@@ -8,6 +8,7 @@ import { BLOCK, CUBE, BLOCK_BASE_Y, SOAP_RADIUS } from './config.js';
 import { makeReliefTexture, RELIEF_SLOPE } from './relief.js';
 import { makeBlobTexture } from './setting/textures.js';
 import { MIDDLE_SHELF, SHELF_Z } from './setting/wall.js';
+import { makeFaceAtlas, hasMotif, ATLAS_COLS, ATLAS_ROWS } from './soapLooks.js';
 
 const MAX = 4;
 const SPARE_SHOWN = 4;                // so viele Ersatzstücke je Sorte werden hinter dem vordersten gezeigt
@@ -54,7 +55,26 @@ export class ShelfSoaps {
     nmap.offset.set(r / BW, r / BH);
     const faceMat = mat.clone();
     faceMat.normalMap = nmap;
-    this.face = new THREE.InstancedMesh(new THREE.PlaneGeometry(BW - 2 * r, BH - 2 * r), faceMat, MAX);
+    // Vorderseite zeigt den Seifen-Look (Muster/Motiv) aus einem Atlas: Kachel je Instanz (aTile),
+    // aTile >= 100 = Motiv-Seife ohne Prägung. Weiterhin ein einziger Draw Call.
+    const atlas = new THREE.CanvasTexture(makeFaceAtlas(r / CUBE));
+    atlas.colorSpace = THREE.SRGBColorSpace; atlas.anisotropy = 4;
+    faceMat.map = atlas;
+    faceMat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float aTile; varying float vNoRelief;')
+        .replace('#include <uv_vertex>', `#include <uv_vertex>
+          { float t = mod(aTile, 100.0); float c = mod(t, ${ATLAS_COLS}.0), rr = floor(t / ${ATLAS_COLS}.0);
+            vMapUv = vec2((c + uv.x) / ${ATLAS_COLS}.0, (${ATLAS_ROWS - 1}.0 - rr + uv.y) / ${ATLAS_ROWS}.0);
+            vNoRelief = aTile >= 99.5 ? 1.0 : 0.0; }`);
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying float vNoRelief;')
+        .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n  if (vNoRelief > 0.5) normal = nonPerturbedNormal;');
+    };
+    const faceGeo = new THREE.PlaneGeometry(BW - 2 * r, BH - 2 * r);
+    this.tile = new THREE.InstancedBufferAttribute(new Float32Array(MAX), 1);
+    faceGeo.setAttribute('aTile', this.tile);
+    this.face = new THREE.InstancedMesh(faceGeo, faceMat, MAX);
     this.faceOffset = new THREE.Matrix4().makeTranslation(0, 0, BD / 2 + 0.002);
     const blobMat = new THREE.MeshBasicMaterial({ map: makeBlobTexture(), transparent: true, depthWrite: false });
     this.blob = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), blobMat, MAX);
@@ -92,12 +112,13 @@ export class ShelfSoaps {
       if (!soap || (fracs && fracs[i] === 0)) { this.hide(i); continue; }   // Sorte ganz aufgebraucht
       this.home[i].set((i - (n - 1) / 2) * SPACING, MIDDLE_SHELF.y + BH * SHELF_SCALE / 2, SHELF_Z);
       _c.setRGB(soap.base[0], soap.base[1], soap.base[2], THREE.SRGBColorSpace);
-      this.body.setColorAt(i, _c); this.face.setColorAt(i, _c);
+      this.body.setColorAt(i, _c); this.face.setColorAt(i, _c.set(1, 1, 1));
+      this.tile.array[i] = soap.id + (hasMotif(soap) ? 100 : 0);
       this.place(i, this.home[i], SHELF_SCALE);
       _m.compose(_p.set(this.home[i].x, MIDDLE_SHELF.y + 0.003, SHELF_Z), _q.identity(), _s.set(BW * SHELF_SCALE * 1.7, 1, BD * SHELF_SCALE * 2.6));
       this.blob.setMatrixAt(i, _m);
     }
-    this.body.instanceColor.needsUpdate = true; this.face.instanceColor.needsUpdate = true;
+    this.body.instanceColor.needsUpdate = true; this.face.instanceColor.needsUpdate = true; this.tile.needsUpdate = true;
     this.blob.instanceMatrix.needsUpdate = true;
   }
 

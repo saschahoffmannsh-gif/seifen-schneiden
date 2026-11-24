@@ -4,6 +4,15 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { lookCanvas } from './soapLooks.js';
+import { SOAPS } from './soaps.js';
+
+/** Seifen-Look als Farbtextur (weich gefiltert): dieselben Muster wie im Spiel. */
+function lookTex(soap, w, h, x0, x1, y0, y1) {
+  const t = new THREE.CanvasTexture(lookCanvas(soap, w, h, x0, x1, y0, y1));
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return t;
+}
 
 /** Planare Draufsicht-UVs (x/z), damit die Prägung nur oben mittig sitzt und die Seiten frei bleiben. */
 function topUV(geo, w, d) {
@@ -151,9 +160,11 @@ export function createStartScene(canvas) {
   // 2) Kiesel (salbei)
   const pebGeo = topUV(new THREE.SphereGeometry(1, 64, 40), 2, 2);
   const pebMat = soapMat(0xa7b98f, 0xeef8e4, null, 9);
+  pebMat.map = lookTex(SOAPS.minze, 128, 128, 0, 15, 4.5, 19.5); pebMat.color.set(0xffffff); pebMat.emissive.set(0x0a1612);   // Minz-Marmor
   const peb = new THREE.Mesh(pebGeo, pebMat); peb.scale.set(0.64, 0.27, 0.46);
   // 3) Runde Seife (Hafer/Creme, geprägt)
   const puckMat = soapMat(0xe9d4b0, 0xfff6e6, null, 10);
+  puckMat.map = lookTex(SOAPS.orange, 96, 96, 0, 15, 4.5, 19.5); puckMat.color.set(0xffffff); puckMat.emissive.set(0x140a02);   // Orangenscheibe
   const puck = new THREE.Mesh(puckGeometry(), puckMat);
 
   const shTex = shadowTexture();
@@ -171,7 +182,6 @@ export function createStartScene(canvas) {
   const fontsReady = document.fonts && document.fonts.load ? Promise.all([document.fonts.load(font(70)), document.fonts.load('600 20px "DM Sans"')]).catch(() => {}) : Promise.resolve();
   fontsReady.then(() => {
     barMat.bumpMap = makeBarBump(); barMat.bumpScale = 11; barMat.needsUpdate = true;
-    puckMat.bumpMap = makePuckBump(); puckMat.needsUpdate = true;
     pebMat.bumpMap = makePebbleBump(); pebMat.needsUpdate = true;
   });
 

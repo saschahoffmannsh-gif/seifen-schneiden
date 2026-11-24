@@ -745,3 +745,6 @@ body.menu-open #hud * { pointer-events: none; }
 #fail-rule { margin: 10px 0 16px; padding: 9px 12px; border-radius: 12px; background: #f6eddd; border: 1px solid var(--gold-l); font: italic 400 13.5px/1.35 var(--f-display); color: var(--ink-2); }
 #fail-retry { width: 100%; }
 #fail-other { margin-top: 4px; }
+/* Seifen-Look im Fach: kleines Stück (Querschnitt) statt Farbpunkt */
+.drawer.soap .dot { width: 17px; height: 26px; border-radius: 5px; background-size: cover !important; background-position: center !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18), 0 1px 2px rgba(0, 0, 0, .25); }
