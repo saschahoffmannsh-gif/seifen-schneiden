@@ -1215,6 +1215,7 @@ export class Game {
     this.refreshMix();   // Mischungs-Balken live (DOM nur bei Änderung)
     this.knife.position.set(this.knifeX, this.knifeY, this.knifeZ);
     this.knife.rotation.z = this.knifeTilt;
+    this.knifeVy = dt > 0 ? (this.knifeY - prevY) / dt : 0;   // für die Würfel auf der Klinge (Block-y/s)
   }
 
   /** Finger (NDC) -> Punkt auf der Schnittebene in Block-Koordinaten (_hit). Ebene/Inverse vorher setzen. */
@@ -1239,6 +1240,9 @@ export class Game {
       sl.halfX = b.halfX; sl.topY = b.topY; sl.bottomY = b.bottomY;
       sl.cutZ = b.cutZ; sl.frontZ = b.frontZ; sl.uncutTop = b.topY - b.rowsCut * CUBE;
       sl.lipFrontZ = this.rig.lipFrontZ; sl.lipBottomY = this.rig.lipBottomY; sl.backZ = -b.halfZ - 0.02;
+      // Klinge steckt in der Scheibe (nicht beim Wechsel zur nächsten Scheibe): hebt die gelösten Würfel an
+      sl.bladeOn = this.state === 'cutting' && !this.returning && this.knife.visible && this.knifeY < b.topY;
+      sl.bladeZ = this.knifeZ; sl.bladeY = this.knifeY; sl.bladeVy = this.knifeVy || 0;
     }
     sndSlide(sl.on ? this.loose.slideN : 0);
     // Kamera: weich (smootherstep) zur Nahaufnahme und zurück

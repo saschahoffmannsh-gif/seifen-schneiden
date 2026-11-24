@@ -24,6 +24,15 @@ const NB_X = [1, -1, 0, 0, 1, 1, -1, -1];
 const NB_Z = [0, 0, 1, -1, 1, -1, 1, -1];
 const NB_W = [1, 1, 1, 1, Math.SQRT1_2, Math.SQRT1_2, Math.SQRT1_2, Math.SQRT1_2];
 
+// Klinge unter der Scheibe: hebt gerade gelöste Würfel leicht von der Schnittfläche ab
+export const BLADE = {
+  lift: 0.03,        // so weit stehen die Würfel auf der Klingenflanke von der Schnittfläche ab
+  ramp: 0.07,        // über diese Höhe hinter der Schneide wächst das Anheben (Keil der Klinge)
+  height: 0.17,      // Klingenhöhe (Schneide -> Rücken), wie in knife.js
+  push: 0.0028,      // max. Anheben pro Physik-Schritt (weich, kein Springen)
+  stick: [0.12, 0.32], // so lange liegen sie zunächst ruhig auf der Klinge (s), dann rutschen sie ab
+};
+
 const _m = new THREE.Matrix4();
 const _p = new THREE.Vector3();
 const _q = new THREE.Quaternion();
@@ -50,6 +59,7 @@ export class LooseCubes {
     this.cell = new Int16Array(MAX).fill(-1); // Höhenfeld-Zelle, auf der der Würfel liegt
     this.hops = new Uint8Array(MAX);
     this.hit = new Uint8Array(MAX);         // 1 = erster Aufprall schon hörbar gemacht
+    this.stick = new Float32Array(MAX);     // Restzeit „liegt auf der Klinge“ (s)
     this.lastCell = new Int16Array(MAX).fill(-1); // Zelle, auf der das Gefälle zuletzt geprüft wurde
     this.sliding = new Uint8Array(MAX);           // 1 = rutscht gerade zur nächsten Zelle          // wie oft der Würfel schon hangabwärts weitergerutscht ist
     this.heights = new Float32Array(GRID * GRID);
@@ -63,7 +73,8 @@ export class LooseCubes {
     // Schräg gekippte Seife (Schneiden): Schnittfläche als Rutsche, in Block-Koordinaten.
     // m = Block->Welt, inv = Welt->Block (Elemente einer Matrix4), Flächen-z abhängig von der Höhe.
     this.slope = { on: false, m: new Float32Array(16), inv: new Float32Array(16), halfX: 0, topY: 0, bottomY: 0,
-      cutZ: 0, frontZ: 0, uncutTop: 0, lipFrontZ: 0, lipBottomY: 0, backZ: 0 };
+      cutZ: 0, frontZ: 0, uncutTop: 0, lipFrontZ: 0, lipBottomY: 0, backZ: 0,
+      bladeOn: false, bladeZ: 0, bladeY: 0, bladeVy: 0 };   // Klinge: Ebene z, Höhe der Schneide, Geschwindigkeit (Block-y/s)
     this.dirtyMin = MAX; this.dirtyMax = -1;
     this.colMin = MAX; this.colMax = -1;
   }
@@ -87,9 +98,10 @@ export class LooseCubes {
     this.vel[o + 1] = -Math.random() * 0.15;
     this.vel[o + 2] = (Math.random() - 0.5) * 0.06;
     if (this.slope.on) {
-      // von der Klinge abgeschoben: etwas von der Fläche weg (Normale) und unterschiedlich schnell hangabwärts
-      const m = this.slope.m, pn = Math.random() * 0.35, pd = 0.1 + Math.random() * 0.5, ps = (Math.random() - 0.5) * 0.25;
-      this.vel[o] += m[8] * pn - m[4] * pd + ps; this.vel[o + 1] += m[9] * pn - m[5] * pd; this.vel[o + 2] += m[10] * pn - m[6] * pd;
+      // die Klinge fährt darunter: kaum Eigenbewegung, sie werden gleich sanft angehoben (siehe step)
+      const m = this.slope.m, pd = Math.random() * 0.06, ps = (Math.random() - 0.5) * 0.04;
+      this.vel[o] = ps - m[4] * pd; this.vel[o + 1] = -m[5] * pd; this.vel[o + 2] = -m[6] * pd;
+      this.stick[i] = this.slope.bladeOn ? BLADE.stick[0] + Math.random() * (BLADE.stick[1] - BLADE.stick[0]) : 0;
     }
     this.rot[o] = rotX; this.rot[o + 1] = 0; this.rot[o + 2] = 0;   // gekippte Seife: Würfel starten in ihrer Lage
     const k = this.slope.on ? 0.25 : 1;             // auf der Schräge liegen sie erst ruhig auf, dann rutschen/kippen sie
@@ -140,33 +152,53 @@ export class LooseCubes {
         const ly = e[1] * x + e[5] * y + e[9] * z + e[13];
         const lz = e[2] * x + e[6] * y + e[10] * z + e[14];
         if (lx > -sl.halfX - HALF * 0.4 && lx < sl.halfX + HALF * 0.4 && ly > sl.lipBottomY - HALF * 0.5 && ly < sl.topY + HALF && lz > sl.backZ) {
-          const f = Math.max(this.surfZ(ly - HALF * 0.8), this.surfZ(ly + HALF * 0.8));
+          let f = Math.max(this.surfZ(ly - HALF * 0.8), this.surfZ(ly + HALF * 0.8));
+          // Klinge: zwischen Schneide und Rücken liegt die Klingenflanke etwas vor der Schnittfläche;
+          // direkt hinter der Schneide wächst das Anheben (Keil) -> Reihe für Reihe heben sich die Würfel ab
+          let onBlade = false;
+          if (sl.bladeOn && ly > sl.bladeY && ly < sl.bladeY + BLADE.height + HALF && lz > sl.bladeZ - 0.02) {
+            const t = Math.min(1, (ly - sl.bladeY) / BLADE.ramp), bf = sl.bladeZ + BLADE.lift * t * t * (3 - 2 * t);
+            if (bf > f) { f = bf; onBlade = true; }
+          }
           if (f > -1e8 && lz < f + HALF && lz > f - 0.3) {
             const m = sl.m;
             this.slideN++;
             // Normale (Block +z) und Rutschrichtung (Block -y) in Weltkoordinaten
             const nx = m[8], ny = m[9], nz = m[10];
-            const pen = f + HALF - lz;
+            let pen = f + HALF - lz;
+            // von der Klinge nur sanft angehoben (begrenzter Weg pro Schritt), an Stufen wie bisher
+            if (onBlade && pen > BLADE.push) pen = BLADE.push;
             x += nx * pen; y += ny * pen; z += nz * pen;
             const vn = V[o] * nx + V[o + 1] * ny + V[o + 2] * nz;
             if (vn < 0) {
-              const k = 1 + (pen > HALF * 0.5 ? 0.45 : 0.12);    // über eine Stufe gehoben: kleiner Hüpfer
+              const k = onBlade ? 1 : 1 + (pen > HALF * 0.5 ? 0.45 : 0.12);    // über eine Stufe gehoben: kleiner Hüpfer
               V[o] -= k * vn * nx; V[o + 1] -= k * vn * ny; V[o + 2] -= k * vn * nz;
             }
-            // Gleitreibung (je Würfel etwas anders: manche rutschen, manche bremsen und kippen)
             const r01 = ((i * 0.6180339) % 1);
-            const mu = 0.15 + 0.72 * r01 * r01;                    // meist glatt, einige bremsen deutlich
             const ux = -m[4], uy = -m[5], uz = -m[6];             // hangabwärts
             const vt = V[o] * ux + V[o + 1] * uy + V[o + 2] * uz;
-            const fr = mu * PHYS.gravity * h * Math.abs(ny);      // Normalkraft ~ g·cos(Neigung)
-            const nv = vt > 0 ? Math.max(0, vt - fr) : Math.min(0, vt + fr);
+            let nv;
+            if (onBlade && this.stick[i] > 0) {
+              // liegt auf der Klinge: geht mit, wenn sie weiter nach unten fährt, sonst ruht er; wackelt minimal
+              this.stick[i] -= h;
+              const target = Math.max(0, -sl.bladeVy);
+              nv = vt + (target - vt) * 0.35;
+              V[o] *= 0.8;
+              S[o] = S[o] * 0.85 + (Math.random() - 0.5) * 1.4;
+              S[o + 1] *= 0.8; S[o + 2] = S[o + 2] * 0.85 + (Math.random() - 0.5) * 1.0;
+            } else {
+              // Gleitreibung (je Würfel etwas anders: manche rutschen, manche bremsen und kippen); Stahl ist glatter
+              const mu = onBlade ? 0.1 + 0.25 * r01 : 0.15 + 0.72 * r01 * r01;
+              const fr = mu * PHYS.gravity * h * Math.abs(ny);      // Normalkraft ~ g·cos(Neigung)
+              nv = vt > 0 ? Math.max(0, vt - fr) : Math.min(0, vt + fr);
+              V[o] *= 0.985;                                         // seitlich kaum Drift
+              // Kippen: ein Teil der Würfel überschlägt sich hangabwärts (Achse = Welt-x), der Rest rutscht flach
+              const roll = r01 > 0.45 ? -nv / CUBE * (0.35 + 0.5 * r01) : 0;
+              S[o] += (roll - S[o]) * 0.08;
+              S[o + 1] *= 0.9; S[o + 2] *= 0.9;
+              if (pen > HALF * 0.5) S[o] -= 6 + 8 * r01;              // Stufe: kippt nach vorne über
+            }
             V[o] += (nv - vt) * ux; V[o + 1] += (nv - vt) * uy; V[o + 2] += (nv - vt) * uz;
-            V[o] *= 0.985;                                         // seitlich kaum Drift
-            // Kippen: ein Teil der Würfel überschlägt sich hangabwärts (Achse = Welt-x), der Rest rutscht flach
-            const roll = r01 > 0.45 ? -nv / CUBE * (0.35 + 0.5 * r01) : 0;
-            S[o] += (roll - S[o]) * 0.08;
-            S[o + 1] *= 0.9; S[o + 2] *= 0.9;
-            if (pen > HALF * 0.5) S[o] -= 6 + 8 * r01;              // Stufe: kippt nach vorne über
           }
         }
       }
