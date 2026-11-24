@@ -11,8 +11,10 @@
 //  * kleine Bildchen für den Schrank.
 // Kosten: einmal beim Laden einer Seife 3600 Funktionsaufrufe, sonst nichts pro Frame.
 import { SOAP_BY_ID } from './soaps.js';
+import { BLOCK } from './config.js';
 
-const NX = 15, NY = 24, NZ = 10;
+const NX = 15, NY = 24, NZ = 10;   // Entwurfsraster der Looks (fein); das Spiel-Raster (BLOCK) wird darauf abgebildet
+const SX = NX / BLOCK.nx, SY = NY / BLOCK.ny, SZ = NZ / BLOCK.nz;
 const hx = (h) => [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -178,7 +180,8 @@ export const LOOKS = {
 export function lookColor(soap, i, j, k, out) {
   const L = LOOKS[soap.id];
   if (!L) return set(out, soap.base);
-  return L.colorAt(i + 0.5, j + 0.5, k + 0.5, out);
+  // Würfelmitte des (gröberen) Spiel-Rasters ins Entwurfsraster der Looks (15 x 24 x 10) umrechnen
+  return L.colorAt((i + 0.5) * SX, (j + 0.5) * SY, (k + 0.5) * SZ, out);
 }
 export const hasMotif = (soap) => !!(LOOKS[soap.id] && LOOKS[soap.id].motif);
 export const lookRough = (soap) => (LOOKS[soap.id] ? LOOKS[soap.id].rough : 0.42);
@@ -198,13 +201,13 @@ function drawFace(g, soap, ox, oy, w, h, x0 = 0, x1 = NX, y0 = 0, y1 = NY) {
 
 export const ATLAS_COLS = 4, ATLAS_ROWS = 3, TILE_W = 60, TILE_H = 96;
 /** Atlas aller Sorten (Kachel = soap.id) für die Regal-Vorderseiten; Ausschnitt = sichtbare Platte. */
-export function makeFaceAtlas(inset) {
+export function makeFaceAtlas(inset) {   // inset in Würfeln des Spiel-Rasters
   const c = document.createElement('canvas');
   c.width = ATLAS_COLS * TILE_W; c.height = ATLAS_ROWS * TILE_H;
   const g = c.getContext('2d');
   for (const s of SOAP_BY_ID) {
     const col = s.id % ATLAS_COLS, row = Math.floor(s.id / ATLAS_COLS);
-    drawFace(g, s, col * TILE_W, row * TILE_H, TILE_W, TILE_H, inset, NX - inset, inset, NY - inset);
+    drawFace(g, s, col * TILE_W, row * TILE_H, TILE_W, TILE_H, inset * SX, NX - inset * SX, inset * SY, NY - inset * SY);
   }
   return c;
 }

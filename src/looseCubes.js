@@ -4,7 +4,7 @@
 // Liegende Würfel werden "eingefroren" und nicht mehr berechnet. Kein Physik-Engine,
 // keine Allokationen im Frame (alle Vektoren/Matrizen werden wiederverwendet).
 import * as THREE from 'three';
-import { BOWL, CUBE, PHYS } from './config.js';
+import { BOWL, CUBE, PHYS, MOULD_CUBES } from './config.js';
 
 const MAX = PHYS.maxCubes;
 const HALF = CUBE / 2;
@@ -26,10 +26,10 @@ const NB_W = [1, 1, 1, 1, Math.SQRT1_2, Math.SQRT1_2, Math.SQRT1_2, Math.SQRT1_2
 
 // Klinge unter der Scheibe: hebt gerade gelöste Würfel leicht von der Schnittfläche ab
 export const BLADE = {
-  lift: 0.03,        // so weit stehen die Würfel auf der Klingenflanke von der Schnittfläche ab
-  ramp: 0.07,        // über diese Höhe hinter der Schneide wächst das Anheben (Keil der Klinge)
+  lift: CUBE * 0.6,       // so weit stehen die Würfel auf der Klingenflanke von der Schnittfläche ab
+  ramp: CUBE * 1.4,       // über diese Höhe hinter der Schneide wächst das Anheben (Keil der Klinge)
   height: 0.17,      // Klingenhöhe (Schneide -> Rücken), wie in knife.js
-  push: 0.0028,      // max. Anheben pro Physik-Schritt (weich, kein Springen)
+  push: CUBE * 0.056,     // max. Anheben pro Physik-Schritt (weich, kein Springen)
   stick: [0.12, 0.32], // so lange liegen sie zunächst ruhig auf der Klinge (s), dann rutschen sie ab
 };
 
@@ -365,7 +365,8 @@ export class LooseCubes {
   /** Durchschnittliche Füllhöhe in der Schale (für die geschmolzene Seife). */
   fillHeight() {
     let n = 0; for (let i = 0; i < this.used; i++) if (this.state[i]) n++;
-    const vol = n * CUBE * CUBE * CUBE;
+    // Füllhöhe wie vor Runde 17 (feine Würfel, 0.45 Volumen je ganze Seife): die geschmolzene Seife bleibt gleich hoch
+    const vol = n / MOULD_CUBES * 0.45;
     return vol / (Math.PI * BOWL.floorR * BOWL.floorR);
   }
 
