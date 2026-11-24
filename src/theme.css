@@ -425,3 +425,6 @@ body.has-actions #actions .btn { min-height: 48px; }
 #quality { padding-top: 22px; }
 #quality > #q-banner { margin-top: -44px; }
 #q-stars { height: 59px; }
+/* vier Reiter (Verpackung) passen ohne Abschneiden */
+#pkg-tabs .tab { padding: 0 11px 2px; font-size: 14.5px; }
+@media (max-width: 370px) { #pkg-tabs .tab { padding: 0 9px 2px; font-size: 13.5px; } }
