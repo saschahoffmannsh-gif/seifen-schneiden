@@ -396,7 +396,7 @@ export class Game {
       title: 'Nicht genug Seife',
       soap: miss.soap,
       lines: [
-        `${miss.soap.name} für den ganzen Auftrag: ${parts.join(' + ')} = ${total * PCT_PER_SLICE} %`,
+        parts.length > 1 ? `${miss.soap.name} für den ganzen Auftrag: ${parts.join(' + ')} = ${total * PCT_PER_SLICE} %` : `${miss.soap.name} gebraucht – ${parts[0]}`,
         `Das sind ${total} Scheiben – genommen: ${took} ${took === 1 ? 'Stück' : 'Stücke'} (${took * SLICES} Scheiben)` + (miss.have > 0 ? `, übrig ${miss.have}` : ''),
       ],
       rule: `1 Stück = ${SLICES} Scheiben = 100 % einer Seife. Plane alle Seifen des Auftrags, bevor du den Schrank schließt.`,
