@@ -29,7 +29,7 @@ const input = createInput(canvas, unlockAudio);
 document.addEventListener('pointerdown', unlockAudio, { once: true });
 // weicher Knopf-Plopp für alle UI-Knöpfe (deaktivierte bleiben still)
 document.addEventListener('pointerdown', (e) => {
-  const b = e.target.closest && e.target.closest('.btn, .round-btn, .x-btn, .tab, .switch, .pkg-card');
+  const b = e.target.closest && e.target.closest('.btn, .round-btn, .x-btn, .tab, .switch, .pkg-card, .tile');
   if (b && !b.disabled) sndPop(b.classList.contains('pkg-card') || b.classList.contains('tab') ? 0.6 : 1);
 });
 

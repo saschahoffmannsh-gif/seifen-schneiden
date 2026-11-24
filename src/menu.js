@@ -9,6 +9,11 @@ import { ADDITIVES } from './additives.js';
 import { SOAP_SHAPES } from './shapes.js';
 import { sndWood } from './audio.js';
 import { createStartScene } from './startscene.js';
+import icoOrders from './assets/home/orders.webp';
+import icoShelf from './assets/home/shelf.webp';
+import icoKitchen from './assets/home/kitchen.webp';
+import icoPack from './assets/home/pack.webp';
+const HOME_ICONS = { orders: icoOrders, shelf: icoShelf, kitchen: icoKitchen, pack: icoPack };
 
 const SAVE_KEY = 'seifen-save-v1';
 const $ = (id) => document.getElementById(id);
@@ -40,6 +45,10 @@ export function createMenu({ getCoins }) {
       p.innerHTML = `<span class="chip">${ICON.coin}<b>${getCoins()}</b></span><span class="chip-sep"></span><span class="chip">${ICON.sparkle}<b>${n}</b>&nbsp;freigeschaltet</span>`;
       p.style.display = '';
     } else p.style.display = 'none';
+    // Hauptmenü: Fortschrittsleiste (Münzen links, Freigeschaltetes als Leiste bis zum Stern)
+    const lists = [PACKAGE_TYPES, DECO_ITEMS, ADDITIVES, SOAP_SHAPES];
+    const un = lists.reduce((a, l) => a + l.filter((t) => t.unlocked).length, 0), all = lists.reduce((a, l) => a + l.length, 0);
+    $('home-bar').innerHTML = `<span class="hb-coin">${ICON.coin}<b>${getCoins()}</b></span><span class="hb-track"><i style="width:${Math.max(6, Math.round(un / all * 100))}%"></i><em>${un}/${all}</em></span><span class="hb-star">${ICON.star}</span>`;
     placeSoaps();
   }
   // 3D-Seifen mittig in den freien Raum zwischen Wortmarke und Menü setzen
@@ -86,7 +95,7 @@ export function createMenu({ getCoins }) {
       busy = true; el.classList.add('done');
       animateTo(1, 110, easeOut, () => {
         scene3d.finish();
-        setTimeout(() => { hide(); }, 750);   // kurz den fallenden Würfeln zusehen, dann ins Spiel
+        setTimeout(() => { goHome(); }, 750);   // kurz den fallenden Würfeln zusehen, dann ins Hauptmenü
       });
     }
     el.addEventListener('pointerdown', (e) => {
@@ -126,14 +135,33 @@ export function createMenu({ getCoins }) {
     };
   })();
 
+  // Hauptmenü (nach dem Schieben bzw. aus dem Spiel): Werkstatt-Hintergrund, 2×2 Kacheln; 3D-Szene aus
+  let homeT = 0;
+  function goHome() {
+    refreshStart();
+    start.classList.add('home');
+    clearTimeout(homeT);
+    homeT = setTimeout(() => { if (start.classList.contains('home')) scene3d.stop(); }, 700);
+  }
+  for (const b of start.querySelectorAll('.tile')) {
+    b.querySelector('img').src = HOME_ICONS[b.dataset.tile];
+    b.addEventListener('click', () => {
+      b.classList.remove('wob'); void b.offsetWidth; b.classList.add('wob');   // kleiner Wackler (noch ohne eigene Seite)
+      if (b.dataset.tile === 'kitchen') setTimeout(() => { if (start.classList.contains('open')) hide(); }, 320);   // Küche = bisheriges Spiel
+    });
+    b.addEventListener('animationend', () => b.classList.remove('wob'));
+  }
+
   function show() {
-    if (started) scene3d.reset();   // nach dem Spiel: frische Seife
+    const home = started;   // aus dem Spiel zurück: direkt ins Hauptmenü
     slide.reset();
+    start.classList.toggle('home', home);
     refreshStart();
     document.body.classList.add('menu-open');
     start.classList.remove('gone');
     placeSoaps();
-    clearTimeout(stopT); scene3d.start();
+    clearTimeout(stopT);
+    if (!home) scene3d.start();
     requestAnimationFrame(() => { start.classList.add('open'); openedAt = performance.now(); });
   }
   function hide() {

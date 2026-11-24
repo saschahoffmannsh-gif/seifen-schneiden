@@ -469,3 +469,66 @@ body.has-actions #order-progress .mx-add { margin-top: 3px; font-size: 11.5px; }
 .slide-go.drag .sg-knob { --b-l: #c8f7e5; }
 @media (prefers-reduced-motion: reduce) { .sg-txt { animation: none; background-position: 50% 0; } }
 #st-canvas { -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(var(--fade-y, 80vh) - 90px), transparent calc(var(--fade-y, 80vh) + 6px)); mask-image: linear-gradient(to bottom, #000 0, #000 calc(var(--fade-y, 80vh) - 90px), transparent calc(var(--fade-y, 80vh) + 6px)); }
+
+/* ---------- Hauptmenü nach der Startseite (Runde 18) ---------- */
+.home-bg, .home-bar, .home-grid { display: none; }
+.home-bg {
+  position: absolute; left: 0; right: 0; bottom: 0; top: 14%;
+  background: url('./assets/home/werkstatt.webp') center bottom / cover no-repeat;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, .55) 18%, #000 42%);
+  mask-image: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, .55) 18%, #000 42%);
+  opacity: 0; animation: homeBgIn .9s var(--ease) forwards;
+}
+.home-bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(255, 214, 232, .55) 0%, rgba(255, 226, 238, .18) 55%, rgba(255, 214, 232, .35) 100%); }
+@keyframes homeBgIn { to { opacity: 1; } }
+#start.home .home-bg { display: block; }
+#start.home .home-bar { display: flex; }
+#start.home .home-grid { display: grid; }
+#start.home #st-canvas { opacity: 0; transition: opacity .5s var(--ease); pointer-events: none; }
+#start.home #start-play, #start.home #start-new, #start.home #st-progress { display: none !important; }
+#start.home .logo { margin-top: 2vh; }
+
+.home-bar {
+  align-items: center; gap: 8px; width: min(100%, 330px); height: 40px; padding: 0 6px 0 4px;
+  border-radius: 999px; background: #fffdf6; border: 3px solid var(--ol); box-shadow: 0 3px 0 var(--ol-a);
+}
+.hb-coin { display: inline-flex; align-items: center; gap: 5px; font: 400 18px var(--f-display); color: var(--ol); font-variant-numeric: tabular-nums; }
+.hb-coin .coin { width: 26px; height: 26px; }
+.hb-track { position: relative; flex: 1; height: 18px; border-radius: 999px; background: #f1e3f3; border: 2px solid var(--ol); overflow: hidden; }
+.hb-track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: linear-gradient(180deg, #ffe98a, var(--sun) 55%, var(--sun-d)); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .55); }
+.hb-track em { position: absolute; inset: 0; display: grid; place-items: center; font: 600 11px/1 var(--f-body); font-style: normal; color: var(--ol); letter-spacing: .04em; }
+.hb-star { display: grid; place-items: center; width: 30px; height: 30px; color: var(--sun); }
+.hb-star .star { width: 30px; height: 30px; filter: drop-shadow(0 2px 0 var(--ol)); stroke: var(--ol); stroke-width: 1.6; paint-order: stroke; }
+
+.home-grid {
+  --tile: min(168px, calc((100vw - 58px) / 2), calc((100dvh - var(--sa-top) - var(--sa-bottom) - 450px) / 2));
+  grid-template-columns: repeat(2, var(--tile)); gap: 14px; justify-content: center;
+}
+.tile {
+  --t-l: #c9f7e0; --t: #8fe8bd; --t-d: #4fd396;
+  position: relative; width: var(--tile); height: var(--tile); padding: 6px 6px 10px; border-radius: 28px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border: 3px solid var(--ol);
+  background: linear-gradient(180deg, var(--t-l) 0%, var(--t) 55%, var(--t-d) 100%);
+  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, .1), inset 0 4px 0 rgba(255, 255, 255, .6), 0 5px 0 var(--ol), 0 12px 18px rgba(60, 25, 70, .25);
+  -webkit-tap-highlight-color: transparent; transition: transform .12s var(--ease), box-shadow .12s var(--ease);
+  animation: tileIn .55s var(--ease-back) both;
+}
+.tile::before { content: ''; position: absolute; left: 12%; right: 12%; top: 6px; height: 26%; border-radius: 999px; background: linear-gradient(180deg, rgba(255, 255, 255, .7), rgba(255, 255, 255, 0)); pointer-events: none; }
+.tile img { width: 66%; height: auto; aspect-ratio: 1; object-fit: contain; pointer-events: none; filter: drop-shadow(0 4px 0 rgba(75, 42, 92, .16)); }
+.tile span {
+  font: 400 clamp(16px, 4.9vw, 21px)/1 var(--f-display); letter-spacing: .02em; color: #fff; white-space: nowrap;
+  text-shadow: 0 2.5px 0 var(--ol), 0 -2px 0 var(--ol), 2px 0 0 var(--ol), -2px 0 0 var(--ol), 1.5px 1.5px 0 var(--ol), -1.5px 1.5px 0 var(--ol), 1.5px -1.5px 0 var(--ol), -1.5px -1.5px 0 var(--ol), 0 4px 0 var(--ol);
+}
+.tile:active { transform: translateY(3px) scale(.97); box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .1), inset 0 4px 0 rgba(255, 255, 255, .6), 0 2px 0 var(--ol), 0 5px 8px rgba(60, 25, 70, .22); }
+.tile.wob { animation: tileWob .5s var(--ease-back); }
+.t-shelf { --t-l: #d8f4ff; --t: #a3e2f8; --t-d: #5ec6ea; }
+.t-kitchen { --t-l: #ffe6d1; --t: #ffc7a0; --t-d: #ff9f68; }
+.t-pack { --t-l: #eee3ff; --t: #ccb6ff; --t-d: #a585f2; }
+.home-grid .tile:nth-child(2) { animation-delay: .07s; }
+.home-grid .tile:nth-child(3) { animation-delay: .14s; }
+.home-grid .tile:nth-child(4) { animation-delay: .21s; }
+@keyframes tileIn { from { opacity: 0; transform: translateY(16px) scale(.8); } to { opacity: 1; transform: none; } }
+@keyframes tileWob { 0% { transform: none; } 25% { transform: rotate(-4deg) scale(1.04); } 50% { transform: rotate(3deg) scale(1.02); } 75% { transform: rotate(-1.5deg); } 100% { transform: none; } }
+#start.home .round-btn span { padding: 2px 10px 3px; border-radius: 999px; background: #fffdf6; border: 2.5px solid var(--ol); box-shadow: 0 2px 0 var(--ol-a); font-size: 12.5px; }
+#start.home .st-row { margin-top: 4px; }

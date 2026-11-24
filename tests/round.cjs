@@ -31,7 +31,10 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   console.log('start half release ->', halfOpen && knobBack === '0' ? 'frei' : 'FEHLER', 'open', halfOpen, 'knob', knobBack);
   if (!halfOpen || knobBack !== '0') errs.push('Halb geschoben: Startbildschirm ' + (halfOpen ? 'offen' : 'ZU') + ', Griff ' + knobBack);
   // ganz durchschieben: Seife fällt, danach startet das Spiel
-  await slideStart(1.05); await p.waitForTimeout(1700);
+  await slideStart(1.05); await p.waitForTimeout(2200);
+  // Hauptmenü (Runde 18): Küche-Kachel führt vorerst ins bisherige Spiel
+  console.log('home menu ->', await p.evaluate(() => document.getElementById('start').classList.contains('home')));
+  await p.click('#home-grid [data-tile="kitchen"]'); await p.waitForTimeout(1200);
   console.log('start hidden ->', await p.evaluate(() => !document.getElementById('start').classList.contains('open')));
   await p.screenshot({ path: out + '/1-regal.png' });
   // Mitten auf den Tisch tippen darf nichts auswählen

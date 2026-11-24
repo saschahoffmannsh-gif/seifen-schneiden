@@ -127,6 +127,7 @@
   <!-- Startbildschirm: 3D-Seifen (startscene.js), Wortmarke, Menü (menu.js) -->
   <div id="start">
     <div class="st-bg"></div>
+    <div class="home-bg" aria-hidden="true"></div>
     <canvas id="st-canvas" aria-hidden="true"></canvas>
     <div class="st-inner">
       <div class="logo">
@@ -143,6 +144,13 @@
           <span class="sg-knob"></span>
         </div>
         <button id="start-new" class="btn link">Neu beginnen</button>
+        <div id="home-bar" class="home-bar" aria-label="Fortschritt"></div>
+        <div id="home-grid" class="home-grid">
+          <button class="tile t-orders" data-tile="orders"><img alt="" data-ico="orders"><span>Bestellungen</span></button>
+          <button class="tile t-shelf" data-tile="shelf"><img alt="" data-ico="shelf"><span>Seifenregal</span></button>
+          <button class="tile t-kitchen" data-tile="kitchen"><img alt="" data-ico="kitchen"><span>Küche</span></button>
+          <button class="tile t-pack" data-tile="pack"><img alt="" data-ico="pack"><span>Verpacken</span></button>
+        </div>
         <div class="st-row">
           <button id="start-settings" class="round-btn" aria-label="Einstellungen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.5-2-3.4-2.3.9a7.6 7.6 0 0 0-2.6-1.5L14 2.6h-4l-.5 2.4a7.6 7.6 0 0 0-2.6 1.5l-2.3-.9-2 3.4 2 1.5a7.6 7.6 0 0 0 0 3l-2 1.5 2 3.4 2.3-.9a7.6 7.6 0 0 0 2.6 1.5l.5 2.4h4l.5-2.4a7.6 7.6 0 0 0 2.6-1.5l2.3.9 2-3.4z"/></svg><span>Einstellungen</span></button>
           <button id="start-collection" class="round-btn" aria-label="Sammlung"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.8 8.2L12 4l8.2 4.2v8L12 20.4l-8.2-4.2z"/><path d="M3.8 8.2L12 12.4l8.2-4.2M12 12.4v8"/></svg><span>Sammlung</span></button>
