@@ -108,7 +108,9 @@ const out = process.argv[3] || '/workspace/seifen-shots';
       await p.mouse.click(pt.x, pt.y);
     }
     await p.waitForFunction((id) => window.__game.state === 'cutting' && window.__game.block.soap.name === id, order[s], { timeout: 30000 });
-    await p.waitForTimeout(500);
+    // Kamera fährt heran, Seife kippt nach hinten: erst danach schneiden
+    await p.waitForFunction(() => { const c = window.__game.testCutPx(); return c.zoom >= 1 && c.tilt >= 1; }, null, { timeout: 30000 });
+    await p.waitForTimeout(300);
     if (s === 0) await p.screenshot({ path: out + '/2-seife-intakt.png' }); await chk('schneiden-start');
     const stopAt = s === 1 ? mix[s] - 0.4 : mix[s];
     // je Wisch: Ruhelage des Messers, Ober- und Unterkante der aktuellen Scheibe (Pixel)
@@ -118,21 +120,21 @@ const out = process.argv[3] || '/workspace/seifen-shots';
       if (st[0] !== 'cutting' || st[1] >= stopAt - 1e-3 || n > 200) break;
       if (st[2]) { await p.waitForTimeout(80); continue; }
       const rem = stopAt - st[1], depth = rem >= 1 - st[3] ? 1.08 : st[3] + rem;
-      const geo = await p.evaluate(() => { const g = window.__game; const pr = (y) => { const v = g.knife.position.clone().setY(y).setX(0).setZ(g.block.cutZ).project(g.camera); return (1 - v.y) / 2 * innerHeight; }; return { rest: pr(g.block.topY + 0.06), top: pr(g.block.topY), bot: pr(g.block.bottomY) }; });
+      const geo = await p.evaluate(() => window.__game.testCutPx());
       // Wisch von oben nach unten: Finger irgendwo greifen, Messer folgt 1:1
-      const x = VW * 0.5, y0 = geo.rest - 12, dy = (geo.top - geo.rest) + depth * (geo.bot - geo.top);
-      await p.mouse.move(x, y0); await p.mouse.down();
+      const x = geo.x, lx = (yy) => geo.restX + (geo.botX - geo.restX) * (yy - geo.rest) / (geo.bot - geo.rest), mv = (yy, o) => p.mouse.move(lx(yy), yy, o), y0 = geo.rest - 12, dy = (geo.top - geo.rest) + depth * (geo.bot - geo.top);
+      await mv(y0); await p.mouse.down();
       if (n === 0 && s === 0) {
         // halb runter, dann hoch: Messer geht mit hoch, schneidet dabei aber nicht; dann weiter runter
-        await p.mouse.move(x, y0 + dy * 0.55, { steps: 6 }); await p.waitForTimeout(150);
+        await mv(y0 + dy * 0.55, { steps: 6 }); await p.waitForTimeout(150);
         const b = await p.evaluate(() => [window.__game.sliceProgress, window.__game.knifeY]);
-        await p.mouse.move(x, y0 + dy * 0.2, { steps: 4 }); await p.waitForTimeout(200);
+        await mv(y0 + dy * 0.2, { steps: 4 }); await p.waitForTimeout(200);
         const a = await p.evaluate(() => [window.__game.sliceProgress, window.__game.knifeY]);
         await p.screenshot({ path: out + '/3a-messer-hoch.png' });
         console.log('knife up: progress', b[0].toFixed(3), '->', a[0].toFixed(3), 'knifeY', b[1].toFixed(3), '->', a[1].toFixed(3));
       }
-      await p.mouse.move(x, y0 + dy, { steps: 8 });
-      if (s === 1 && !midShot && st[1] > 1.2) { await p.mouse.move(x, y0 + dy * 0.6, { steps: 2 }); await p.waitForTimeout(150); await p.screenshot({ path: out + '/3-schneiden-mitte.png' }); await chk('schneiden-mitte'); midShot = true; }
+      await mv(y0 + dy, { steps: 8 });
+      if (s === 1 && !midShot && st[1] > 1.2) { await mv(y0 + dy * 0.6, { steps: 2 }); await p.waitForTimeout(150); await p.screenshot({ path: out + '/3-schneiden-mitte.png' }); await chk('schneiden-mitte'); midShot = true; }
       await p.mouse.up(); await p.waitForTimeout(120);
       n++;
     }

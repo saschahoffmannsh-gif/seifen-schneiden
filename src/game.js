@@ -26,6 +26,7 @@ import { SOAP_SHAPES, DEFAULT_SHAPE, shapeGeometry, shapeEmboss, shapeIconURL, i
 import { PKG_CATS, PACKAGE_TYPES } from './decor.js';
 import { Deco } from './deco.js';
 import { Showcase } from './showcase.js';
+import { CutRig } from './cutRig.js';
 import { DECO_ITEMS, DECO_GROUPS, phaseOf, groupOf } from './decoItems.js';
 import { DECO_SPOTS, DECO_Y, SHELF_Z } from './setting/wall.js';
 
@@ -36,6 +37,10 @@ const _dragPos = new THREE.Vector3(), _dragTarget = new THREE.Vector3();
 
 const BAR_TABLE_SCALE = 0.85;                       // Seife auf dem Tisch / im Päckchen
 const BAR_HALF_H = 0.18 * BAR_TABLE_SCALE;          // halbe Höhe der liegenden Seife
+const KNIFE_X = -0.12;                               // Messer leicht nach links: Griff bleibt in der Nahaufnahme im Bild
+const ZOOM_TIME = 0.85;                             // s für die Kamerafahrt zur Seife und zurück
+const ZOOM_FIT_W = 1.9, ZOOM_FIT_H = 2.6;
+const CLOSE_DIR = new THREE.Vector3(0.48, 0.5, 1).normalize();   // Blickrichtung der Nahaufnahme (von vorne rechts, ~25° von oben)           // so viel Szene (Breite/Höhe) zeigt die Nahaufnahme mindestens
 const PRESENT_LIFT = 0.12;                          // Präsentation: so weit steigt die Seife (unter der Ergebniskarte)
 const easeInOut = (t) => t * t * (3 - 2 * t);
 const easeOut = (t) => 1 - (1 - t) * (1 - t) * (1 - t);
@@ -47,12 +52,14 @@ const _ray = new THREE.Raycaster();
 const _ndc = new THREE.Vector2();
 const _hit = new THREE.Vector3();
 const _plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -(BLOCK.nz * CUBE / 2 + 0.05));
+const _invM = new THREE.Matrix4(), _camDir = new THREE.Vector3();
+const smoother = (t) => t * t * t * (t * (t * 6 - 15) + 10);
 
 const damp = (cur, target, rate, dt) => cur + (target - cur) * (1 - Math.exp(-rate * dt));
 
 export class Game {
-  constructor({ renderer, scene, camera, ovenLight, bg, bowl, bowlShadow }, ui, input, block, loose, knife, confetti, shelf, packages) {
-    Object.assign(this, { renderer, scene, camera, ovenLight, bg, bowl, bowlShadow, ui, input, block, loose, knife, confetti, shelf, packages });
+  constructor({ renderer, scene, camera, camBase, ovenLight, bg, bowl, bowlShadow }, ui, input, block, loose, knife, confetti, shelf, packages) {
+    Object.assign(this, { renderer, scene, camera, camBase, ovenLight, bg, bowl, bowlShadow, ui, input, block, loose, knife, confetti, shelf, packages });
     this.anims = [];             // laufende Animationen (werden nur bei Ereignissen angelegt)
     this.pkgSlot = -1;
     this.swipe = { active: false, x0: 0, y0: 0, t0: 0, dx: 0 };
@@ -127,7 +134,13 @@ export class Game {
     this.sliceProgress = 0; this.returning = false; this.slicesCut = 0;
     knife.position.set(0, 2.2, BLOCK.nz * CUBE / 2 + 0.03);
     knife.visible = false;
-    scene.add(knife);
+    // Seife + Messer + Seifenbrett kippen gemeinsam (45° nach hinten beim Schneiden)
+    this.rig = new CutRig(scene);
+    this.rig.add(block.mesh);
+    this.rig.add(knife);
+    // Kamera: Grundstellung <-> Nahaufnahme der Seife beim Schneiden (weich überblendet)
+    this.zoomT = 0; this.zoomE = 0; this.camVersion = -1;
+    this.closePos = new THREE.Vector3(); this.closeLook = new THREE.Vector3();
 
     // Fertige Seife (Geometrie + Material einmalig; nur die Textur wechselt pro Seife)
     this.barMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0 });
@@ -149,7 +162,8 @@ export class Game {
     this.showcase = new Showcase(scene);
 
     // Klick-Geräusch, wenn Würfel landen
-    this.onCube = (x, y, z, r, g, b, id) => loose.spawn(x, y, z, r, g, b, id);
+    // gelöste Würfel: aus Block-Koordinaten in die Welt (gekippte Seife), mit gleicher Lage
+    this.onCube = (x, y, z, r, g, b, id) => { this.rig.toWorld(_a.set(x, y, z), _b); loose.spawn(_b.x, _b.y, _b.z, r, g, b, id, this.rig.outer.rotation.x); };
 
     // Bestell-Zettel am mittleren Brett + Seifenschrank
     this.notes = new OrderNotes(scene);
@@ -335,6 +349,7 @@ export class Game {
     const m = this.order.mix.find((x) => x.soap === soap);
     const have = Math.round(this.pcts[soap.id] || 0);
     this.ui.hint(m ? `Noch ${m.pct / PCT_PER_SLICE - Math.round(have / PCT_PER_SLICE)} Scheiben ${soap.name} – von oben nach unten wischen` : 'Von oben nach unten wischen');
+    this.rig.reset();
     this.block.load(soap, Math.min(SLICES, save.stock(soap.id)));
     this.ui.actions([{ label: '✋ Fertig mit dieser Seife', onClick: () => this.stopCutting() }]);
     this.loose.blockHalfX = this.block.halfX; this.loose.blockHalfZ = this.block.halfZ;
@@ -342,7 +357,7 @@ export class Game {
     this.knife.visible = true;
     this.knifeY = this.block.topY + 0.6;
     this.knifeZ = this.block.cutZ;
-    this.knifeX = 0; this.knifeTilt = 0;
+    this.knifeX = KNIFE_X; this.knifeTilt = 0;
     this.cutHeld = this.input.down ? 'stale' : false;   // Finger vom Antippen im Regal schneidet nicht
     this.sliceProgress = 0; this.returning = false; this.slicesCut = 0;
     this.loose.blockTop = -1; // Würfel fallen vorne weg, keine Kollision mit der Blockoberseite nötig
@@ -377,7 +392,7 @@ export class Game {
     this.shelf.setSoaps(this.order.soaps, this.shelfFracs());
     // das Stück fliegt sichtbar zurück auf seinen Platz im Regal
     const home = this.order.soaps.indexOf(soap);
-    if (home >= 0) this.shelf.flyBack(home);
+    if (home >= 0) { const ang = this.rig.piecePose(this.shelf.frac[home], _t); this.shelf.flyBack(home, _t, ang); }
     if (next >= 0) { this.toShelf(); this.pickSoap(next); return; }
     this.state = 'between';
     setTimeout(() => this.toShelf(), 600);
@@ -838,9 +853,19 @@ export class Game {
       out.push({ name, x0, y0, x1, y1 });
     };
     const box = new THREE.Box3();
-    if (st === 'cutting' && this.block.mesh.visible) add('seife', box.set(_a.set(-this.block.halfX, this.block.bottomY, -this.block.halfZ), _b.set(this.block.halfX, this.block.topY, this.block.halfZ)));
+    if (st === 'cutting' && this.block.mesh.visible) {
+      // gekippte Seife: die 8 Ecken über das Gestell in die Welt
+      box.set(_a.set(-this.block.halfX, this.block.bottomY, -this.block.halfZ), _b.set(this.block.halfX, this.block.topY, this.block.frontZ));
+      box.applyMatrix4(this.rig.inner.matrixWorld);
+      add('seife', box);
+    }
     // Schale: nur der Bereich, in dem die Würfel/die flüssige Seife liegen (Boden bis halbe Höhe)
-    if ((st === 'shelf' || st === 'cutting' || st === 'oven') && this.bowl.visible) add('schale-innen', box.set(_a.set(-BOWL.floorR, 0, -BOWL.floorR), _b.set(BOWL.floorR, BOWL.height * 0.5, BOWL.floorR)));
+    // Nahaufnahme beim Schneiden: statt der ganzen Schale die Stelle, an der die Würfel landen (vor der Seife)
+    if (st === 'cutting' && this.bowl.visible) {
+      this.rig.fullTiltCenter(_t, -BLOCK.ny * CUBE / 2);   // Unterkante der gekippten Seife (Mitte)
+      add('landezone', box.set(_a.set(-this.block.halfX - 0.1, 0, _t.z - 0.1), _b.set(this.block.halfX + 0.1, 0.25, Math.min(BOWL.floorR * 0.9, _t.z + 0.45))));
+    }
+    if ((st === 'shelf' || st === 'oven') && this.bowl.visible) add('schale-innen', box.set(_a.set(-BOWL.floorR, 0, -BOWL.floorR), _b.set(BOWL.floorR, BOWL.height * 0.5, BOWL.floorR)));
     if ((st === 'reveal' || st === 'unmolded' || st === 'pickPkg' || st === 'picker' || st === 'pickSoap') && this.bar.visible) add('seife', box.setFromObject(this.bar));
     if ((st === 'pickSoap' || st === 'decorFill' || st === 'packed') && this.pkgSlot >= 0) {
       const P = TABLE_SPOT.pkg, [fw, fd] = this.packages.footprint(this.pkgSlot);
@@ -848,6 +873,22 @@ export class Game {
       if (st !== 'packed') { const r = this.lidRect(); out.push({ name: 'deckel', x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }); }
     }
     return out;
+  }
+
+  /** Für Tests: Bildschirm-y (px) von Messer-Ruhelage, Ober- und Unterkante der Schnittebene (gekippt) + x der Mitte. */
+  testCutPx() {
+    const H = window.innerHeight, W = window.innerWidth, b = this.block, M = this.rig.inner.matrixWorld;
+    const pr = (y) => { _t.set(0, y, b.cutZ).applyMatrix4(M).project(this.camera); return [(_t.x + 1) / 2 * W, (1 - _t.y) / 2 * H]; };
+    const r = pr(b.topY + 0.06), t = pr(b.topY), u = pr(b.bottomY);
+    // Bildschirm-Punkte (die Mittellinie der gekippten Seife läuft im Bild leicht schräg)
+    return { rest: r[1], top: t[1], bot: u[1], x: t[0], restX: r[0], botX: u[0], zoom: this.zoomE, tilt: this.rig.e };
+  }
+
+  testRayLocalY(x, y) {
+    _ndc.set(x, y); _ray.setFromCamera(_ndc, this.camera);
+    _plane.normal.set(0, 0, 1); _plane.constant = -this.block.cutZ; _plane.applyMatrix4(this.rig.inner.matrixWorld);
+    if (!_ray.ray.intersectPlane(_plane, _hit)) return null;
+    return _hit.applyMatrix4(_invM.copy(this.rig.inner.matrixWorld).invert()).toArray();
   }
 
   /** Für Tests: Bildschirm-Pixel einer Deko-Stelle im Regal bzw. des Päckchens auf dem Tisch. */
@@ -1071,6 +1112,9 @@ export class Game {
         need = Math.max(0, qb + 24 - top);   // Luft fürs Wippen + Drehen
       }
       // während der Arbeit nur nachgeben, nie zurückspringen (kein Pendeln bei wechselnden Hinweisen / Drehen)
+      // Kamera-Modus gewechselt (Nahaufnahme <-> normal): Merkwert neu beginnen
+      const mode = this.zoomTarget ? 1 : 0;
+      if (mode !== this.vsMode) { this.vsMode = mode; this.vsKeep = 0; }
       this.vsKeep = (work || present) ? Math.max(this.vsKeep || 0, need) : 0;
       this.viewShiftTarget = present ? -Math.min(this.vsKeep, H * 0.2) : Math.min(this.vsKeep, H * 0.1);
     }
@@ -1082,6 +1126,7 @@ export class Game {
 
   update(dt, time) {
     this.now = time;
+    this.updateRigAndCamera(dt);
     this.updateViewShift(dt);
     // nächste gewünschte Seife im Regal hüpft leicht (zeigt: hier antippen)
     let bob = -1;
@@ -1129,12 +1174,17 @@ export class Game {
     if (!inp.down) this.cutHeld = false;
     let follow = false;
     if (inp.down && this.cutHeld !== 'stale' && !this.returning) {
-      _ndc.set(inp.x, inp.y);
-      _ray.setFromCamera(_ndc, this.camera);
-      _plane.constant = -this.knifeZ;
-      if (_ray.ray.intersectPlane(_plane, _hit)) {
-        // Griffpunkt merken: das Messer springt nicht zum Finger, sondern bewegt sich mit ihm
-        if (!this.cutHeld) { this.cutHeld = true; this.cutGrab = this.knifeY - _hit.y; }
+      // Schnittebene liegt in Block-Koordinaten (Seife ist gekippt): Ebene in die Welt, Treffer zurück
+      _plane.normal.set(0, 0, 1); _plane.constant = -this.knifeZ;
+      _plane.applyMatrix4(this.rig.inner.matrixWorld);
+      _invM.copy(this.rig.inner.matrixWorld).invert();
+      // Griffpunkt = Aufsetzpunkt des Fingers (nicht erst die Lage im nächsten Bild): das Messer springt
+      // nicht zum Finger, sondern bewegt sich ab da exakt mit ihm
+      if (!this.cutHeld) {
+        const fresh = inp.seq !== this.grabSeq;   // neu aufgesetzt: ab dem Aufsetzpunkt; Finger blieb liegen: ab jetzt
+        if (fresh ? this.planeY(inp.downX, inp.downY) : this.planeY(inp.x, inp.y)) { this.cutHeld = true; this.cutGrab = this.knifeY - _hit.y; this.grabSeq = inp.seq; }
+      }
+      if (this.cutHeld === true && this.planeY(inp.x, inp.y)) {
         this.knifeTargetY = THREE.MathUtils.clamp(_hit.y + this.cutGrab, top - height, top + 0.55);
         follow = true;
       }
@@ -1165,6 +1215,55 @@ export class Game {
     this.refreshMix();   // Mischungs-Balken live (DOM nur bei Änderung)
     this.knife.position.set(this.knifeX, this.knifeY, this.knifeZ);
     this.knife.rotation.z = this.knifeTilt;
+  }
+
+  /** Finger (NDC) -> Punkt auf der Schnittebene in Block-Koordinaten (_hit). Ebene/Inverse vorher setzen. */
+  planeY(x, y) {
+    _ndc.set(x, y);
+    _ray.setFromCamera(_ndc, this.camera);
+    if (!_ray.ray.intersectPlane(_plane, _hit)) return false;
+    _hit.applyMatrix4(_invM);
+    return true;
+  }
+
+  /** Kipp-Gestell, Rutsche für die Würfel und Kamera (Nahaufnahme beim Schneiden). Pro Frame, ohne Allokation. */
+  updateRigAndCamera(dt) {
+    const on = this.state === 'cutting' && this.block.mesh.visible;
+    this.rig.update(dt, on);
+    // Rutsche: aktuelle Schnittfläche/Stufe in Block-Koordinaten an die Würfel-Physik geben
+    const sl = this.loose.slope, b = this.block;
+    sl.on = this.rig.e > 0.02 && b.mesh.visible && b.active;
+    if (sl.on) {
+      sl.m.set(this.rig.inner.matrixWorld.elements);
+      sl.inv.set(_invM.copy(this.rig.inner.matrixWorld).invert().elements);
+      sl.halfX = b.halfX; sl.topY = b.topY; sl.bottomY = b.bottomY;
+      sl.cutZ = b.cutZ; sl.frontZ = b.frontZ; sl.uncutTop = b.topY - b.rowsCut * CUBE;
+      sl.lipFrontZ = this.rig.lipFrontZ; sl.lipBottomY = this.rig.lipBottomY; sl.backZ = -b.halfZ - 0.02;
+    }
+    // Kamera: weich (smootherstep) zur Nahaufnahme und zurück
+    const target = on ? 1 : 0;
+    this.zoomTarget = target;
+    if (this.zoomT !== target) this.zoomT = target > this.zoomT ? Math.min(1, this.zoomT + dt / ZOOM_TIME) : Math.max(0, this.zoomT - dt / ZOOM_TIME);
+    const e = smoother(this.zoomT);
+    if (e === this.zoomE && this.camVersion === this.camBase.version) return;
+    this.zoomE = e;
+    if (this.camVersion !== this.camBase.version) { this.camVersion = this.camBase.version; this.computeClose(); }
+    const c = this.camera, B = this.camBase;
+    c.position.lerpVectors(B.pos, this.closePos, e);
+    _a.lerpVectors(B.look, this.closeLook, e);
+    c.lookAt(_a);
+    c.updateMatrixWorld();
+  }
+
+  /** Nahaufnahme: gleiche Blickrichtung wie sonst, Abstand so, dass Seife + Messer groß, aber ganz im Bild sind. */
+  computeClose() {
+    const c = this.camera, B = this.camBase;
+    this.rig.fullTiltCenter(this.closeLook, -0.1);
+    // etwas flacher und leicht von rechts: so liest man die Neigung (Seitenkante + Brett) und die Schnittkante
+    _camDir.copy(CLOSE_DIR);
+    const vf = THREE.MathUtils.degToRad(c.fov), hf = 2 * Math.atan(Math.tan(vf / 2) * c.aspect);
+    const dist = Math.max(ZOOM_FIT_W / 2 / Math.tan(hf / 2), ZOOM_FIT_H / 2 / Math.tan(vf / 2));
+    this.closePos.copy(this.closeLook).addScaledVector(_camDir, dist);
   }
 
   completeSlice() {

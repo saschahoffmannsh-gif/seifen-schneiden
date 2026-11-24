@@ -92,6 +92,7 @@ export function createScene(canvas) {
 
   // Kamera so weit weg, dass Breite UND Höhe der Szene ins Bild passen (Hoch- und Querformat)
   const FIT_W = 2.95;
+  const camBase = { pos: new THREE.Vector3(), look: new THREE.Vector3(), version: 0 };
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(w, h, false);
@@ -102,13 +103,17 @@ export function createScene(canvas) {
     const vf = THREE.MathUtils.degToRad(camera.fov);
     const hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
     const dist = Math.max(FIT_W / 2 / Math.tan(hf / 2), FIT_H / 2 / Math.tan(vf / 2));
-    camera.position.copy(target).addScaledVector(viewDir, dist);
-    camera.position.y += 0.05 + lift;
-    camera.lookAt(target.x, target.y - 0.12 + lift, target.z);
+    // Grundstellung merken (das Spiel blendet daraus weich in die Nahaufnahme beim Schneiden über)
+    camBase.pos.copy(target).addScaledVector(viewDir, dist);
+    camBase.pos.y += 0.05 + lift;
+    camBase.look.set(target.x, target.y - 0.12 + lift, target.z);
+    camera.position.copy(camBase.pos);
+    camera.lookAt(camBase.look);
     camera.updateProjectionMatrix();
+    camBase.version++;
   }
   resize();
   window.addEventListener('resize', resize);
 
-  return { renderer, scene, camera, bowl, bowlShadow: shadow, ovenLight, bg, env };
+  return { renderer, scene, camera, camBase, bowl, bowlShadow: shadow, ovenLight, bg, env };
 }
