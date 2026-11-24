@@ -29,6 +29,7 @@ import { Showcase } from './showcase.js';
 import { CutRig } from './cutRig.js';
 import { DECO_ITEMS, DECO_GROUPS, phaseOf, groupOf } from './decoItems.js';
 import { DECO_SPOTS, DECO_Y, SHELF_Z } from './setting/wall.js';
+import { KNIFE_X, SKEW_RISE, ZOOM_FIT_W, ZOOM_FIT_H, CLOSE_DIR, poseKnife, syncSlope } from './cutGeom.js';
 
 const FILL_CAP = 40, FILL_MAX_KINDS = 4;     // Teile pro Füllungs-Sorte, verschiedene Füllungen
 const DRAG_LIFT = 55;                        // px: Deko schwebt so weit über dem Finger
@@ -38,14 +39,7 @@ const _dragPos = new THREE.Vector3(), _dragTarget = new THREE.Vector3();
 const TAKE_MAX = 9;                                 // Stücke je Sorte, die ins Regal passen (Zähler einstellig)
 const BAR_TABLE_SCALE = 0.85;                       // Seife auf dem Tisch / im Päckchen
 const BAR_HALF_H = 0.18 * BAR_TABLE_SCALE;          // halbe Höhe der liegenden Seife
-const KNIFE_X = -0.12;
-// schräge Klinge: knifeY = Höhe der Schneide an der hinteren (rechten) Würfelspalte; links liegt sie tiefer
-const SKEW = THREE.MathUtils.degToRad(CUT.skewDeg), SKEW_TAN = Math.tan(SKEW);
-const X_TRAIL = (BLOCK.nx - 1) / 2 * CUBE, X_LEAD = -X_TRAIL;
-const SKEW_RISE = (X_TRAIL - X_LEAD) * SKEW_TAN;      // so viel tiefer ist die Schneide an der linken Spalte                               // Messer leicht nach links: Griff bleibt in der Nahaufnahme im Bild
 const ZOOM_TIME = 0.85;                             // s für die Kamerafahrt zur Seife und zurück
-const ZOOM_FIT_W = 2.0, ZOOM_FIT_H = 2.7;
-const CLOSE_DIR = new THREE.Vector3(0.48, 0.5, 1).normalize();   // Blickrichtung der Nahaufnahme (von vorne rechts, ~25° von oben)           // so viel Szene (Breite/Höhe) zeigt die Nahaufnahme mindestens
 const PRESENT_LIFT = 0.12;                          // Präsentation: so weit steigt die Seife (unter der Ergebniskarte)
 const easeInOut = (t) => t * t * (3 - 2 * t);
 const easeOut = (t) => 1 - (1 - t) * (1 - t) * (1 - t);
@@ -1372,8 +1366,7 @@ export class Game {
     this.knifeTilt = damp(this.knifeTilt, 0, 10, dt);
     this.refreshMix();   // Mischungs-Balken live (DOM nur bei Änderung)
     // Messer (Ursprung bei KNIFE_X) um die Schräge gedreht; knifeY ist die Schneide an der hinteren Spalte
-    this.knife.position.set(this.knifeX, this.knifeY - (X_TRAIL - this.knifeX) * SKEW_TAN, this.knifeZ);
-    this.knife.rotation.z = SKEW + this.knifeTilt;
+    poseKnife(this.knife, this.knifeY, this.knifeZ, this.knifeTilt);
     this.knifeVy = dt > 0 ? (this.knifeY - prevY) / dt : 0;   // für die Würfel auf der Klinge (Block-y/s)
   }
 
@@ -1391,20 +1384,8 @@ export class Game {
     const on = this.state === 'cutting' && this.block.mesh.visible;
     this.rig.update(dt, on);
     // Rutsche: aktuelle Schnittfläche/Stufe in Block-Koordinaten an die Würfel-Physik geben
-    const sl = this.loose.slope, b = this.block;
-    sl.on = this.rig.e > 0.02 && b.mesh.visible && b.active;
-    if (sl.on) {
-      sl.m.set(this.rig.inner.matrixWorld.elements);
-      sl.inv.set(_invM.copy(this.rig.inner.matrixWorld).invert().elements);
-      sl.halfX = b.halfX; sl.topY = b.topY; sl.bottomY = b.bottomY;
-      sl.cutZ = b.cutZ; sl.frontZ = b.frontZ; sl.uncutTop = b.topY - b.rowsCut * CUBE;
-      sl.nCols = BLOCK.nx; for (let i = 0; i < BLOCK.nx; i++) sl.colTop[i] = b.topY - b.colRows[i] * CUBE;
-      sl.lipFrontZ = this.rig.lipFrontZ; sl.lipBottomY = this.rig.lipBottomY; sl.backZ = -b.halfZ - 0.02;
-      // Klinge steckt in der Scheibe (nicht beim Wechsel zur nächsten Scheibe): hebt die gelösten Würfel an
-      sl.bladeOn = this.state === 'cutting' && !this.returning && this.knife.visible && this.knifeY - SKEW_RISE < b.topY;
-      sl.bladeZ = this.knifeZ; sl.bladeY = this.knifeY; sl.bladeVy = this.knifeVy || 0;
-      sl.bladeX0 = X_TRAIL; sl.bladeTan = SKEW_TAN;   // Schneide schräg: Höhe an der Stelle x = bladeY + (x - X0)·tan
-    }
+    const sl = this.loose.slope;
+    syncSlope(this.loose, this.rig, this.block, { on: this.state === 'cutting' && !this.returning && this.knife.visible, y: this.knifeY, z: this.knifeZ, vy: this.knifeVy });
     sndSlide(sl.on ? this.loose.slideN : 0);
     // Kamera: weich (smootherstep) zur Nahaufnahme und zurück
     const target = on ? 1 : 0;

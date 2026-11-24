@@ -72,22 +72,7 @@ export function createScene(canvas) {
   shadow.position.y = -0.065;
   scene.add(shadow);
 
-  // Schale als Drehkörper (Lathe). Profil: außen unten -> Rand -> innen -> Boden
-  const t = 0.06;
-  const pts = [
-    [0, -0.07], [BOWL.floorR + 0.02, -0.07], [BOWL.rimR + t + 0.02, BOWL.height],
-    [BOWL.rimR + t, BOWL.height + 0.035], [BOWL.rimR, BOWL.height + 0.03],
-    [BOWL.floorR, 0], [0, 0],
-  ].map(([x, y]) => new THREE.Vector2(x, y));
-  // Metallschale: gebürsteter Stahl (Streifen rund um die Schale), spiegelt die warme Küche
-  const brushed = makeBrushedTexture();
-  brushed.repeat.set(3, 1);
-  brushed.anisotropy = aniso;
-  const steel = new THREE.MeshStandardMaterial({
-    color: 0xe4e7eb, metalness: 1, roughness: 0.34, roughnessMap: brushed,
-    envMap: env, envMapIntensity: 1.15, side: THREE.DoubleSide,
-  });
-  const bowl = new THREE.Mesh(new THREE.LatheGeometry(pts, 64), steel);
+  const bowl = createBowl(env, aniso);
   scene.add(bowl);
 
   // Kamera so weit weg, dass Breite UND Höhe der Szene ins Bild passen (Hoch- und Querformat)
@@ -116,4 +101,25 @@ export function createScene(canvas) {
   window.addEventListener('resize', resize);
 
   return { renderer, scene, camera, camBase, bowl, bowlShadow: shadow, ovenLight, bg, env };
+}
+
+/** Metallschale (Lathe, gebürsteter Stahl) – auch für den Startbildschirm, damit sie gleich aussieht. */
+export function createBowl(env, aniso) {
+  // Schale als Drehkörper (Lathe). Profil: außen unten -> Rand -> innen -> Boden
+  const t = 0.06;
+  const pts = [
+    [0, -0.07], [BOWL.floorR + 0.02, -0.07], [BOWL.rimR + t + 0.02, BOWL.height],
+    [BOWL.rimR + t, BOWL.height + 0.035], [BOWL.rimR, BOWL.height + 0.03],
+    [BOWL.floorR, 0], [0, 0],
+  ].map(([x, y]) => new THREE.Vector2(x, y));
+  // Metallschale: gebürsteter Stahl (Streifen rund um die Schale), spiegelt die warme Küche
+  const brushed = makeBrushedTexture();
+  brushed.repeat.set(3, 1);
+  brushed.anisotropy = aniso;
+  const steel = new THREE.MeshStandardMaterial({
+    color: 0xe4e7eb, metalness: 1, roughness: 0.34, roughnessMap: brushed,
+    envMap: env, envMapIntensity: 1.15, side: THREE.DoubleSide,
+  });
+  const bowl = new THREE.Mesh(new THREE.LatheGeometry(pts, 64), steel);
+  return bowl;
 }
