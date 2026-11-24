@@ -406,3 +406,22 @@ body.has-actions #hint:not(:empty) { padding: 4px 13px 5px; font-size: 13px; }
 .set-lab { flex: 1; min-width: 0; }
 #set-reset { flex-shrink: 0; padding: 0 14px 2px; font-size: 15px; }
 @media (max-width: 370px) { .set-row { gap: 9px; } .set-lab { font-size: 17px; } }
+
+/* Kompakt wie vorher: Bestell-Panel und Ergebniskarte dürfen nicht höher werden (Überlappungs-Check) */
+#order-progress .mx-v, #order-progress .mx-v small, #order-text .seq, #order-progress .mx-add, #order-progress .mx-sum, .mx-x { line-height: 1; }
+#order-text .seq { padding: 2px 8px 2px; }
+body.has-actions #order-text b { font-size: 16px; }
+body.has-actions #order-progress .mx-bar { height: 8px; }
+body.has-actions #order-progress .mx-v { font-size: 14.5px; }
+body.has-actions #hint:not(:empty) { border-width: 2.5px; padding: 3px 12px 4px; }
+body.has-actions #actions .btn { min-height: 48px; }
+#q-stars { height: 62px; margin: 6px 0 2px; }
+#q-stars .qs { width: 50px; height: 50px; }
+#q-stars .qs:nth-child(2) { width: 64px; height: 64px; margin-bottom: 8px; }
+#quality .q-row { padding-top: 3px; padding-bottom: 3px; line-height: 1.15; }
+#quality .q-row:last-child { padding-top: 6px; }
+#q-title { line-height: 1.2; }
+#q-banner { font-size: 26px; padding: 8px 24px 10px; }
+#quality { padding-top: 22px; }
+#quality > #q-banner { margin-top: -44px; }
+#q-stars { height: 59px; }
