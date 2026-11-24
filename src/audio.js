@@ -248,13 +248,13 @@ export function sndTick() {
  * Würfel rutschen über die schräge Seife: ganz leises, weiches Schaben (eine Rauschquelle, Pegel folgt
  * der Anzahl rutschender Würfel, sättigt). Pro Bild aufgerufen; ohne Rutschen verstummt es und stoppt.
  */
-let slide = null, slideQuiet = 0;
+let slide = null, slideQuiet = 0, slideT = -1;
 export function sndSlide(n) {
   if (!ctx) return;
   const now = ctx.currentTime;
   if (n <= 0) {
     if (!slide) return;
-    if (!slideQuiet) { slideQuiet = now; slide.g.gain.setTargetAtTime(0, now, 0.06); }
+    if (!slideQuiet) { slideQuiet = now; slide.g.gain.cancelScheduledValues(now); slide.g.gain.setTargetAtTime(0, now, 0.06); slideT = -1; }
     else if (now - slideQuiet > 0.5) { try { slide.src.stop(); } catch { /* schon gestoppt */ } slide = null; slideQuiet = 0; }
     return;
   }
@@ -269,8 +269,13 @@ export function sndSlide(n) {
     src.start();
     slide = { src, g, bp };
   }
+  // höchstens alle 60 ms neu planen (keine wachsende Automations-Liste bei 120 Bildern/s)
+  if (now - slideT < 0.06) return;
+  slideT = now;
   const level = 0.0042 * (1 - Math.exp(-n / 60));             // deutlich unter Schnitt und Rieseln
+  slide.g.gain.cancelScheduledValues(now);
   slide.g.gain.setTargetAtTime(level, now, 0.05);
+  slide.bp.frequency.cancelScheduledValues(now);
   slide.bp.frequency.setTargetAtTime(1150 + Math.min(n, 200) * 1.5, now, 0.1);   // mehr Würfel = minimal heller
 }
 
