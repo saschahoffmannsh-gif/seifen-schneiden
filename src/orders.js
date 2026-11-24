@@ -1,10 +1,13 @@
 // Bestellungen: Kundschaft, eine individuelle Mischung in Prozent (Schritte von 10 % = eine Scheibe),
 // manchmal ein gewünschter Zusatz, und die Belohnung.
-// Datenmodell offen für später (mehrere Seifen in einem größeren Päckchen): order.items = [{ mix, additive }];
-// heute hat jede Bestellung genau ein item, die Felder mix/soaps/additive spiegeln es.
+// Datenmodell offen für später (Seifenkörbe mit mehreren Seifen): order.items = [{ mix, additive, shape, qty }];
+// heute hat jede Bestellung genau ein item (qty 1), die Felder mix/soaps/additive spiegeln es.
+// barsNeeded(order) zählt über alle items, wie viele Stücke je Sorte aus dem Schrank geholt werden müssen.
 import { SOAP_LIST, SOAPS } from './soaps.js';
 import { ADDITIVES } from './additives.js';
 import { SOAP_SHAPES, DEFAULT_SHAPE } from './shapes.js';
+import { PCT_PER_SLICE } from './config.js';
+import { BAR_SLICES } from './save.js';
 
 const CUSTOMERS = ['Anna', 'Ben', 'Clara', 'Emil', 'Frieda', 'Jonas', 'Lea', 'Mila', 'Paul', 'Sophie', 'Greta', 'Oskar', 'Ida', 'Theo'];
 let nextId = 1;
@@ -49,8 +52,25 @@ export function makeOrder({ first = false, avoid = [], avoidRecipes = [] } = {})
   if (!first && special.length && Math.random() < 0.6) shape = special[(Math.random() * special.length) | 0];
   const reward = 36 + mix.length * 4 + (additive ? 8 : 0) + shape.bonus + ((Math.random() * 4) | 0) * 2;
   const soaps = mix.map((m) => m.soap);
-  return { id: nextId++, customer, mix, soaps, additive, shape, reward, items: [{ mix, additive, shape }] };
+  return { id: nextId++, customer, mix, soaps, additive, shape, reward, items: [{ mix, additive, shape, qty: 1 }] };
 }
 
 /** Text wie "Vanille 60 % · Erdbeere 40 %". */
 export const mixText = (mix) => mix.map((m) => `${m.soap.name} ${m.pct} %`).join(' · ');
+
+/**
+ * Bedarf an Seifenstücken je Sorte: Map soapId -> Stückzahl. Jede Seife (item) braucht von jeder ihrer
+ * Sorten mindestens ein Stück (mehr, wenn die Scheiben nicht aus einem Stück reichen), mal qty.
+ * Heute: 1 je Sorte. Ein Seifenkorb mit zwei Seiten Vanille ergibt später automatisch 2.
+ */
+export function barsNeeded(order) {
+  const need = new Map();
+  if (!order) return need;
+  for (const it of order.items || [{ mix: order.mix, qty: 1 }]) {
+    for (const m of it.mix) {
+      const bars = Math.max(1, Math.ceil(m.pct / PCT_PER_SLICE / BAR_SLICES)) * (it.qty || 1);
+      need.set(m.soap.id, (need.get(m.soap.id) || 0) + bars);
+    }
+  }
+  return need;
+}
