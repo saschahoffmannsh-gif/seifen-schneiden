@@ -39,7 +39,7 @@ const BAR_TABLE_SCALE = 0.85;                       // Seife auf dem Tisch / im 
 const BAR_HALF_H = 0.18 * BAR_TABLE_SCALE;          // halbe Höhe der liegenden Seife
 const KNIFE_X = -0.12;                               // Messer leicht nach links: Griff bleibt in der Nahaufnahme im Bild
 const ZOOM_TIME = 0.85;                             // s für die Kamerafahrt zur Seife und zurück
-const ZOOM_FIT_W = 1.9, ZOOM_FIT_H = 2.6;
+const ZOOM_FIT_W = 2.0, ZOOM_FIT_H = 2.7;
 const CLOSE_DIR = new THREE.Vector3(0.48, 0.5, 1).normalize();   // Blickrichtung der Nahaufnahme (von vorne rechts, ~25° von oben)           // so viel Szene (Breite/Höhe) zeigt die Nahaufnahme mindestens
 const PRESENT_LIFT = 0.12;                          // Präsentation: so weit steigt die Seife (unter der Ergebniskarte)
 const easeInOut = (t) => t * t * (3 - 2 * t);
@@ -348,7 +348,7 @@ export class Game {
     this.state = 'cutting';
     const m = this.order.mix.find((x) => x.soap === soap);
     const have = Math.round(this.pcts[soap.id] || 0);
-    this.ui.hint(m ? `Noch ${m.pct / PCT_PER_SLICE - Math.round(have / PCT_PER_SLICE)} Scheiben ${soap.name} – von oben nach unten wischen` : 'Von oben nach unten wischen');
+    this.ui.hint(m ? `${m.pct / PCT_PER_SLICE - Math.round(have / PCT_PER_SLICE)} Scheiben ${soap.name} · nach unten wischen` : 'Nach unten wischen');   // kurz: eine Zeile, mehr Platz für die Nahaufnahme
     this.rig.reset();
     this.block.load(soap, Math.min(SLICES, save.stock(soap.id)));
     this.ui.actions([{ label: '✋ Fertig mit dieser Seife', onClick: () => this.stopCutting() }]);
