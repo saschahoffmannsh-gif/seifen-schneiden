@@ -63,7 +63,11 @@ layoutUI();
 window.addEventListener('resize', layoutUI);
 window.__game = game; // für Tests/Debugging
 window.__barsNeeded = barsNeeded;   // Tests: Stücke je Sorte für einen Auftrag
-window.__menu = createMenu({ getCoins: () => game.coins });
+window.__menu = createMenu({
+  getCoins: () => game.coins,
+  // Bestellungen-Ansicht: echte Aufträge vom Brett; annehmen wie über den Zettel
+  board: () => ({ orders: game.notes.orders, active: game.order, canAccept: game.state === 'choose' && !game.order, accept: (i) => game.acceptOrder(i) }),
+});
 window.__decoItems = DECO_ITEMS;
 window.__additives = ADDITIVES;
 

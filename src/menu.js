@@ -14,6 +14,12 @@ import icoShelf from './assets/home/shelf.webp';
 import icoKitchen from './assets/home/kitchen.webp';
 import icoPack from './assets/home/pack.webp';
 const HOME_ICONS = { orders: icoOrders, shelf: icoShelf, kitchen: icoKitchen, pack: icoPack };
+import avatarSheet from './assets/avatars/kunden.webp';
+import { soapCss } from './cabinet.js';
+import { shapeIconURL, DEFAULT_SHAPE } from './shapes.js';
+// Kunden-Porträts (4×4-Blatt, generiert): Name -> Zelle
+const AVATAR = { Anna: 0, Lea: 1, Clara: 2, Mila: 3, Greta: 4, Ida: 5, Frieda: 6, Sophie: 7, Emil: 8, Ben: 9, Paul: 10, Jonas: 11, Oskar: 12, Theo: 14 };
+const CARD_COLORS = ['c-mint', 'c-sun', 'c-lilac', 'c-peach', 'c-sky'];
 
 const SAVE_KEY = 'seifen-save-v1';
 const $ = (id) => document.getElementById(id);
@@ -28,7 +34,7 @@ function hasProgress() {
 function openModal(id) { const m = $(id); m.classList.add('open'); }
 function closeModal(id) { $(id).classList.remove('open'); }
 
-export function createMenu({ getCoins }) {
+export function createMenu({ getCoins, board = null }) {
   const start = $('start');
   let started = false, openedAt = 0, stopT = 0;
   const scene3d = createStartScene($('st-canvas'));
@@ -148,11 +154,71 @@ export function createMenu({ getCoins }) {
     b.addEventListener('click', () => {
       b.classList.remove('wob'); void b.offsetWidth; b.classList.add('wob');   // kleiner Wackler (noch ohne eigene Seite)
       if (b.dataset.tile === 'kitchen') setTimeout(() => { if (start.classList.contains('open')) hide(); }, 320);   // Küche = bisheriges Spiel
+      if (b.dataset.tile === 'orders' && board) setTimeout(openOrders, 220);
     });
     b.addEventListener('animationend', () => b.classList.remove('wob'));
   }
 
+  // ---------- Bestellungen: die echten Aufträge vom Brett (game.notes.orders), je Seife ein Schüssel-Slot ----------
+  // Schüsselinhalt als SVG: Grundfarbe = größte Sorte, die anderen als verwirbelte Spiralbänder (Farben der echten Sorten)
+  function spiral(turn, r0, r1, rot) {
+    const pts = [];
+    for (let k = 0; k <= 40; k++) {
+      const t = k / 40, a = rot + t * turn * Math.PI * 2, r = r0 + (r1 - r0) * t;
+      pts.push(`${(50 + Math.cos(a) * r * 50).toFixed(1)},${(20 + Math.sin(a) * r * 20).toFixed(1)}`);
+    }
+    return 'M' + pts.join(' L');
+  }
+  function bowlMix(mix) {
+    const [first, ...rest] = mix;
+    let svg = `<svg viewBox="0 0 100 40" preserveAspectRatio="none"><rect width="100" height="40" fill="${soapCss(first.soap)}"/>`;
+    rest.forEach((m, k) => {
+      const w = 4 + m.pct * 0.22, rot = (k + 1) * 2.4;
+      svg += `<path d="${spiral(1.6, 0.08, 0.95, rot)}" fill="none" stroke="${soapCss(m.soap)}" stroke-width="${w.toFixed(1)}" stroke-linecap="round"/>`;
+    });
+    return svg + '</svg>';
+  }
+  function orderCard(o, i, st) {
+    const items = o.items || [o];
+    const slots = items.map((it, k) => {
+      const ext = [];
+      if (it.shape && it.shape !== DEFAULT_SHAPE) ext.push(`<span><img src="${shapeIconURL(it.shape.id, 48)}" alt="">${rich(it.shape.name)}</span>`);
+      if (it.additive) ext.push(`<span>${ICON.drop}${rich(it.additive.name)}</span>`);
+      return `<div class="oc-slot"><div class="bowl"><i>${bowlMix(it.mix)}</i></div>`
+        + `<div class="oc-mix">${it.mix.map((m) => `<span><i style="background:${soapCss(m.soap)}"></i>${rich(m.soap.name)} <b>${m.pct}&nbsp;%</b></span>`).join('')}</div>`
+        + (ext.length ? `<div class="oc-ext">${ext.join('')}</div>` : '')
+        + `<div class="oc-chip"><i class="bar"></i>${items.length > 1 ? `Seife ${k + 1}` : '1 Seife'}</div></div>`;
+    }).join('');
+    const av = AVATAR[o.customer] ?? (o.customer.length % 16);
+    const live = st.active === o;
+    return `<button class="ord-card ${CARD_COLORS[i % CARD_COLORS.length]}${live ? ' live' : ''}${!live && !st.canAccept ? ' wait' : ''}" data-i="${i}">`
+      + `<div class="oc-who"><span class="oc-av" style="background-image:url(${avatarSheet});background-position:${(av % 4) / 3 * 100}% ${Math.floor(av / 4) / 3 * 100}%"></span><b>${rich(o.customer)}</b></div>`
+      + `<div class="oc-slots n${Math.min(items.length, 2)}">${slots}</div>`
+      + `<div class="oc-reward"><small>bis</small>${ICON.coin}<b>${Math.round((o.total || o.reward) * 1.25)}</b></div>`
+      + (live ? '<div class="oc-badge">Läuft gerade</div>' : '') + '</button>';
+  }
+  function renderOrders() {
+    const st = board();
+    const list = st.orders.map((o, i) => (o ? orderCard(o, i, st) : '')).join('');
+    $('ord-list').innerHTML = list || '<div class="ord-empty">Gerade keine Bestellungen – gleich kommen neue!</div>';
+    $('ord-msg').textContent = st.active ? 'Eine Bestellung läuft gerade – tippe sie an, um weiterzumachen.' : st.canAccept ? 'Tippe eine Bestellung an, um sie anzunehmen.' : '';
+    for (const c of $('ord-list').querySelectorAll('.ord-card')) {
+      c.onclick = () => {
+        const i = +c.dataset.i, s2 = board();
+        c.classList.remove('wob'); void c.offsetWidth; c.classList.add('wob');
+        if (s2.active && s2.orders[i] === s2.active) { setTimeout(() => hide(), 260); return; }   // laufende Bestellung: zurück ins Spiel
+        if (!s2.canAccept) { $('ord-msg').textContent = 'Erst die laufende Bestellung abschließen.'; return; }
+        setTimeout(() => { hide(); s2.accept(i); }, 260);   // annehmen -> Spiel startet mit dieser Bestellung (Regal)
+      };
+      c.addEventListener('animationend', () => c.classList.remove('wob'));
+    }
+  }
+  function openOrders() { renderOrders(); $('ord-list').scrollTop = 0; start.classList.add('orders'); }
+  function closeOrders() { start.classList.remove('orders'); refreshStart(); }
+  $('ord-back').onclick = closeOrders;
+
   function show() {
+    start.classList.remove('orders');
     const home = started;   // aus dem Spiel zurück: direkt ins Hauptmenü
     slide.reset();
     start.classList.toggle('home', home);
