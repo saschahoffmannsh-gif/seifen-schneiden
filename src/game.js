@@ -14,11 +14,11 @@ import * as THREE from 'three';
 import { BLOCK, BOWL, CUBE, CUT, OVEN_SECONDS, BLOCK_BASE_Y, SLICES, MOULD_CUBES, PCT_PER_SLICE } from './config.js';
 import { SOAP_LIST, SOAP_BY_ID } from './soaps.js';
 import { makeMarbleTexture } from './marble.js';
-import { sndCut, sndPaper, sndDrawer, sndWood, sndThump, sndGlass, sndCeramic, sndCardboard, sndLid, sndFabric, sndCoins, sndCreak, sndSlide, haptic } from './audio.js';
+import { sndCut, sndPaper, sndDrawer, sndStack, sndWood, sndThump, sndGlass, sndCeramic, sndCardboard, sndLid, sndFabric, sndCoins, sndCreak, sndSlide, haptic } from './audio.js';
 import { PKG, TABLE_SPOT, PKG_SHELF_SCALE, SHADOW_SOAP, SHADOW_LID } from './packages.js';
 import { TABLE_Y, CABINET, SHELF_FRONT_Z } from './setting/wall.js';
 import { OrderNotes, NOTE_COUNT } from './orderNotes.js';
-import { makeOrder } from './orders.js';
+import { barsNeeded, makeOrder } from './orders.js';
 import { ADDITIVES, ADD_CATS, MAX_ADDITIVES, additiveThumb } from './additives.js';
 import { cabinetLayout } from './cabinet.js';
 import { save, applyUnlocks, BAR_SLICES, BAR_PRICE, STOCK_MAX } from './save.js';
@@ -170,7 +170,8 @@ export class Game {
     for (let i = 0; i < NOTE_COUNT; i++) this.notes.set(i, makeOrder({ first: i === 0, avoid: this.noteNames(), avoidRecipes: this.noteRecipes() }));
     this.activeNote = -1;
     this.order = null;
-    this.picked = new Set(); this.pickedDrawers = new Set(); this.stocked = false;
+    // Seifenschrank-Zähler: take = Map soapId -> geholte Stücke, takeDrawer = soapId -> Schublade mit dem Zähler
+    this.take = new Map(); this.takeDrawer = new Map(); this.stocked = false;
     this.cabLayout = cabinetLayout();
     this.toChoose();
   }
@@ -204,7 +205,7 @@ export class Game {
     this.activeNote = i;
     this.notes.setActive(i, true);
     this.cutIds.clear();
-    this.picked.clear(); this.pickedDrawers.clear(); this.stocked = false;
+    this.take.clear(); this.takeDrawer.clear(); this.stocked = false;
     this.additives = []; this.warnedAdd = false;
     this.ui.setOrder(this.order);
     this.refreshMix();
@@ -227,7 +228,7 @@ export class Game {
     let fill = 0;
     for (const s of SOAP_BY_ID) { const p = c[s.id] * 100 / MOULD_CUBES; this.pcts[s.id] = p; fill += p; }
     this.fillPct = fill;
-    this.ui.setMix(this.order, this.pcts, fill, this.additives, this.stockOf);
+    this.ui.setMix(this.order, this.pcts, fill, this.additives, this.stockOf, (id) => this.takenBars(id));
   }
 
   /** Sorten der Bestellung, von denen noch deutlich zu wenig in der Form ist. */
@@ -257,22 +258,42 @@ export class Game {
     }, { line: `+${BAR_SLICES} Scheiben (Vorrat jetzt ${S})` + (cost ? '' : ' · ein Geschenk'), verb: cost ? 'Kaufen' : 'Mitnehmen' });
   }
 
-  /** Vollbild-Schrank: alle Seifen der Bestellung in den Schubladen finden. */
+  /** Stücke im Schrank (ganze und angebrochene) einer Sorte. */
+  barsInStock(soap) { return Math.ceil(save.stock(soap.id) / BAR_SLICES); }
+
+  /** Alle Sorten der Bestellung mit mindestens so vielen Stücken, wie die Bestellung braucht? */
+  takeComplete() {
+    const o = this.order;
+    if (!o) return false;
+    const need = barsNeeded(o);
+    return o.soaps.every((s) => (this.take.get(s.id) || 0) >= (need.get(s.id) || 1));
+  }
+
+  /**
+   * Vollbild-Schrank: alle Seifen der Bestellung in den Schubladen finden. Jedes Antippen einer
+   * Schublade legt ein Stück mehr heraus (Zähler am Fach), das Minus am Zähler legt eins zurück.
+   * Ins Regal geht es mit dem Knopf unten, sobald jede Sorte so oft da ist, wie das Rezept braucht.
+   */
   openCabinet() {
     const back = this.state;
     this.state = 'cabinet';
     sndCreak(); haptic(8);   // Schranktür knarrt, dann gehen die Türen auf
     const o = this.order;
+    const need = barsNeeded(o);
     const findText = () => {
       if (!o) return 'Nimm zuerst eine Bestellung an';
-      const rest = o.soaps.filter((s) => !this.picked.has(s.id));
-      return rest.length ? `Gesucht: ${rest.map((s) => s.name).join(', ')}` : 'Alles beisammen';
+      const rest = o.soaps.filter((s) => (this.take.get(s.id) || 0) < (need.get(s.id) || 1)).map((s) => {
+        const n = need.get(s.id) || 1, t = this.take.get(s.id) || 0;
+        return n > 1 ? `${s.name} ${t}/${n}` : s.name;
+      });
+      return rest.length ? `Gesucht: ${rest.join(', ')}` : 'Alles beisammen';
     };
     this.ui.hint('');
-    this.ui.openCabinet(this.cabLayout, findText(), (d) => !!o && this.stocked === false && d.kind === 'soap' && this.picked.has(d.soap.id) && this.pickedDrawers.has(d), (d) => {
+    const anchor = (d) => d.kind === 'soap' && this.takeDrawer.get(d.soap.id) === d && (this.take.get(d.soap.id) || 0) > 0;
+    this.ui.openCabinet(this.cabLayout, findText(), (d) => !!o && anchor(d), (d) => {
       if (d.kind === 'locked') return 'Noch gesperrt';
       // leere Schublade: neues Stück nachkaufen (geht immer, auch ohne Bestellung)
-      if (d.kind === 'soap' && this.drawerStock(d) === 0) {
+      if (d.kind === 'soap' && this.drawerStock(d) === 0 && !anchor(d)) {
         this.offerRestock(d.soap, () => { this.ui.refreshCabinet(); this.refreshMix(); });
         return { refresh: true };
       }
@@ -280,13 +301,38 @@ export class Game {
       if (!o) return 'Nimm zuerst eine Bestellung an';
       if (this.stocked) return 'Die Seifen stehen schon im Regal';
       if (!o.soaps.includes(d.soap)) return 'Nicht in der Bestellung';
-      if (this.picked.has(d.soap.id)) return 'Bereits ausgewählt';
-      this.picked.add(d.soap.id); this.pickedDrawers.add(d);
-      sndDrawer(); haptic(12);
-      const all = o.soaps.every((s) => this.picked.has(s.id));
-      return { find: findText(), done: all ? () => this.stockShelf() : null };
-    }, () => { if (back === 'choose') this.toChoose(); else this.toShelf(); }, (d) => this.drawerStock(d));
+      const t = this.take.get(d.soap.id) || 0, have = this.barsInStock(d.soap);
+      if (t >= have) return have === 1 ? `Nur 1 Stück ${d.soap.name} im Schrank` : `Nur ${have} Stücke ${d.soap.name} im Schrank`;
+      if (!t) this.takeDrawer.set(d.soap.id, d);
+      this.take.set(d.soap.id, t + 1);
+      if (!t) sndDrawer(); else sndStack(t + 1);
+      haptic(t ? 8 : 12);
+      return { find: findText(), count: t + 1 };
+    }, () => { if (back === 'choose') this.toChoose(); else this.toShelf(); }, (d) => this.drawerStock(d), {
+      count: (d) => (anchor(d) ? this.take.get(d.soap.id) : 0),
+      need: (d) => (d.kind === 'soap' ? need.get(d.soap.id) || 0 : 0),
+      canEdit: () => !!o && !this.stocked,
+      dec: (d) => {
+        if (!o || this.stocked || !anchor(d)) return null;
+        const t = this.take.get(d.soap.id) - 1;
+        if (t > 0) this.take.set(d.soap.id, t); else { this.take.delete(d.soap.id); this.takeDrawer.delete(d.soap.id); }
+        sndStack(t, false); haptic(6);
+        return { find: findText(), count: t };
+      },
+      done: () => (o && !this.stocked ? { ready: this.takeComplete(), label: this.takeLabel() } : null),
+      onDone: () => this.stockShelf(),
+    });
   }
+
+  /** Knopf-Text im Schrank: 'Ins Regal stellen · 3 Stück'. */
+  takeLabel() {
+    let n = 0;
+    for (const v of this.take.values()) n += v;
+    return n ? `Ins Regal stellen · ${n} ${n === 1 ? 'Stück' : 'Stücke'}` : 'Ins Regal stellen';
+  }
+
+  /** Geholte Stücke einer Sorte (für Anzeige und spätere Seifenkörbe). */
+  takenBars(id) { return this.take.get(id) || 0; }
 
   /** Alle gefundenen Seifen fliegen (nacheinander) von oben auf das mittlere Brett und stellen sich auf. */
   stockShelf() {

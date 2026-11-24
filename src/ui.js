@@ -37,9 +37,9 @@ export function createUI() {
      * darunter die Füllung der Form (100 % = voll). pcts: { soapId: Prozent } oder null.
      * Schreibt ins DOM nur, wenn sich die gerundeten Werte ändern.
      */
-    setMix(order, pcts, fill, adds, stockOf) {
+    setMix(order, pcts, fill, adds, stockOf, takenOf) {
       if (!order) return;
-      const key = order.id + '|' + order.mix.map((m) => Math.round(pcts ? pcts[m.soap.id] || 0 : 0) + (stockOf ? '/' + stockOf(m.soap.id) : '')).join(',') + '|' + Math.round(fill) + '|' + adds.map((a) => a.id).join(',');
+      const key = order.id + '|' + order.mix.map((m) => Math.round(pcts ? pcts[m.soap.id] || 0 : 0) + (stockOf ? '/' + stockOf(m.soap.id) : '')).join(',') + '|' + Math.round(fill) + '|' + adds.map((a) => a.id).join(',') + '|' + (takenOf ? order.mix.map((m) => takenOf(m.soap.id)).join(',') : '');
       if (key === this._mixKey) return;
       this._mixKey = key;
       const row = (label, col, val, target, scale, cls = '') => {
@@ -48,7 +48,9 @@ export function createUI() {
         return `<div class="mx${cls}${near}"><span class="mx-n"><i class="sw" style="background:${col}"></i>${label}</span><span class="mx-bar"><i style="width:${w}%;background:${col}"></i><b style="left:${t}%"></b></span>`
           + `<span class="mx-v">${Math.round(val)}<small>/${target} %</small></span></div>`;
       };
-      let h = order.mix.map((m) => row(rich(m.soap.name), soapCss(m.soap), pcts ? pcts[m.soap.id] || 0 : 0, m.pct, 100)).join('');
+      // mehr als ein Stück aus dem Schrank geholt: '×2' hinter dem Namen
+      const tk = (m) => { const n = takenOf ? takenOf(m.soap.id) : 0; return n > 1 ? ` <em class="mx-x">×${n}</em>` : ''; };
+      let h = order.mix.map((m) => row(rich(m.soap.name) + tk(m), soapCss(m.soap), pcts ? pcts[m.soap.id] || 0 : 0, m.pct, 100)).join('');
       h += row('Füllung', '#c9a27a', fill, 100, 125, ' total');
       if (adds.length || order.additive) {
         const need = order.additive;
@@ -210,7 +212,7 @@ export function createUI() {
      * pick(d) -> Fehlertext (String) oder { find, done }: Schublade fährt raus und bleibt markiert;
      * done = Funktion -> alles gefunden, Schrank geht zu, danach done().
      */
-    openCabinet(layout, findText, marked, pick, onClose, drawerStock) {
+    openCabinet(layout, findText, marked, pick, onClose, drawerStock, opt = {}) {
       const root = $('cabinet'), grid = $('cab-grid'), msg = $('cab-msg');
       if (!grid.childElementCount) {
         for (const d of layout) {
@@ -219,13 +221,32 @@ export function createUI() {
           const col = d.kind === 'soap' ? soapCss(d.soap) : d.kind === 'locked' ? d.color : 'transparent';
           const name = d.kind === 'soap' ? d.soap.name : d.kind === 'locked' ? d.name : 'leer';
           b.innerHTML = `<span class="soap-pop" style="background:${col}"></span><span class="lab"><span class="dot" style="background:${col}"></span><span class="nm${name.length > 8 ? ' long' : ''}">${name}</span>`
-            + (d.kind === 'soap' ? '<span class="stk"><i></i></span>' : '') + '</span><span class="pull"></span>';
+            + (d.kind === 'soap' ? '<span class="stk"><i></i></span>' : '') + '</span><span class="pull"></span>'
+            + (d.kind === 'soap' ? '<span class="cnt" aria-live="polite"><small>×</small><b>0</b></span><span class="cnt-minus" role="button" aria-label="Ein Stück zurücklegen"></span>' : '');
           b._d = d;
           grid.appendChild(b);
         }
       }
       this._cabRefresh = () => {
         if (drawerStock) for (const x of grid.children) if (x._d.kind === 'soap') { const n = drawerStock(x._d); x.querySelector('.stk i').style.width = `${n * 10}%`; x.classList.toggle('bare', n === 0); x.title = `${n} Scheiben`; }
+      };
+      // Zähler am Fach: Badge (Anzahl, grün sobald das Rezept erfüllt ist), Minus nur solange man noch ändern darf
+      const paint = (bump) => {
+        for (const b of grid.children) {
+          if (b._d.kind !== 'soap') continue;
+          b.classList.toggle('out', marked(b._d));
+          const n = opt.count ? opt.count(b._d) || 0 : 0, need = opt.need ? opt.need(b._d) : 0;
+          b.classList.toggle('has-cnt', n > 0);
+          b.classList.toggle('cnt-ok', n > 0 && n >= need);
+          b.classList.toggle('cnt-edit', n > 0 && !!(opt.canEdit && opt.canEdit()));
+          const c = b.querySelector('.cnt');
+          if (n > 0) c.querySelector('b').textContent = n;
+          c.setAttribute('aria-label', `${n} Stück`);
+          if (bump === b) { c.classList.remove('bump', 'dip'); void c.offsetWidth; c.classList.add(bump._dir < 0 ? 'dip' : 'bump'); }
+        }
+        const done = opt.done ? opt.done() : null, btn = $('cab-done');
+        $('cab-foot').classList.toggle('show', !!done);
+        if (done) { btn.disabled = !done.ready; btn.textContent = done.label; btn.classList.toggle('ready', done.ready); }
       };
       for (const b of grid.children) {
         b.classList.remove('shake'); b.classList.toggle('out', marked(b._d));
@@ -238,16 +259,24 @@ export function createUI() {
         }
       }
       $('cab-find').textContent = findText;
+      paint(null);
       let busy = false;
       const shut = (then) => {
         root.classList.remove('open');
         covered = false; clearTimeout(coverTimer);
-        grid.onclick = null; $('cab-close').onclick = null;
+        grid.onclick = null; $('cab-close').onclick = null; $('cab-done').onclick = null;
         setTimeout(() => { root.classList.remove('show'); then && then(); }, 480);
       };
       grid.onclick = (e) => {
         const b = e.target.closest('.drawer');
-        if (!b || busy || b.classList.contains('out')) return;
+        if (!b || busy) return;
+        // Minus am Zähler: ein Stück zurück in die Schublade
+        if (e.target.closest('.cnt-minus') && b.classList.contains('cnt-edit')) {
+          const r = opt.dec && opt.dec(b._d);
+          if (r) { b._dir = -1; $('cab-find').textContent = r.find; paint(b); }
+          return;
+        }
+        if (b.classList.contains('out') && !opt.count) return;
         const r = pick(b._d, b);
         if (r && r.refresh) return;
         if (typeof r === 'string') {
@@ -256,10 +285,12 @@ export function createUI() {
           clearTimeout(msg._t); msg._t = setTimeout(() => msg.classList.remove('show'), 1300);
           return;
         }
-        b.classList.add('out');
+        b._dir = 1;
         $('cab-find').textContent = r.find;
+        paint(b);
         if (r.done) { busy = true; setTimeout(() => shut(r.done), 750); }
       };
+      $('cab-done').onclick = () => { if (busy || !opt.onDone) return; const d = opt.done && opt.done(); if (!d || !d.ready) return; busy = true; setTimeout(() => shut(opt.onDone), 160); };
       $('cab-close').onclick = () => { if (!busy) shut(onClose); };
       msg.classList.remove('show');
       grid.scrollTop = 0;

@@ -540,6 +540,35 @@ body:has(#quality.show) #order { display: none; }
   border: 1px solid rgba(220, 197, 155, .35); box-shadow: 0 6px 18px rgba(0, 0, 0, .4); opacity: 0; transition: opacity .25s; pointer-events: none;
 }
 #cab-msg.show { opacity: 1; }
+.cab:has(#cab-foot.show) #cab-msg { bottom: 84px; }
+/* Zähler am Fach: Elfenbein-Plakette mit Goldrand, Fraunces-Ziffer; grün, sobald das Rezept erfüllt ist */
+#cab-grid { padding-top: 16px; }
+.drawer .cnt, .drawer .cnt-minus { position: absolute; z-index: 3; display: none; }
+.drawer.has-cnt .cnt {
+  display: flex; align-items: baseline; justify-content: center; gap: 1px; top: -9px; right: -8px; min-width: 22px; height: 22px; padding: 0 5px;
+  border-radius: 999px; background: var(--card-bg); border: 1px solid var(--gold); color: var(--ink);
+  box-shadow: 0 0 0 1.5px rgba(255, 250, 240, .9), 0 3px 7px rgba(40, 24, 14, .45);
+  font: 600 13px/20px var(--f-display); font-variant-numeric: lining-nums tabular-nums; letter-spacing: -.01em;
+}
+.drawer .cnt small { font: 500 9px/20px var(--f-body); color: var(--ink-3); }
+.drawer.cnt-ok .cnt { background: linear-gradient(#a2b596, var(--sage) 55%, var(--sage-d)); border-color: var(--sage-d); color: #fbfaf4; }
+.drawer.cnt-ok .cnt small { color: rgba(251, 250, 244, .8); }
+.drawer.has-cnt.out::after { display: none; }                 /* das Häkchen übernimmt die grüne Plakette */
+.drawer .cnt.bump { animation: cntPop .42s var(--ease-back); }
+.drawer .cnt.dip { animation: cntDip .32s var(--ease); }
+@keyframes cntPop { 0% { transform: scale(.55); } 55% { transform: scale(1.22); } 100% { transform: scale(1); } }
+@keyframes cntDip { 0% { transform: scale(1); } 40% { transform: scale(.78); } 100% { transform: scale(1); } }
+.drawer.cnt-edit .cnt-minus {
+  display: block; top: -9px; left: -8px; width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+  background: linear-gradient(#4a3428, var(--esp-2)); box-shadow: 0 0 0 1.5px rgba(255, 250, 240, .9), 0 3px 7px rgba(40, 24, 14, .45);
+  animation: badgeIn .25s var(--ease);
+}
+.drawer.cnt-edit .cnt-minus::before { content: ''; position: absolute; inset: -9px; }          /* größere Trefferfläche für den Finger */
+.drawer.cnt-edit .cnt-minus::after { content: ''; position: absolute; left: 6px; right: 6px; top: 10px; height: 2px; border-radius: 1px; background: #f6ecdc; }
+#cab-foot { display: none; padding: 4px 16px 14px; justify-content: center; }
+#cab-foot.show { display: flex; }
+#cab-foot .btn { min-height: 50px; width: min(100%, 320px); font-size: 15px; }
+#cab-foot .btn.ready { animation: btnIn .35s var(--ease); }
 .cab-door {
   position: absolute; top: 0; bottom: 0; width: 50%; z-index: 5; pointer-events: none; border-radius: 20px;
   background: repeating-linear-gradient(90deg, rgba(90, 50, 20, .08) 0 2px, transparent 2px 11px), linear-gradient(#b98a60, #94653f);
@@ -650,3 +679,5 @@ body.menu-open #hud * { pointer-events: none; }
 
 /* Seifenform im großen Zettel */
 .note-row.shape .sh-ic { width: 18px; height: 18px; flex: none; margin-right: 2px; }
+/* geholte Stücke im Bestell-Zettel: 'Vanille ×2' */
+.mx-x { font: 600 11px var(--f-display); font-style: normal; color: var(--gold-d); margin-left: 2px; font-variant-numeric: lining-nums; }

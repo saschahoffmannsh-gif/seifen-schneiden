@@ -77,6 +77,17 @@ export function sndDrawer() {
   noise({ type: 'bandpass', f: 520, f2: 950, q: 0.9, gain: 0.04, a: 0.05, d: 0.13 });   // Holz gleitet
   sndWood(0.16, 0.75);                                                                   // Anschlag
 }
+/**
+ * Zähler am Seifenfach: ein Seifenstück legt sich weich auf das vorige (wachsig, gedämpft, kein Piepen).
+ * k = neuer Zählerstand (jedes weitere Stück minimal heller); up = false: Stück zurück in die Schublade (dunkler, leiser).
+ */
+export function sndStack(k = 1, up = true) {
+  if (!ctx) return;
+  const f = up ? 1 + Math.min(4, Math.max(0, k - 2)) * 0.045 : 0.82;
+  noise({ type: 'lowpass', f: 1500 * f, gain: up ? 0.032 : 0.022, a: 0.002, d: 0.045 });                 // Auflegen
+  noise({ t: 0.012, type: 'bandpass', f: 2600 * f, q: 1.4, gain: up ? 0.008 : 0.005, a: 0.002, d: 0.02 }); // feines Kratzen der Kante
+  modes([[300 * f, 0.07], [540 * f, 0.05, 0.5], [930 * f, 0.03, 0.22]], { gain: up ? 0.02 : 0.014, a: 0.003 });  // Holzboden der Schublade
+}
 /** Holz-Klopfen (Seifen aufs Brett, Ton-Schalter). */
 export function sndWood(t = 0, k = 1) {
   if (!ctx) return;
