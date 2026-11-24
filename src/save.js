@@ -12,11 +12,15 @@ if (!Array.isArray(data.unlocked)) data.unlocked = [];
 if (!data.stock || typeof data.stock !== 'object') data.stock = {};
 data.unlocked = [...new Set(data.unlocked.filter((x) => typeof x === 'string').map((x) => RENAMED[x] || x))];
 
-// Seifen-Vorrat im Schrank, in Scheiben (10 Scheiben = ein ganzes Stück). Start: 2 Stück je Sorte.
+// Früher: Seifen-Vorrat im Schrank in Scheiben. Seit dem Puzzle-Prinzip sind die Schrankfächer immer voll;
+// stock()/setStock() bleiben nur für alte Spielstände lesbar und werden vom Spiel nicht mehr benutzt.
 export const STOCK_START = 20, STOCK_MAX = 30, BAR_SLICES = 10, BAR_PRICE = 6;
 
 export const save = {
   get coins() { return data.coins; },
+  /** Abgeschlossene Aufträge (für die Puzzle-Kurve: ab wann 2 und 3 Seifen kommen). */
+  get done() { return data.done || 0; },
+  set done(v) { data.done = v; this.flush(); },
   set coins(v) { data.coins = v; this.flush(); },
   isUnlocked(id) { return data.unlocked.includes(id); },
   unlock(id) { if (!data.unlocked.includes(id)) data.unlocked.push(id); this.flush(); },

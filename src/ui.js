@@ -29,7 +29,9 @@ export function createUI() {
       $('order').classList.toggle('hidden', !order);
       this._mixKey = '';
       if (!order) { this.layoutOrder(); return; }
-      el.orderText.innerHTML = `<span class="avatar">${rich(order.customer[0])}</span><b>${rich(order.customer)}</b> wünscht sich`;
+      const n = order.items ? order.items.length : 1;
+      el.orderText.innerHTML = `<span class="avatar">${rich(order.customer[0])}</span><b>${rich(order.customer)}</b> wünscht sich`
+        + (n > 1 ? ` <span class="seq">Seife ${order.cur + 1}<small>/${n}</small></span>` : '');
       this.setMix(order, null, 0, []);
     },
     /**
@@ -183,19 +185,20 @@ export function createUI() {
     openNote(order, canAccept, onAccept, o2 = {}) {
       const root = $('note-view'), btn = $('note-accept');
       $('note-customer').textContent = order.customer;
-      // Mischung: Kuchen-Diagramm + Zeilen mit Prozent und Vorrat
-      let acc = 0;
-      const pie = order.mix.map((m) => { const a = acc; acc += m.pct; return `${soapCss(m.soap)} ${a}% ${acc}%`; }).join(',');
-      const stock = o2.stockOf || (() => null);
-      $('note-soaps').innerHTML = `<div class="note-pie" style="background:conic-gradient(${pie})"></div><div class="note-mix">`
-        + order.mix.map((m) => {
-          const st = stock(m.soap.id), need = m.pct / 10, low = st != null && st < need;
-          return `<div class="note-row"><i class="sw" style="background:${soapCss(m.soap)}"></i><span class="nr-name">${rich(m.soap.name)}</span><b>${m.pct} %</b>`
-            + (st != null ? `<small class="${low ? 'low' : ''}">Vorrat ${st}</small>` : '') + '</div>';
-        }).join('')
-        + (order.shape ? `<div class="note-row shape"><img class="sh-ic" src="${shapeIconURL(order.shape.id, 64)}" alt=""><span class="nr-name">Form</span><b>${rich(order.shape.name)}</b></div>` : '')
-        + (order.additive ? `<div class="note-row add">${ICON.drop}mit ${rich(order.additive.name)}</div>` : '') + '</div>';
-      $('note-reward').innerHTML = `<span class="reward-chip">Belohnung bis ${ICON.coin}<b>${Math.round(order.reward * 1.25)}</b></span>`;
+      // je Seife: Kuchen-Diagramm + Zeilen mit Prozent (bei mehreren Seifen untereinander, „Seife 1“, „Seife 2“ …)
+      const items = order.items || [order];
+      const block = (it, k) => {
+        let acc = 0;
+        const pie = it.mix.map((m) => { const a = acc; acc += m.pct; return `${soapCss(m.soap)} ${a}% ${acc}%`; }).join(',');
+        return `<div class="note-item">${items.length > 1 ? `<div class="note-k">Seife ${k + 1}</div>` : ''}<div class="note-item-in"><div class="note-pie" style="background:conic-gradient(${pie})"></div><div class="note-mix">`
+          + it.mix.map((m) => `<div class="note-row"><i class="sw" style="background:${soapCss(m.soap)}"></i><span class="nr-name">${rich(m.soap.name)}</span><b>${m.pct} %</b></div>`).join('')
+          + (it.shape ? `<div class="note-row shape"><img class="sh-ic" src="${shapeIconURL(it.shape.id, 64)}" alt=""><span class="nr-name">Form</span><b>${rich(it.shape.name)}</b></div>` : '')
+          + (it.additive ? `<div class="note-row add">${ICON.drop}mit ${rich(it.additive.name)}</div>` : '') + '</div></div></div>';
+      };
+      $('note-soaps').classList.toggle('multi', items.length > 1);
+      $('note-soaps').innerHTML = items.map(block).join('')
+        + (items.length > 1 ? `<div class="note-tip">1 Stück aus dem Schrank = 100 % einer Seife</div>` : '');
+      $('note-reward').innerHTML = `<span class="reward-chip">Belohnung bis ${ICON.coin}<b>${Math.round((order.total || order.reward) * 1.25)}</b></span>`;
       btn.disabled = !canAccept;
       btn.textContent = canAccept ? 'Bestellung annehmen' : 'Erst die aktuelle Bestellung abschließen';
       const close = () => { root.classList.remove('open'); root.onclick = null; $('note-close').onclick = null; btn.onclick = null; };
@@ -207,6 +210,45 @@ export function createUI() {
     sceneCovered() { return covered; },
     refreshCabinet() { if (this._cabRefresh) this._cabRefresh(); },
     noteOpen() { return $('note-view').classList.contains('open'); },
+    /**
+     * Schrank-Gitter vermessen: 3 Spalten sichtbar (große Fächer), Reihen nach Höhe (3–6),
+     * alphabetisch spaltenweise; nur wenn selbst 3 Reihen nicht passen, scrollt es auch senkrecht.
+     */
+    layoutCabinet() {
+      const grid = $('cab-grid');
+      if (!grid._wired) {
+        grid._wired = true;
+        grid.addEventListener('scroll', () => this.cabScrolled(), { passive: true });
+        const page = (dir) => grid.scrollBy({ left: dir * (grid.clientWidth - 32), behavior: 'smooth' });
+        document.querySelector('.cab-more.right').addEventListener('click', () => page(1));
+        document.querySelector('.cab-more.left').addEventListener('click', () => page(-1));
+        addEventListener('resize', () => { if ($('cabinet').classList.contains('show')) { this.layoutCabinet(); this.cabScrolled(); } });
+      }
+      const gap = innerWidth < 380 ? 8 : 10, pad = 16;
+      const W = grid.clientWidth - 2 * pad, H = grid.clientHeight - 6 - 14;
+      // 3 große Fächer nebeneinander; so viele Reihen, wie in der Höhe gut passen (3–6)
+      const dw = Math.floor((W - 2 * gap) / 3);
+      let rows = Math.max(3, Math.min(6, Math.floor((H + gap) / (dw * 0.86 + gap))));
+      let dh = Math.floor((H - (rows - 1) * gap) / rows);
+      dh = Math.min(dh, Math.round(dw * 1.2));
+      let v = false;
+      if (dh < dw * 0.7) { dh = Math.round(dw * 0.8); v = true; }   // sehr flaches Fenster: dann auch senkrecht scrollen
+      grid.style.setProperty('--dw', dw + 'px'); grid.style.setProperty('--dh', dh + 'px');
+      grid.style.setProperty('--rows', rows); grid.style.setProperty('--cg', gap + 'px');
+      grid.classList.toggle('vscroll', v);
+      grid._cols = Math.ceil(grid.scrollWidth / (dw + gap));
+    },
+    /** Rand-Hinweise und Seitenpunkte nach dem Scrollen. */
+    cabScrolled() {
+      const grid = $('cab-grid'), max = grid.scrollWidth - grid.clientWidth;
+      document.querySelector('.cab-more.right').classList.toggle('show', grid.scrollLeft < max - 6);
+      document.querySelector('.cab-more.left').classList.toggle('show', grid.scrollLeft > 6);
+      const pages = Math.max(1, Math.round(grid.scrollWidth / Math.max(1, grid.clientWidth - 16)));
+      const dots = $('cab-pages');
+      if (dots.childElementCount !== pages) dots.innerHTML = '<i></i>'.repeat(pages);
+      const cur = max > 0 ? Math.round(grid.scrollLeft / max * (pages - 1)) : 0;
+      [...dots.children].forEach((d, k) => d.classList.toggle('on', k === cur));
+    },
     /**
      * Seifenschrank im Vollbild. layout: Schubladen (cabinet.js). marked(d): Schublade schon gewählt?
      * pick(d) -> Fehlertext (String) oder { find, done }: Schublade fährt raus und bleibt markiert;
@@ -220,8 +262,9 @@ export function createUI() {
           b.className = 'drawer ' + d.kind;
           const col = d.kind === 'soap' ? soapCss(d.soap) : d.kind === 'locked' ? d.color : 'transparent';
           const name = d.kind === 'soap' ? d.soap.name : d.kind === 'locked' ? d.name : 'leer';
-          b.innerHTML = `<span class="soap-pop" style="background:${col}"></span><span class="lab"><span class="dot" style="background:${col}"></span><span class="nm${name.length > 8 ? ' long' : ''}">${name}</span>`
-            + (d.kind === 'soap' ? '<span class="stk"><i></i></span>' : '') + '</span><span class="pull"></span>'
+          const look = d.kind === 'soap' && this.soapThumb ? `url(${this.soapThumb(d.soap)})` : col;   // Seifen-Look (Muster/Motiv) als Bildchen
+          b.innerHTML = `<span class="soap-pop" style="background:${look}"></span><span class="lab"><span class="dot" style="background:${look}"></span><span class="nm${name.length > 9 ? ' long' : ''}">${name}</span>`
+            + '</span><span class="pull"></span>'
             + (d.kind === 'soap' ? '<span class="cnt" aria-live="polite"><small>×</small><b>0</b></span><span class="cnt-minus" role="button" aria-label="Ein Stück zurücklegen"></span>' : '');
           b._d = d;
           grid.appendChild(b);
@@ -260,6 +303,14 @@ export function createUI() {
       }
       $('cab-find').textContent = findText;
       paint(null);
+      root.classList.add('show');
+      this.layoutCabinet();
+      grid.scrollLeft = 0; grid.scrollTop = 0;
+      this.cabScrolled();
+      // erster Treffer der Bestellung: dorthin scrollen, wenn er nicht auf der ersten Seite liegt
+      const first = [...grid.children].find((b) => b._d.kind === 'soap' && opt.focus && opt.focus(b._d));
+      if (first && first.offsetLeft + first.offsetWidth > grid.clientWidth) grid.scrollLeft = Math.max(0, first.offsetLeft - 16);
+      this.cabScrolled();
       let busy = false;
       const shut = (then) => {
         root.classList.remove('open');
@@ -293,11 +344,22 @@ export function createUI() {
       $('cab-done').onclick = () => { if (busy || !opt.onDone) return; const d = opt.done && opt.done(); if (!d || !d.ready) return; busy = true; setTimeout(() => shut(opt.onDone), 160); };
       $('cab-close').onclick = () => { if (!busy) shut(onClose); };
       msg.classList.remove('show');
-      grid.scrollTop = 0;
-      root.classList.add('show');
       requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add('open')));
       clearTimeout(coverTimer); coverTimer = setTimeout(() => { covered = true; }, 520);
     },
+    /** „Nicht genug Seife“: Erklärung + Nochmal versuchen / anderen Auftrag. */
+    showFail(f) {
+      const root = $('fail');
+      $('fail-title').textContent = f.title;
+      $('fail-soap').style.background = soapCss(f.soap);
+      $('fail-why').innerHTML = f.lines.map((l) => `<p>${rich(l)}</p>`).join('');
+      $('fail-rule').textContent = f.rule;
+      const close = (cb) => { root.classList.remove('open'); $('fail-retry').onclick = null; $('fail-other').onclick = null; setTimeout(cb, 180); };
+      $('fail-retry').onclick = () => close(f.onRetry);
+      $('fail-other').onclick = () => close(f.onOther);
+      root.classList.add('open');
+    },
+    failOpen() { return $('fail').classList.contains('open'); },
     /** Ergebnis-Karte nach dem Ausformen: Genauigkeit, Sterne, Zeilen, Preis. null = ausblenden. */
     showQuality(q) {
       const root = $('quality');

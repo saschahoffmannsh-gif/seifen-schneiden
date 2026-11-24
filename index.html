@@ -68,7 +68,12 @@
         <button id="cab-close" class="x-btn" aria-label="Schließen"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>
       </div>
       <div id="cab-find"></div>
-      <div id="cab-grid" class="scroll-y"></div>
+      <div id="cab-wrap">
+        <div id="cab-grid"></div>
+        <div class="cab-more left" aria-hidden="true"><i></i></div>
+        <div class="cab-more right" aria-label="Weiter nach rechts" role="button"><i></i></div>
+      </div>
+      <div id="cab-pages" aria-hidden="true"></div>
       <div id="cab-msg"></div>
       <div id="cab-foot"><button id="cab-done" class="btn go" disabled>Ins Regal stellen</button></div>
       <div class="cab-door left"><span class="knob"></span></div>
@@ -77,6 +82,18 @@
   </div>
 
   <!-- Freischalten (Päckchen und Deko) -->
+  <div id="fail" role="dialog" aria-modal="true" aria-labelledby="fail-title">
+    <div class="fail-card">
+      <div class="eyebrow">Auftrag nicht geschafft</div>
+      <div class="fail-art" aria-hidden="true"><span id="fail-soap"></span><span class="fail-soap2"></span></div>
+      <h2 id="fail-title" class="m-title">Nicht genug Seife</h2>
+      <div id="fail-why"></div>
+      <div id="fail-rule"></div>
+      <button id="fail-retry" class="btn go big">Nochmal versuchen</button>
+      <button id="fail-other" class="btn link">Anderen Auftrag wählen</button>
+    </div>
+  </div>
+
   <div id="unlock">
     <div class="unlock-card">
       <div class="eyebrow">Freischalten</div>

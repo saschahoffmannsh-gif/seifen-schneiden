@@ -10,6 +10,7 @@ import { makeBlobTexture } from './setting/textures.js';
 import { MIDDLE_SHELF, SHELF_Z } from './setting/wall.js';
 
 const MAX = 4;
+const SPARE_SHOWN = 4;                // so viele Ersatzstücke je Sorte werden hinter dem vordersten gezeigt
 const BW = BLOCK.nx * CUBE, BH = BLOCK.ny * CUBE, BD = BLOCK.nz * CUBE; // große Seife
 export const SHELF_SCALE = 0.36;                                       // Seife im Regal: 36 %
 const SPACING = 0.62;
@@ -64,6 +65,12 @@ export class ShelfSoaps {
     }
     for (let i = 0; i < MAX; i++) { this.body.setColorAt(i, _c.set(1, 1, 1)); this.face.setColorAt(i, _c); }
 
+    // Ersatzstücke (weitere volle Stücke derselben Sorte) stehen leicht versetzt hinter dem vordersten
+    this.spare = new THREE.InstancedMesh(this.body.geometry, mat, MAX * SPARE_SHOWN);
+    for (let i = 0; i < MAX * SPARE_SHOWN; i++) { this.spare.setMatrixAt(i, _zero); this.spare.setColorAt(i, _c.set(1, 1, 1)); }
+    this.spare.frustumCulled = false;
+    scene.add(this.spare);
+    this.spareN = new Uint8Array(MAX);
     this.soaps = [];                       // Seife pro Platz (oder null)
     this.home = Array.from({ length: MAX }, () => new THREE.Vector3());
     this.fly = -1; this.flyT = 0; this.onArrive = null;
@@ -78,10 +85,11 @@ export class ShelfSoaps {
   setSoaps(list, fracs = null) {
     this.soaps = list.slice(0, MAX);
     for (let i = 0; i < MAX; i++) this.frac[i] = fracs && fracs[i] != null ? Math.max(0.08, fracs[i]) : 1;
+    this.spareN.fill(0); this.drawSpares();
     const n = this.soaps.length;
     for (let i = 0; i < MAX; i++) {
       const soap = this.soaps[i];
-      if (!soap) { this.hide(i); continue; }
+      if (!soap || (fracs && fracs[i] === 0)) { this.hide(i); continue; }   // Sorte ganz aufgebraucht
       this.home[i].set((i - (n - 1) / 2) * SPACING, MIDDLE_SHELF.y + BH * SHELF_SCALE / 2, SHELF_Z);
       _c.setRGB(soap.base[0], soap.base[1], soap.base[2], THREE.SRGBColorSpace);
       this.body.setColorAt(i, _c); this.face.setColorAt(i, _c);
@@ -91,6 +99,23 @@ export class ShelfSoaps {
     }
     this.body.instanceColor.needsUpdate = true; this.face.instanceColor.needsUpdate = true;
     this.blob.instanceMatrix.needsUpdate = true;
+  }
+
+  /** n Ersatzstücke hinter Platz i (0 = keins). */
+  setSpares(i, n) { this.spareN[i] = Math.min(SPARE_SHOWN, n); this.drawSpares(); }
+  drawSpares() {
+    const n = this.soaps.length;
+    for (let i = 0; i < MAX; i++) for (let k = 0; k < SPARE_SHOWN; k++) {
+      const idx = i * SPARE_SHOWN + k, soap = this.soaps[i];
+      if (!soap || k >= this.spareN[i]) { this.spare.setMatrixAt(idx, _zero); continue; }
+      // gestaffelt nach hinten rechts, damit man die Stücke zählen kann
+      _p.set((i - (n - 1) / 2) * SPACING + 0.075 * (k + 1), MIDDLE_SHELF.y + BH * SHELF_SCALE / 2, SHELF_Z - 0.05 * (k + 1));
+      _m.compose(_p, _q.identity(), _s.set(SHELF_SCALE, SHELF_SCALE, SHELF_SCALE));
+      this.spare.setMatrixAt(idx, _m);
+      _c.setRGB(soap.base[0] * 0.93, soap.base[1] * 0.93, soap.base[2] * 0.93, THREE.SRGBColorSpace);
+      this.spare.setColorAt(idx, _c);
+    }
+    this.spare.instanceMatrix.needsUpdate = true; this.spare.instanceColor.needsUpdate = true;
   }
 
   place(i, pos, scale, rotX = 0) {

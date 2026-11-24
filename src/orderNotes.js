@@ -104,38 +104,52 @@ export class OrderNotes {
     g.strokeStyle = 'rgba(184,149,93,0.8)'; g.lineWidth = 1;
     g.beginPath(); g.moveTo(cx - 44, 98); g.lineTo(cx - 8, 98); g.moveTo(cx + 8, 98); g.lineTo(cx + 44, 98); g.stroke();
     g.fillStyle = '#b8955d'; g.beginPath(); g.moveTo(cx, 93); g.lineTo(cx + 4, 98); g.lineTo(cx, 103); g.lineTo(cx - 4, 98); g.closePath(); g.fill();
-    // Mischung: schlanker, abgerundeter Balken
-    const bx = 26, bw = w - 52, by = 116, bh = 18;
-    let acc = 0;
-    g.save(); g.beginPath(); g.roundRect(bx, by, bw, bh, 9); g.clip();
-    o.mix.forEach((m) => {
-      const ww = bw * m.pct / 100;
-      g.fillStyle = soapRgb(m.soap); g.fillRect(bx + acc, by, ww + 0.5, bh);
-      if (acc > 0) { g.fillStyle = 'rgba(253,249,241,0.95)'; g.fillRect(bx + acc - 1, by, 2, bh); }
-      acc += ww;
-    });
-    const sh = g.createLinearGradient(0, by, 0, by + bh);
-    sh.addColorStop(0, 'rgba(255,255,255,0.35)'); sh.addColorStop(0.5, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(60,40,20,0.12)');
-    g.fillStyle = sh; g.fillRect(bx, by, bw, bh);
-    g.restore();
-    g.strokeStyle = 'rgba(90,60,30,0.25)'; g.lineWidth = 1; g.beginPath(); g.roundRect(bx, by, bw, bh, 9); g.stroke();
-    // Zeilen: Farbpunkt, Name, Prozent rechtsbündig
-    o.mix.forEach((m, k) => {
-      const y = 156 + k * 25;
-      g.fillStyle = soapRgb(m.soap); g.beginPath(); g.arc(34, y - 6, 6.5, 0, 6.283); g.fill();
-      g.strokeStyle = 'rgba(60,40,20,0.25)'; g.lineWidth = 1; g.stroke();
-      g.textAlign = 'left'; g.fillStyle = '#4a3628'; g.font = `500 18px ${SANS}`; g.fillText(m.soap.name, 50, y, 140);
-      g.textAlign = 'right'; g.fillStyle = '#392920'; g.font = `600 18px ${SANS}`; g.fillText(`${m.pct} %`, w - 26, y);
-    });
-    // Seifenform: Symbol + Name als eigene Zeile
-    const fy = 156 + o.mix.length * 25;
-    if (o.shape) {
-      drawShapeIcon(g, o.shape.id, 34, fy - 6, 19, '#e3cba9', 'rgba(90,60,30,0.6)');
-      g.textAlign = 'left'; g.fillStyle = '#4a3628'; g.font = `500 18px ${SANS}`; g.fillText('Form', 50, fy, 90);
-      g.textAlign = 'right'; g.fillStyle = '#392920'; g.font = `600 18px ${SANS}`; g.fillText(o.shape.name, w - 26, fy, 150);
+    const bar = (items, bx, by, bw, bh) => {
+      let acc = 0;
+      g.save(); g.beginPath(); g.roundRect(bx, by, bw, bh, bh / 2); g.clip();
+      items.forEach((m) => {
+        const ww = bw * m.pct / 100;
+        g.fillStyle = soapRgb(m.soap); g.fillRect(bx + acc, by, ww + 0.5, bh);
+        if (acc > 0) { g.fillStyle = 'rgba(253,249,241,0.95)'; g.fillRect(bx + acc - 1, by, 2, bh); }
+        acc += ww;
+      });
+      const sh = g.createLinearGradient(0, by, 0, by + bh);
+      sh.addColorStop(0, 'rgba(255,255,255,0.35)'); sh.addColorStop(0.5, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(60,40,20,0.12)');
+      g.fillStyle = sh; g.fillRect(bx, by, bw, bh);
+      g.restore();
+      g.strokeStyle = 'rgba(90,60,30,0.25)'; g.lineWidth = 1; g.beginPath(); g.roundRect(bx, by, bw, bh, bh / 2); g.stroke();
+    };
+    if (o.items && o.items.length > 1) {
+      // mehrere Seifen: je Seife „SEIFE k“ + Balken + eine Zeile mit den Anteilen
+      const n = o.items.length, step = n > 2 ? 42 : 60, y0 = 114;
+      o.items.forEach((it, k) => {
+        const y = y0 + k * step;
+        g.textAlign = 'left'; spaced(g, 2); g.fillStyle = '#9a7a52'; g.font = `600 11px ${SANS}`; g.fillText(`SEIFE ${k + 1}`, 26, y + 10); spaced(g, 0);
+        bar(it.mix, 92, y, w - 118, 12);
+        g.textAlign = 'center'; g.fillStyle = '#392920'; g.font = `500 ${n > 2 ? 14 : 15.5}px ${SANS}`;
+        g.fillText(it.mix.map((m) => `${m.soap.name} ${m.pct}`).join(' · ') + ' %', cx, y + (n > 2 ? 30 : 34), w - 40);
+      });
+    } else {
+      // Mischung: schlanker, abgerundeter Balken
+      bar(o.mix, 26, 116, w - 52, 18);
+      // Zeilen: Farbpunkt, Name, Prozent rechtsbündig
+      o.mix.forEach((m, k) => {
+        const y = 156 + k * 25;
+        g.fillStyle = soapRgb(m.soap); g.beginPath(); g.arc(34, y - 6, 6.5, 0, 6.283); g.fill();
+        g.strokeStyle = 'rgba(60,40,20,0.25)'; g.lineWidth = 1; g.stroke();
+        g.textAlign = 'left'; g.fillStyle = '#4a3628'; g.font = `500 18px ${SANS}`; g.fillText(m.soap.name, 50, y, 140);
+        g.textAlign = 'right'; g.fillStyle = '#392920'; g.font = `600 18px ${SANS}`; g.fillText(`${m.pct} %`, w - 26, y);
+      });
+      // Seifenform: Symbol + Name als eigene Zeile
+      const fy = 156 + o.mix.length * 25;
+      if (o.shape) {
+        drawShapeIcon(g, o.shape.id, 34, fy - 6, 19, '#e3cba9', 'rgba(90,60,30,0.6)');
+        g.textAlign = 'left'; g.fillStyle = '#4a3628'; g.font = `500 18px ${SANS}`; g.fillText('Form', 50, fy, 90);
+        g.textAlign = 'right'; g.fillStyle = '#392920'; g.font = `600 18px ${SANS}`; g.fillText(o.shape.name, w - 26, fy, 150);
+      }
+      const yy = fy - 2 + (o.shape ? 25 : 0);
+      if (o.additive) { g.textAlign = 'center'; g.fillStyle = '#8a6a3e'; g.font = `italic 400 18px ${SERIF}`; g.fillText(`mit ${o.additive.name}`, cx, yy, w - 40); }
     }
-    const yy = fy - 2 + (o.shape ? 25 : 0);
-    if (o.additive) { g.textAlign = 'center'; g.fillStyle = '#8a6a3e'; g.font = `italic 400 18px ${SERIF}`; g.fillText(`mit ${o.additive.name}`, cx, yy, w - 40); }
     // Trennlinie + Belohnung (Goldmünze)
     g.strokeStyle = 'rgba(184,149,93,0.45)'; g.lineWidth = 1; g.beginPath(); g.moveTo(30, h - 55); g.lineTo(w - 30, h - 55); g.stroke();
     const mx = cx - 26, my = h - 29;
@@ -143,7 +157,7 @@ export class OrderNotes {
     cg.addColorStop(0, '#f6e2a6'); cg.addColorStop(0.6, '#d9b35e'); cg.addColorStop(1, '#a98238');
     g.fillStyle = cg; g.beginPath(); g.arc(mx, my, 14, 0, 6.283); g.fill();
     g.strokeStyle = 'rgba(120,85,30,0.7)'; g.lineWidth = 1.2; g.beginPath(); g.arc(mx, my, 10, 0, 6.283); g.stroke();
-    g.textAlign = 'left'; g.fillStyle = '#392920'; g.font = `500 28px ${SERIF}`; g.fillText(String(o.reward), mx + 22, my + 9);
+    g.textAlign = 'left'; g.fillStyle = '#392920'; g.font = `500 28px ${SERIF}`; g.fillText(String(o.total || o.reward), mx + 22, my + 9);
     if (this.active[i]) {
       // Stempel „In Arbeit“: salbeigrün, leicht schräg, doppelte Kontur
       g.save(); g.translate(cx, h / 2 + 34); g.rotate(-0.26);
