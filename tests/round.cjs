@@ -135,7 +135,11 @@ const out = process.argv[3] || '/workspace/seifen-shots';
       const pt = await shelfPt(s);
       await p.mouse.click(pt.x, pt.y);
     }
-    await p.waitForFunction((id) => window.__game.state === 'cutting' && window.__game.block.soap.name === id, order[s], { timeout: 30000 });
+    await p.waitForFunction((id) => window.__game.state === 'cutting' && window.__game.block.soap.name === id, order[s], { timeout: 30000 }).catch(async (e) => {
+      await p.screenshot({ path: out + '/fehler-wechsel.png' });
+      console.log('switch failed', order[s], await p.evaluate(() => { const g = window.__game; return [g.state, g.block && g.block.soap && g.block.soap.name, document.getElementById('hint').textContent]; }));
+      throw e;
+    });
     // Kamera fährt heran, Seife kippt nach hinten: erst danach schneiden
     await p.waitForFunction(() => { const c = window.__game.testCutPx(); return c.zoom >= 1 && c.tilt >= 1; }, null, { timeout: 30000 });
     await p.waitForTimeout(300);
