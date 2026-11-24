@@ -38,7 +38,11 @@ const _dragPos = new THREE.Vector3(), _dragTarget = new THREE.Vector3();
 const TAKE_MAX = 9;                                 // Stücke je Sorte, die ins Regal passen (Zähler einstellig)
 const BAR_TABLE_SCALE = 0.85;                       // Seife auf dem Tisch / im Päckchen
 const BAR_HALF_H = 0.18 * BAR_TABLE_SCALE;          // halbe Höhe der liegenden Seife
-const KNIFE_X = -0.12;                               // Messer leicht nach links: Griff bleibt in der Nahaufnahme im Bild
+const KNIFE_X = -0.12;
+// schräge Klinge: knifeY = Höhe der Schneide an der hinteren (rechten) Würfelspalte; links liegt sie tiefer
+const SKEW = THREE.MathUtils.degToRad(CUT.skewDeg), SKEW_TAN = Math.tan(SKEW);
+const X_TRAIL = (BLOCK.nx - 1) / 2 * CUBE, X_LEAD = -X_TRAIL;
+const SKEW_RISE = (X_TRAIL - X_LEAD) * SKEW_TAN;      // so viel tiefer ist die Schneide an der linken Spalte                               // Messer leicht nach links: Griff bleibt in der Nahaufnahme im Bild
 const ZOOM_TIME = 0.85;                             // s für die Kamerafahrt zur Seife und zurück
 const ZOOM_FIT_W = 2.0, ZOOM_FIT_H = 2.7;
 const CLOSE_DIR = new THREE.Vector3(0.48, 0.5, 1).normalize();   // Blickrichtung der Nahaufnahme (von vorne rechts, ~25° von oben)           // so viel Szene (Breite/Höhe) zeigt die Nahaufnahme mindestens
@@ -132,7 +136,7 @@ export class Game {
     // Messer-Zustand
     this.knifeX = 0; this.knifeTargetY = 0; this.cutHeld = false; this.cutGrab = 0;
     this.knifeY = 2; this.knifeZ = 0; this.knifeTilt = 0;
-    this.sliceProgress = 0; this.returning = false; this.slicesCut = 0;
+    this.sliceProgress = 0; this.cutRaw = -1; this.returning = false; this.slicesCut = 0;
     knife.position.set(0, 2.2, BLOCK.nz * CUBE / 2 + 0.03);
     knife.visible = false;
     // Seife + Messer + Seifenbrett kippen gemeinsam (45° nach hinten beim Schneiden)
@@ -471,7 +475,7 @@ export class Game {
     this.knifeZ = this.block.cutZ;
     this.knifeX = KNIFE_X; this.knifeTilt = 0;
     this.cutHeld = this.input.down ? 'stale' : false;   // Finger vom Antippen im Regal schneidet nicht
-    this.sliceProgress = 0; this.returning = false; this.slicesCut = 0;
+    this.sliceProgress = 0; this.cutRaw = -1; this.returning = false; this.slicesCut = 0;
     this.loose.blockTop = -1; // Würfel fallen vorne weg, keine Kollision mit der Blockoberseite nötig
     haptic(8);
   }
@@ -997,7 +1001,7 @@ export class Game {
   testCutPx() {
     const H = window.innerHeight, W = window.innerWidth, b = this.block, M = this.rig.inner.matrixWorld;
     const pr = (y) => { _t.set(0, y, b.cutZ).applyMatrix4(M).project(this.camera); return [(_t.x + 1) / 2 * W, (1 - _t.y) / 2 * H]; };
-    const r = pr(b.topY + 0.06), t = pr(b.topY), u = pr(b.bottomY);
+    const r = pr(b.topY + 0.06 + SKEW_RISE), t = pr(b.topY), u = pr(b.bottomY);
     // Bildschirm-Punkte (die Mittellinie der gekippten Seife läuft im Bild leicht schräg)
     return { rest: r[1], top: t[1], bot: u[1], x: t[0], restX: r[0], botX: u[0], zoom: this.zoomE, tilt: this.rig.e };
   }
@@ -1310,7 +1314,8 @@ export class Game {
    */
   updateCutting(dt) {
     const inp = this.input;
-    const top = this.block.topY, height = top - this.block.bottomY, rest = top + 0.06;
+    // Ruhelage: auch die vorauseilende (linke) Seite der Schneide steht knapp über der Seife
+    const top = this.block.topY, height = top - this.block.bottomY, rest = top + 0.06 + SKEW_RISE;
     if (!inp.down) this.cutHeld = false;
     let follow = false;
     if (inp.down && this.cutHeld !== 'stale' && !this.returning) {
@@ -1325,7 +1330,7 @@ export class Game {
         if (fresh ? this.planeY(inp.downX, inp.downY) : this.planeY(inp.x, inp.y)) { this.cutHeld = true; this.cutGrab = this.knifeY - _hit.y; this.grabSeq = inp.seq; }
       }
       if (this.cutHeld === true && this.planeY(inp.x, inp.y)) {
-        this.knifeTargetY = THREE.MathUtils.clamp(_hit.y + this.cutGrab, top - height, top + 0.55);
+        this.knifeTargetY = THREE.MathUtils.clamp(_hit.y + this.cutGrab, top - height, top + 0.55 + SKEW_RISE);
         follow = true;
       }
     }
@@ -1334,17 +1339,21 @@ export class Game {
       // automatisch hochfahren und eine Scheibe nach hinten wechseln
       this.knifeY = damp(this.knifeY, rest, CUT.returnSpeed, dt);
       this.knifeZ = damp(this.knifeZ, this.block.cutZ, CUT.returnSpeed, dt);
-      if (rest - this.knifeY < 0.02) { this.returning = false; this.sliceProgress = 0; this.cutHeld = inp.down ? false : this.cutHeld; }
+      if (rest - this.knifeY < 0.02) { this.returning = false; this.sliceProgress = 0; this.cutRaw = -1; this.cutHeld = inp.down ? false : this.cutHeld; }
     } else {
       // 1:1 dem Finger nach; ohne Finger gleitet es sanft zurück nach oben
       this.knifeY = follow ? this.knifeTargetY : damp(this.knifeY, rest, 7, dt);
       this.knifeZ = damp(this.knifeZ, this.block.cutZ, 16, dt);
       if (this.block.active && follow && this.knifeY < prevY - 1e-4) {
         // nur abwärts: Tiefe der Schneide in der Seife = Fortschritt (hoch schneidet nicht)
-        const depth = THREE.MathUtils.clamp((top - this.knifeY) / height, 0, 1);
-        if (depth > this.sliceProgress) {
-          this.sliceProgress = depth >= 0.985 ? 1 : depth;
-          const n = this.block.cutTo(this.sliceProgress, this.onCube);
+        // Tiefe an der hinteren Seite = Fortschritt; die Spitze links ist um lead voraus und löst schon vorher
+        const lead = SKEW_RISE / height;
+        const raw = Math.min(1, (top - this.knifeY) / height);
+        if (raw > (this.cutRaw ?? -1)) {
+          this.cutRaw = raw;
+          const depth = Math.max(0, raw);
+          this.sliceProgress = depth >= 0.985 ? 1 : Math.max(this.sliceProgress, depth);
+          const n = this.block.cutTo(this.sliceProgress >= 1 ? 1 : raw, this.onCube, lead);
           if (n) { sndCut(); haptic(5); }
           if (this.sliceProgress >= 1) this.completeSlice();
         }
@@ -1353,8 +1362,9 @@ export class Game {
     // Messer neigt sich kaum: ruhige, gerade Führung
     this.knifeTilt = damp(this.knifeTilt, 0, 10, dt);
     this.refreshMix();   // Mischungs-Balken live (DOM nur bei Änderung)
-    this.knife.position.set(this.knifeX, this.knifeY, this.knifeZ);
-    this.knife.rotation.z = this.knifeTilt;
+    // Messer (Ursprung bei KNIFE_X) um die Schräge gedreht; knifeY ist die Schneide an der hinteren Spalte
+    this.knife.position.set(this.knifeX, this.knifeY - (X_TRAIL - this.knifeX) * SKEW_TAN, this.knifeZ);
+    this.knife.rotation.z = SKEW + this.knifeTilt;
     this.knifeVy = dt > 0 ? (this.knifeY - prevY) / dt : 0;   // für die Würfel auf der Klinge (Block-y/s)
   }
 
@@ -1381,8 +1391,9 @@ export class Game {
       sl.cutZ = b.cutZ; sl.frontZ = b.frontZ; sl.uncutTop = b.topY - b.rowsCut * CUBE;
       sl.lipFrontZ = this.rig.lipFrontZ; sl.lipBottomY = this.rig.lipBottomY; sl.backZ = -b.halfZ - 0.02;
       // Klinge steckt in der Scheibe (nicht beim Wechsel zur nächsten Scheibe): hebt die gelösten Würfel an
-      sl.bladeOn = this.state === 'cutting' && !this.returning && this.knife.visible && this.knifeY < b.topY;
+      sl.bladeOn = this.state === 'cutting' && !this.returning && this.knife.visible && this.knifeY - SKEW_RISE < b.topY;
       sl.bladeZ = this.knifeZ; sl.bladeY = this.knifeY; sl.bladeVy = this.knifeVy || 0;
+      sl.bladeX0 = X_TRAIL; sl.bladeTan = SKEW_TAN;   // Schneide schräg: Höhe an der Stelle x = bladeY + (x - X0)·tan
     }
     sndSlide(sl.on ? this.loose.slideN : 0);
     // Kamera: weich (smootherstep) zur Nahaufnahme und zurück

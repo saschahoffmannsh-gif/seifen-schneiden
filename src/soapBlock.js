@@ -29,7 +29,8 @@ export class SoapBlock {
     this.released = new Uint8Array(this.count);
     this.colors = new Float32Array(this.count * 3); // lineare RGB pro Würfel
     this.slice = -1;          // aktuelle (vorderste) Scheibe in z, die geschnitten wird
-    this.rowsCut = 0;         // wie viele Reihen (von oben) der aktuellen Scheibe schon gelöst sind
+    this.rowsCut = 0;         // wie viele Reihen (von oben) der aktuellen Scheibe schon ganz gelöst sind
+    this.colRows = new Int16Array(nx);   // je Spalte gelöste Reihen (schräge Klinge: links voraus)
     this.soap = null;
     this.halfX = nx * CUBE / 2;
     this.halfZ = nz * CUBE / 2;
@@ -79,7 +80,7 @@ export class SoapBlock {
     this.mesh.instanceColor.needsUpdate = true;
     this.slice = kz / SLICE_DEPTH - 1;  // vorderste vorhandene Scheibe (Kamera-Seite)
     this.slicesLeft = kz / SLICE_DEPTH;
-    this.rowsCut = 0;
+    this.rowsCut = 0; this.colRows.fill(0);
     this.mesh.visible = true;
   }
 
@@ -100,27 +101,38 @@ export class SoapBlock {
    * Für jeden gelösten Würfel wird onCube(x,y,z,r,g,b,soapId) aufgerufen.
    * Gibt die Anzahl gelöster Würfel zurück.
    */
-  cutTo(frac, onCube) {
+  /**
+   * Scheibe bis zur Tiefe frac (0..1, an der hinteren = rechten Seite der Klinge) lösen. lead = wie weit
+   * (in Anteilen der Höhe) die Schneide links voraus ist (schräge Klinge): Spalte i ist um
+   * lead·(nx-1-i)/(nx-1) tiefer -> die Würfel einer Reihe lösen sich versetzt von links nach rechts.
+   * frac darf negativ sein (nur die Spitze steckt schon in der Seife).
+   */
+  cutTo(frac, onCube, lead = 0) {
     if (this.slice < 0) return 0;
     const { nx, ny } = BLOCK;
-    const target = Math.min(ny, Math.floor(frac * ny + 0.0001));
-    let n = 0;
-    while (this.rowsCut < target) {
-      const j = ny - 1 - this.rowsCut; // oben zuerst
-      for (let dk = SLICE_DEPTH - 1; dk >= 0; dk--) for (let i = 0; i < nx; i++) {
-        const k = this.slice * SLICE_DEPTH + dk;
-        const idx = this.index(i, j, k);
-        if (this.released[idx]) continue;
-        this.released[idx] = 1;
-        this.releasedCount++;
-        this.mesh.setMatrixAt(idx, _zero);
-        this.uncover(i, j, k);
-        onCube(this.cubeX(i), this.cubeY(j), this.cubeZ(k),
-          this.colors[idx * 3], this.colors[idx * 3 + 1], this.colors[idx * 3 + 2], this.soap.id);
-        n++;
+    let n = 0, minRows = ny;
+    for (let i = 0; i < nx; i++) {
+      const d = Math.min(1, frac + lead * (nx - 1 - i) / (nx - 1));
+      const target = Math.max(0, Math.min(ny, Math.floor(d * ny + 0.0001)));
+      while (this.colRows[i] < target) {
+        const j = ny - 1 - this.colRows[i]; // oben zuerst
+        for (let dk = SLICE_DEPTH - 1; dk >= 0; dk--) {
+          const k = this.slice * SLICE_DEPTH + dk;
+          const idx = this.index(i, j, k);
+          if (this.released[idx]) continue;
+          this.released[idx] = 1;
+          this.releasedCount++;
+          this.mesh.setMatrixAt(idx, _zero);
+          this.uncover(i, j, k);
+          onCube(this.cubeX(i), this.cubeY(j), this.cubeZ(k),
+            this.colors[idx * 3], this.colors[idx * 3 + 1], this.colors[idx * 3 + 2], this.soap.id);
+          n++;
+        }
+        this.colRows[i]++;
       }
-      this.rowsCut++;
+      if (this.colRows[i] < minRows) minRows = this.colRows[i];
     }
+    this.rowsCut = minRows;   // ganz gelöste Reihen (für die Rutschfläche)
     if (n) { this.mesh.instanceMatrix.needsUpdate = true; this.hidden.needsUpdate = true; }
     return n;
   }
@@ -141,7 +153,7 @@ export class SoapBlock {
     this.cutTo(1, onCube);
     this.slice--;
     this.slicesLeft--;
-    this.rowsCut = 0;
+    this.rowsCut = 0; this.colRows.fill(0);
     if (this.slice < 0) this.mesh.visible = false;
     return this.slice < 0;
   }

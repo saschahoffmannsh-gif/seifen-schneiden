@@ -74,7 +74,7 @@ export class LooseCubes {
     // m = Block->Welt, inv = Welt->Block (Elemente einer Matrix4), Flächen-z abhängig von der Höhe.
     this.slope = { on: false, m: new Float32Array(16), inv: new Float32Array(16), halfX: 0, topY: 0, bottomY: 0,
       cutZ: 0, frontZ: 0, uncutTop: 0, lipFrontZ: 0, lipBottomY: 0, backZ: 0,
-      bladeOn: false, bladeZ: 0, bladeY: 0, bladeVy: 0 };   // Klinge: Ebene z, Höhe der Schneide, Geschwindigkeit (Block-y/s)
+      bladeOn: false, bladeZ: 0, bladeY: 0, bladeVy: 0, bladeX0: 0, bladeTan: 0 };   // Klinge: Ebene z, Höhe der Schneide, Geschwindigkeit (Block-y/s)
     this.dirtyMin = MAX; this.dirtyMax = -1;
     this.colMin = MAX; this.colMax = -1;
   }
@@ -156,8 +156,9 @@ export class LooseCubes {
           // Klinge: zwischen Schneide und Rücken liegt die Klingenflanke etwas vor der Schnittfläche;
           // direkt hinter der Schneide wächst das Anheben (Keil) -> Reihe für Reihe heben sich die Würfel ab
           let onBlade = false;
-          if (sl.bladeOn && ly > sl.bladeY && ly < sl.bladeY + BLADE.height + HALF && lz > sl.bladeZ - 0.02) {
-            const t = Math.min(1, (ly - sl.bladeY) / BLADE.ramp), bf = sl.bladeZ + BLADE.lift * t * t * (3 - 2 * t);
+          const by = sl.bladeY + (lx - sl.bladeX0) * sl.bladeTan;   // schräge Schneide: Höhe hier
+          if (sl.bladeOn && ly > by && ly < by + BLADE.height + HALF && lz > sl.bladeZ - 0.02) {
+            const t = Math.min(1, (ly - by) / BLADE.ramp), bf = sl.bladeZ + BLADE.lift * t * t * (3 - 2 * t);
             if (bf > f) { f = bf; onBlade = true; }
           }
           if (f > -1e8 && lz < f + HALF && lz > f - 0.3) {

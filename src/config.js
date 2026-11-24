@@ -35,6 +35,9 @@ export const PHYS = {
 export const CUT = {
   // Das Messer folgt dem Finger senkrecht; nur abwärts schneidet es (Tiefe = Fortschritt der Scheibe).
   returnSpeed: 9,         // wie schnell das Messer nach einer Scheibe wieder hochfährt
+  // Klinge leicht schräg (in der Schnittebene): die Spitze (links) eilt voraus, die Würfel einer Reihe
+  // lösen sich versetzt von links nach rechts statt alle gleichzeitig. Es bleibt eine gerade Scheibe.
+  skewDeg: 13,
 };
 
 export const OVEN_SECONDS = 5;
