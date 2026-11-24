@@ -15,7 +15,23 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   // Startbildschirm: sichtbar, Spielen-Button, dann ins Spiel
   console.log('start screen ->', await p.evaluate(() => document.getElementById('start').classList.contains('open')), await p.textContent('#start-play'));
   await p.screenshot({ path: out + '/0-start.png' });
-  await p.click('#start-play'); await p.waitForTimeout(800);
+  // Schieberegler: Griff ziehen (Anteil f der Strecke), loslassen
+  const slideStart = async (f) => {
+    const k = await p.$eval('#start-play .sg-knob', (e) => { const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; });
+    const tr = await p.$eval('#start-play', (e) => { const r = e.getBoundingClientRect(); return r.right - r.left; });
+    const range = tr - k.w - 8;
+    await p.mouse.move(k.x, k.y); await p.mouse.down();
+    for (let i = 1; i <= 10; i++) { await p.mouse.move(k.x + range * f * i / 10, k.y); await p.waitForTimeout(40); }
+    await p.mouse.up();
+  };
+  // nur halb geschoben und losgelassen: Griff federt zurück, Spiel startet NICHT
+  await slideStart(0.5); await p.waitForTimeout(1200);
+  const halfOpen = await p.evaluate(() => document.getElementById('start').classList.contains('open'));
+  const knobBack = await p.$eval('#start-play', (e) => e.getAttribute('aria-valuenow'));
+  console.log('start half release ->', halfOpen && knobBack === '0' ? 'frei' : 'FEHLER', 'open', halfOpen, 'knob', knobBack);
+  if (!halfOpen || knobBack !== '0') errs.push('Halb geschoben: Startbildschirm ' + (halfOpen ? 'offen' : 'ZU') + ', Griff ' + knobBack);
+  // ganz durchschieben: Seife fällt, danach startet das Spiel
+  await slideStart(1.05); await p.waitForTimeout(1700);
   console.log('start hidden ->', await p.evaluate(() => !document.getElementById('start').classList.contains('open')));
   await p.screenshot({ path: out + '/1-regal.png' });
   // Mitten auf den Tisch tippen darf nichts auswählen
