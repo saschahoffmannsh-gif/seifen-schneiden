@@ -301,3 +301,23 @@ export function sndCut() {
 
 /** Kurze Vibration (falls das Gerät es kann). */
 export function haptic(ms = 10) { try { navigator.vibrate && navigator.vibrate(ms); } catch (_) { /* ignorieren */ } }
+
+/**
+ * Weicher Knopf-„Plopp“ (wie ein Gummi-/Blasen-Plopp, kein Piepen): kurzer, tiefer Sinus, der schnell
+ * nach unten gleitet, plus ein ganz leiser, gedämpfter Anschlag. k = Lautstärke, up = etwas höher (Stern).
+ */
+let lastPop = -1;
+export function sndPop(k = 1, t = 0, up = 0) {
+  if (!ctx) return;
+  const t0 = ctx.currentTime + t;
+  if (!t && t0 - lastPop < 0.05) return;            // Doppel-Taps nicht doppelt
+  lastPop = t0;
+  const f = rnd(300, 340) * (1 + up * 0.25);
+  const o = ctx.createOscillator(); o.type = 'sine';
+  o.frequency.setValueAtTime(f * 1.6, t0); o.frequency.exponentialRampToValueAtTime(f, t0 + 0.035); o.frequency.exponentialRampToValueAtTime(f * 0.72, t0 + 0.12);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.07 * k, t0 + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.13);
+  o.connect(g); g.connect(bus); o.start(t0); o.stop(t0 + 0.16);
+  noise({ t, type: 'bandpass', f: 900, q: 0.9, gain: 0.012 * k, a: 0.002, d: 0.025, lp: 2000 });
+}

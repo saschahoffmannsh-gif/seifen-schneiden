@@ -5,6 +5,7 @@ import { DECO_ITEMS } from './decoItems.js';
 // Einstieg: baut alles zusammen und startet die Hauptschleife.
 import * as THREE from 'three';
 import './style.css';
+import './theme.css';   // Casual-Comic-Look (Runde 14)
 import { createScene } from './scene.js';
 import { SoapBlock } from './soapBlock.js';
 import { LooseCubes } from './looseCubes.js';
@@ -17,7 +18,7 @@ import { Game } from './game.js';
 import { ShelfSoaps } from './shelfSoaps.js';
 import { Packages } from './packages.js';
 import { BOWL } from './config.js';
-import { unlockAudio, sndTick } from './audio.js';
+import { unlockAudio, sndTick, sndPop } from './audio.js';
 import { PHYS } from './config.js';
 import { createBlockMaterial, createLooseMaterial } from './soapMaterial.js';
 
@@ -26,6 +27,11 @@ const view = createScene(canvas);
 const ui = createUI();
 const input = createInput(canvas, unlockAudio);
 document.addEventListener('pointerdown', unlockAudio, { once: true });
+// weicher Knopf-Plopp für alle UI-Knöpfe (deaktivierte bleiben still)
+document.addEventListener('pointerdown', (e) => {
+  const b = e.target.closest && e.target.closest('.btn, .round-btn, .x-btn, .tab, .switch, .pkg-card');
+  if (b && !b.disabled) sndPop(b.classList.contains('pkg-card') || b.classList.contains('tab') ? 0.6 : 1);
+});
 
 // Block: unterteilte Würfel (damit die Rundung im Shader weich wird).
 // Geometrien/Materialien werden genau einmal erzeugt.

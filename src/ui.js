@@ -2,7 +2,7 @@
 
 import { soapCss } from './cabinet.js';
 import { soapThumb } from './soapLooks.js';
-import { sndCoins } from './audio.js';
+import { sndCoins, sndPop } from './audio.js';
 import { shapeIconURL } from './shapes.js';
 import { ICON, rich, buttonLabel } from './icons.js';
 
@@ -74,8 +74,21 @@ export function createUI() {
       this.layoutOrder();
     },
     setCoins(n, bump) {
-      el.coins.textContent = n;
-      if (bump) { el.coinPill.classList.add('bump'); setTimeout(() => el.coinPill.classList.remove('bump'), 200); }
+      // Münzzähler zählt hoch/runter (kurz, ease-out); ohne bump sofort
+      cancelAnimationFrame(this._coinRaf);
+      const from = this._coinShown != null ? this._coinShown : n;
+      this._coinShown = n;
+      if (!bump || from === n) { el.coins.textContent = n; }
+      else {
+        const t0 = performance.now(), dur = Math.min(900, 300 + Math.abs(n - from) * 6);
+        const step = (now) => {
+          const t = Math.min(1, (now - t0) / dur), e = 1 - (1 - t) ** 3;
+          el.coins.textContent = Math.round(from + (n - from) * e);
+          if (t < 1) this._coinRaf = requestAnimationFrame(step);
+        };
+        this._coinRaf = requestAnimationFrame(step);
+      }
+      if (bump) { el.coinPill.classList.add('bump'); setTimeout(() => el.coinPill.classList.remove('bump'), 220); }
     },
     /** Deko-Bonus auf dem Bestell-Zettel ('+15 🪙 Deko'). */
     setDeco(n) {
@@ -365,7 +378,9 @@ export function createUI() {
     showQuality(q) {
       const root = $('quality');
       if (!q) { root.classList.remove('show'); return; }
-      $('q-stars').innerHTML = [0, 1, 2].map((k) => `<span class="qs ${k < q.stars ? 'on' : 'off'}" style="animation-delay:${0.25 + k * 0.18}s">${ICON.star}</span>`).join('');
+      // Sterne ploppen nacheinander auf (mit Funkeln) – je Stern ein weicher Plopp
+      $('q-stars').innerHTML = [0, 1, 2].map((k) => `<span class="qs ${k < q.stars ? 'on' : 'off'}" style="--d:${(0.35 + k * 0.32).toFixed(2)}s">${ICON.star}</span>`).join('');
+      for (let k = 0; k < q.stars; k++) sndPop(0.8, 0.35 + k * 0.32 + 0.2, k + 1);
       $('q-banner').textContent = q.stars === 3 ? 'Perfekt' : q.stars === 2 ? 'Sehr schön' : 'Geschafft';
       $('q-title').textContent = `Mischung ${q.accuracy} % genau`;
       $('q-rows').innerHTML = q.rows.map((r) => `<div class="q-row"><span>${rich(r.label)}</span><b class="${r.cls || ''}">${rich(r.value)}</b></div>`).join('');
