@@ -428,3 +428,7 @@ body.has-actions #actions .btn { min-height: 48px; }
 /* vier Reiter (Verpackung) passen ohne Abschneiden */
 #pkg-tabs .tab { padding: 0 11px 2px; font-size: 14.5px; }
 @media (max-width: 370px) { #pkg-tabs .tab { padding: 0 9px 2px; font-size: 13.5px; } }
+/* beim Schneiden/Arbeiten (Knöpfe unten) Kopfzeile so flach wie vorher */
+body.has-actions .avatar { width: 22px; height: 22px; font-size: 13px; border-width: 2px; }
+body.has-actions #order-text .seq { font-size: 12px; padding: 1px 7px 1px; border-width: 2px; }
+body.has-actions #order-progress .mx-add { margin-top: 3px; font-size: 11.5px; }
