@@ -84,13 +84,37 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   await p.click(`#cab-grid .drawer.soap >> nth=${wrong}`); await p.waitForTimeout(150);
   console.log('wrong drawer ->', await p.$eval('#cab-msg', (e) => e.textContent));
   await p.screenshot({ path: out + '/18-schublade-falsch.png' });
+  // Zähler am Fach: Wert der Plakette, Zustand im Spiel, Knopf unten
+  const cnt = (idx) => p.evaluate((idx) => { const b = document.querySelectorAll('#cab-grid .drawer')[idx], g = window.__game; return { badge: b.classList.contains('has-cnt') ? b.querySelector('.cnt b').textContent : '', minus: getComputedStyle(b.querySelector('.cnt-minus')).display !== 'none', take: g.take.get(b._d.soap.id) || 0, ok: b.classList.contains('cnt-ok'), done: document.getElementById('cab-done').disabled ? 'aus' : 'an', msg: document.getElementById('cab-msg').classList.contains('show') ? document.getElementById('cab-msg').textContent : '' }; }, idx);
+  const expect = (label, got, want) => { const ok = Object.keys(want).every((k) => got[k] === want[k]); console.log('counter', label, JSON.stringify(got), ok ? 'ok' : 'FEHLER erwartet ' + JSON.stringify(want)); if (!ok) note('Zähler ' + label); };
   for (let s = 0; s < order.length; s++) {
     const idx = await p.evaluate((name) => [...document.querySelectorAll('#cab-grid .drawer')].findIndex((b) => b._d.kind === 'soap' && b._d.soap.name === name), order[s]);
     await p.$eval(`#cab-grid .drawer:nth-child(${idx + 1})`, (e) => e.scrollIntoView({ block: 'center' }));
     await p.click(`#cab-grid .drawer >> nth=${idx}`); await p.waitForTimeout(500);
     console.log('picked', order[s], '->', await p.$eval('#cab-find', (e) => e.textContent));
-    if (s === 0) await p.screenshot({ path: out + '/19-schublade-gefunden.png' });
+    if (s === 0) {
+      await p.screenshot({ path: out + '/19-schublade-gefunden.png' });
+      expect('1x', await cnt(idx), { badge: '1', take: 1, minus: true, ok: true, done: 'aus' });
+      const bars = await p.evaluate((idx) => { const b = document.querySelectorAll('#cab-grid .drawer')[idx]; return window.__game.barsInStock(b._d.soap); }, idx);
+      await p.click(`#cab-grid .drawer >> nth=${idx}`); await p.waitForTimeout(500);
+      await p.screenshot({ path: out + '/19b-zaehler-2.png' });
+      expect('2x', await cnt(idx), bars >= 2 ? { badge: '2', take: 2 } : { badge: '1', take: 1 });
+      for (let k = 2; k < bars; k++) { await p.click(`#cab-grid .drawer >> nth=${idx}`); await p.waitForTimeout(300); }
+      await p.click(`#cab-grid .drawer >> nth=${idx}`); await p.waitForTimeout(250);   // mehr als im Schrank liegt: Hinweis, Zähler bleibt
+      expect('max', await cnt(idx), { badge: String(bars), take: bars });
+      console.log('counter max msg', (await cnt(idx)).msg);
+      await p.waitForTimeout(1300);
+      for (let k = bars; k > 1; k--) { await p.click(`#cab-grid .drawer >> nth=${idx} >> .cnt-minus`); await p.waitForTimeout(350); }
+      expect('minus', await cnt(idx), { badge: '1', take: 1 });
+      await p.click(`#cab-grid .drawer >> nth=${idx} >> .cnt-minus`); await p.waitForTimeout(350);
+      expect('null', await cnt(idx), { badge: '', take: 0, minus: false });
+      await p.click(`#cab-grid .drawer >> nth=${idx}`); await p.waitForTimeout(500);
+      expect('wieder 1x', await cnt(idx), { badge: '1', take: 1 });
+    }
   }
+  expect('alles', await cnt(await p.evaluate(() => [...document.querySelectorAll('#cab-grid .drawer')].findIndex((b) => b.classList.contains('has-cnt')))), { done: 'an' });
+  await p.screenshot({ path: out + '/19c-schrank-bereit.png' });
+  await p.click('#cab-done');
   await p.waitForFunction(() => window.__game.state === 'shelf', null, { timeout: 60000 });
   await p.waitForTimeout(600);
   console.log('stocked', await p.$eval('#hint', (e) => e.textContent), await p.evaluate(() => window.__game.shelf.soaps.map((s) => s.name)));
