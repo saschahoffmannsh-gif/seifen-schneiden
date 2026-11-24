@@ -9,7 +9,7 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   const p = await b.newPage({ viewport: { width: VW, height: VH }, deviceScaleFactor: 2 });
   // Safe-Area simulieren (iPhone): SAFE=oben,unten in px, z. B. SAFE=47,34
   if (process.env.SAFE) { const [st, sb] = process.env.SAFE.split(',').map(Number); await p.addInitScript(([st, sb]) => { document.addEventListener('DOMContentLoaded', () => { document.documentElement.style.setProperty('--sa-top', st + 'px'); document.documentElement.style.setProperty('--sa-bottom', sb + 'px'); }); }, [st, sb]); }
-  const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
+  const errs = []; const note = (t) => { errs.push(t); console.log('PAGE-ERROR', t); }; p.on('pageerror', e => note(e.message)); p.on('console', m => m.type() === 'error' && note(m.text()));
   await p.goto(url + '?fps=1');
   await p.waitForTimeout(2500);
   // Startbildschirm: sichtbar, Spielen-Button, dann ins Spiel
