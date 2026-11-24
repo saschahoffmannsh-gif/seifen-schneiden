@@ -60,12 +60,16 @@ export class LooseCubes {
     this.blockTop = -1;                   // Oberkante des Seifenblocks (Kollision)
     this.blockHalfX = 0; this.blockHalfZ = 0;
     this.onLand = null;                   // Callback für Klick-Geräusch
+    // Schräg gekippte Seife (Schneiden): Schnittfläche als Rutsche, in Block-Koordinaten.
+    // m = Block->Welt, inv = Welt->Block (Elemente einer Matrix4), Flächen-z abhängig von der Höhe.
+    this.slope = { on: false, m: new Float32Array(16), inv: new Float32Array(16), halfX: 0, topY: 0, bottomY: 0,
+      cutZ: 0, frontZ: 0, uncutTop: 0, lipFrontZ: 0, lipBottomY: 0, backZ: 0 };
     this.dirtyMin = MAX; this.dirtyMax = -1;
     this.colMin = MAX; this.colMax = -1;
   }
 
   /** Einen Würfel aus dem Pool holen. Ist der Pool voll, wird der älteste recycelt. */
-  spawn(x, y, z, r, g, b, typeId) {
+  spawn(x, y, z, r, g, b, typeId, rotX = 0) {
     const i = this.next;
     this.next = (this.next + 1) % MAX;
     if (this.used < MAX) { this.used++; this.mesh.count = this.used; }
@@ -82,10 +86,16 @@ export class LooseCubes {
     this.vel[o] = (Math.random() - 0.5) * 0.06;
     this.vel[o + 1] = -Math.random() * 0.15;
     this.vel[o + 2] = (Math.random() - 0.5) * 0.06;
-    this.rot[o] = 0; this.rot[o + 1] = 0; this.rot[o + 2] = 0;
-    this.spin[o] = (Math.random() - 0.5) * 5;
-    this.spin[o + 1] = (Math.random() - 0.5) * 3;
-    this.spin[o + 2] = (Math.random() - 0.5) * 5;
+    if (this.slope.on) {
+      // von der Klinge abgeschoben: etwas von der Fläche weg (Normale) und unterschiedlich schnell hangabwärts
+      const m = this.slope.m, pn = Math.random() * 0.35, pd = 0.1 + Math.random() * 0.5, ps = (Math.random() - 0.5) * 0.25;
+      this.vel[o] += m[8] * pn - m[4] * pd + ps; this.vel[o + 1] += m[9] * pn - m[5] * pd; this.vel[o + 2] += m[10] * pn - m[6] * pd;
+    }
+    this.rot[o] = rotX; this.rot[o + 1] = 0; this.rot[o + 2] = 0;   // gekippte Seife: Würfel starten in ihrer Lage
+    const k = this.slope.on ? 0.25 : 1;             // auf der Schräge liegen sie erst ruhig auf, dann rutschen/kippen sie
+    this.spin[o] = (Math.random() - 0.5) * 5 * k;
+    this.spin[o + 1] = (Math.random() - 0.5) * 3 * k;
+    this.spin[o + 2] = (Math.random() - 0.5) * 5 * k;
     this.mesh.setColorAt(i, _tmpColor.setRGB(r, g, b));
     if (i < this.colMin) this.colMin = i;
     if (i > this.colMax) this.colMax = i;
@@ -119,6 +129,44 @@ export class LooseCubes {
         V[o + 1] = -V[o + 1] * 0.35;
         V[o] += (x >= 0 ? 1 : -1) * 0.5;
         V[o + 2] += 0.3;
+      }
+
+      // 1b) schräge Seife: auf der Schnittfläche rutschen, an der Stufe der angeschnittenen Scheibe
+      //     und an der Brett-Leiste kippen/purzeln, unten frei in die Schale fallen
+      if (this.slope.on) {
+        const sl = this.slope, e = sl.inv;
+        const lx = e[0] * x + e[4] * y + e[8] * z + e[12];
+        const ly = e[1] * x + e[5] * y + e[9] * z + e[13];
+        const lz = e[2] * x + e[6] * y + e[10] * z + e[14];
+        if (lx > -sl.halfX - HALF * 0.4 && lx < sl.halfX + HALF * 0.4 && ly > sl.lipBottomY - HALF * 0.5 && ly < sl.topY + HALF && lz > sl.backZ) {
+          const f = Math.max(this.surfZ(ly - HALF * 0.8), this.surfZ(ly + HALF * 0.8));
+          if (f > -1e8 && lz < f + HALF && lz > f - 0.3) {
+            const m = sl.m;
+            // Normale (Block +z) und Rutschrichtung (Block -y) in Weltkoordinaten
+            const nx = m[8], ny = m[9], nz = m[10];
+            const pen = f + HALF - lz;
+            x += nx * pen; y += ny * pen; z += nz * pen;
+            const vn = V[o] * nx + V[o + 1] * ny + V[o + 2] * nz;
+            if (vn < 0) {
+              const k = 1 + (pen > HALF * 0.5 ? 0.45 : 0.12);    // über eine Stufe gehoben: kleiner Hüpfer
+              V[o] -= k * vn * nx; V[o + 1] -= k * vn * ny; V[o + 2] -= k * vn * nz;
+            }
+            // Gleitreibung (je Würfel etwas anders: manche rutschen, manche bremsen und kippen)
+            const r01 = ((i * 0.6180339) % 1);
+            const mu = 0.22 + 0.3 * r01;
+            const ux = -m[4], uy = -m[5], uz = -m[6];             // hangabwärts
+            const vt = V[o] * ux + V[o + 1] * uy + V[o + 2] * uz;
+            const fr = mu * PHYS.gravity * h * Math.abs(ny);      // Normalkraft ~ g·cos(Neigung)
+            const nv = vt > 0 ? Math.max(0, vt - fr) : Math.min(0, vt + fr);
+            V[o] += (nv - vt) * ux; V[o + 1] += (nv - vt) * uy; V[o + 2] += (nv - vt) * uz;
+            V[o] *= 0.985;                                         // seitlich kaum Drift
+            // Kippen: ein Teil der Würfel überschlägt sich hangabwärts (Achse = Welt-x), der Rest rutscht flach
+            const roll = r01 > 0.45 ? -nv / CUBE * (0.35 + 0.5 * r01) : 0;
+            S[o] += (roll - S[o]) * 0.08;
+            S[o + 1] *= 0.9; S[o + 2] *= 0.9;
+            if (pen > HALF * 0.5) S[o] -= 6 + 8 * r01;              // Stufe: kippt nach vorne über
+          }
+        }
       }
 
       // 2) Schalenwand (kegelförmig): radial zurückschieben und abprallen
@@ -180,6 +228,16 @@ export class LooseCubes {
       P[o] = x; P[o + 1] = y; P[o + 2] = z;
       this.writeMatrix(i);
     }
+  }
+
+  /** Flächen-z der Schräge auf Höhe ly (Block-Koordinaten); -1e9 = keine Fläche. */
+  surfZ(ly) {
+    const sl = this.slope;
+    if (ly > sl.topY) return -1e9;
+    if (ly >= sl.uncutTop) return sl.cutZ;                // schon geschnitten: Fläche hinter der Scheibe
+    if (ly >= sl.bottomY) return sl.frontZ;               // noch stehender Rest der Scheibe (Stufe)
+    if (ly >= sl.lipBottomY) return sl.lipFrontZ;         // Leiste des Bretts
+    return -1e9;
   }
 
   cellAt(x, z) {

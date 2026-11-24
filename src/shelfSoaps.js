@@ -17,7 +17,7 @@ const FLY_TIME = 0.55;
 
 const _m = new THREE.Matrix4(), _m2 = new THREE.Matrix4(), _q = new THREE.Quaternion();
 const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
-const _v = new THREE.Vector3();
+const _v = new THREE.Vector3(), _to = new THREE.Vector3(), _xAxis = new THREE.Vector3(1, 0, 0);
 const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
 
 /** Steigungs-Textur der großen Seife -> Normal Map (einmalig beim Start). */
@@ -68,6 +68,7 @@ export class ShelfSoaps {
     this.home = Array.from({ length: MAX }, () => new THREE.Vector3());
     this.fly = -1; this.flyT = 0; this.onArrive = null;
     this.back = -1; this.backT = 0;          // Seife fliegt von der Schale zurück ins Regal
+    this.backFrom = new THREE.Vector3(); this.backAng = 0;
     this.ray = new THREE.Raycaster();
     this.bobSlot = -1;
   }
@@ -92,8 +93,9 @@ export class ShelfSoaps {
     this.blob.instanceMatrix.needsUpdate = true;
   }
 
-  place(i, pos, scale) {
-    _m.compose(pos, _q.identity(), _s.set(scale, scale, scale * this.frac[i]));
+  place(i, pos, scale, rotX = 0) {
+    if (rotX) _q.setFromAxisAngle(_xAxis, rotX); else _q.identity();
+    _m.compose(pos, _q, _s.set(scale, scale, scale * this.frac[i]));
     this.body.setMatrixAt(i, _m);
     this.face.setMatrixAt(i, _m2.multiplyMatrices(_m, this.faceOffset));
     this.body.instanceMatrix.needsUpdate = true; this.face.instanceMatrix.needsUpdate = true;
@@ -129,9 +131,12 @@ export class ShelfSoaps {
   }
 
   /** Seife i (gerade über der Schale) fliegt zurück auf ihren Platz im Regal. */
-  flyBack(i) {
+  /** from/ang: Startlage (Mitte des Reststücks in der Welt, Kippwinkel um x) – die gekippte Seife richtet sich im Flug auf. */
+  flyBack(i, from = null, ang = 0) {
     if (this.back >= 0) this.landBack();
     this.back = i; this.backT = 0;
+    if (from) this.backFrom.copy(from); else this.backFrom.set(0, BLOCK_BASE_Y + BH / 2, 0);
+    this.backAng = ang;
     this.blob.setMatrixAt(i, _zero); this.blob.instanceMatrix.needsUpdate = true;
     this.flyPose(i, 0);
   }
@@ -144,9 +149,10 @@ export class ShelfSoaps {
   }
   /** Position auf der Flugbahn Regal (e=0) -> über der Schale (e=1). */
   flyPose(i, t) {
-    const e = t * t * (3 - 2 * t), h = this.home[i], ty = BLOCK_BASE_Y + BH / 2;
-    _p.set(h.x * (1 - e), h.y + (ty - h.y) * e + Math.sin(t * Math.PI) * 0.45, h.z * (1 - e));
-    this.place(i, _p, SHELF_SCALE + (1 - SHELF_SCALE) * e);
+    const e = t * t * (3 - 2 * t), h = this.home[i];
+    const back = i === this.back, f = back ? this.backFrom : _to.set(0, BLOCK_BASE_Y + BH / 2, 0);
+    _p.set(h.x + (f.x - h.x) * e, h.y + (f.y - h.y) * e + Math.sin(t * Math.PI) * 0.45, h.z + (f.z - h.z) * e);
+    this.place(i, _p, SHELF_SCALE + (1 - SHELF_SCALE) * e, back ? this.backAng * e : 0);
   }
 
   /** Pro Frame: Flug animieren, nächste gewünschte Seife leicht hüpfen lassen. Keine Allokationen. */
