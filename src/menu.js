@@ -51,6 +51,9 @@ export function createMenu({ getCoins }) {
     $('st-canvas').style.setProperty('--fade-y', `${Math.round(mn.top)}px`);   // Schale läuft unten zum Regler hin aus
   }
   window.addEventListener('resize', () => { if (start.classList.contains('open')) placeSoaps(); });
+  // Safe-Area/Schriften können das Layout nach dem ersten Messen verschieben -> neu einpassen
+  if (window.ResizeObserver) new ResizeObserver(() => { if (start.classList.contains('open')) placeSoaps(); }).observe(start.querySelector('.st-inner'));
+  window.addEventListener('load', () => { if (start.classList.contains('open')) placeSoaps(); });
 
   // ---------- Schieberegler (wie früher „Zum Entsperren schieben“): Fortschritt = Schnitttiefe ----------
   const slide = (() => {

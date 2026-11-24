@@ -83,7 +83,7 @@ export function createStartScene(canvas) {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     const vf = THREE.MathUtils.degToRad(camera.fov), hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
-    const dist = Math.max(FIT_W / 2 / Math.tan(hf / 2), FIT_H / 2 / Math.tan(vf / 2) / Math.max(0.15, band));
+    const dist = Math.max(FIT_W / 2 / Math.tan(hf / 2), FIT_H / 2 / Math.tan(vf / 2) / Math.max(0.15, band * 0.94));   // etwas Luft zu Wortmarke und Regler
     camera.position.copy(look3).addScaledVector(CLOSE_DIR, dist);
     camera.lookAt(look3);
     // Bildmitte auf die Mitte des Bands schieben
