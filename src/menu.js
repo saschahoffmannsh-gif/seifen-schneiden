@@ -3,6 +3,7 @@
 // Hinter dem Startbildschirm laufen 3D-Seifen (startscene.js) – nur solange er offen ist.
 import { ICON, rich } from './icons.js';
 import { sound } from './sound.js';
+import { save } from './save.js';
 import { PACKAGE_TYPES } from './decor.js';
 import { DECO_ITEMS } from './decoItems.js';
 import { ADDITIVES } from './additives.js';
@@ -54,6 +55,12 @@ export function createMenu({ getCoins, board = null }) {
     // Hauptmenü: Fortschrittsleiste (Münzen links, Freigeschaltetes als Leiste bis zum Stern)
     const lists = [PACKAGE_TYPES, DECO_ITEMS, ADDITIVES, SOAP_SHAPES];
     const un = lists.reduce((a, l) => a + l.filter((t) => t.unlocked).length, 0), all = lists.reduce((a, l) => a + l.length, 0);
+    // Shop-Bewertung (Durchschnitt der abgeschlossenen Bestellungen, 1–5 Sterne)
+    const rt = save.rating, starRow = ICON.star.repeat(5);
+    $('home-rating').innerHTML = `<span class="hr-stars" aria-hidden="true"><span class="hr-off">${starRow}</span><span class="hr-on" style="width:${(rt.avg / 5 * 100).toFixed(1)}%">${starRow}</span></span>`
+      + (rt.n ? `<b>${rt.avg.toFixed(1).replace('.', ',')}</b><span class="hr-txt">Shop-Bewertung<small>${rt.n} ${rt.n === 1 ? 'Bewertung' : 'Bewertungen'}</small></span>`
+        : '<span class="hr-txt one">Noch keine Bewertung</span>');
+    $('home-rating').setAttribute('aria-label', rt.n ? `Shop-Bewertung ${rt.avg.toFixed(1)} von 5 Sternen aus ${rt.n} Bewertungen` : 'Noch keine Shop-Bewertung');
     $('home-bar').innerHTML = `<span class="hb-coin">${ICON.coin}<b>${getCoins()}</b></span><span class="hb-track"><i style="width:${Math.max(6, Math.round(un / all * 100))}%"></i><em>${un}/${all}</em></span><span class="hb-star">${ICON.star}</span>`;
     placeSoaps();
   }

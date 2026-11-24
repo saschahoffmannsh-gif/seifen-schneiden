@@ -626,3 +626,24 @@ body.has-actions #order-progress .mx-add { margin-top: 3px; font-size: 11.5px; }
   .oc-av { width: 66px; height: 66px; }
   .oc-who b { font-size: 17px; }
 }
+
+/* ---------- Shop-Bewertung über der Fortschrittsleiste (SS-13) ---------- */
+.home-rating { display: none; }
+#start.home .home-rating {
+  display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 10px; max-width: 100%;
+  border-radius: 999px; background: linear-gradient(180deg, #fff9e0, #ffeaa0); border: 3px solid var(--ol); box-shadow: 0 3px 0 var(--ol-a);
+}
+.hr-stars { position: relative; display: inline-block; flex: none; line-height: 0; }
+.hr-stars > span { display: inline-flex; gap: 1px; white-space: nowrap; }
+.hr-on { position: absolute; left: 0; top: 0; overflow: hidden; }
+.hr-stars .star { width: 21px; height: 21px; flex: none; stroke: var(--ol); stroke-width: 1.8; paint-order: stroke; }
+.hr-off .star { color: #f1e3f3; }
+.hr-on .star { color: var(--sun); filter: drop-shadow(0 1.5px 0 var(--sun-e)); }
+.home-rating > b { font: 400 22px/1 var(--f-display); color: var(--ol); font-variant-numeric: tabular-nums; }
+.hr-txt { display: flex; flex-direction: column; font: 600 11.5px/1.15 var(--f-body); color: var(--ol); white-space: nowrap; }
+.hr-txt small { font: 600 10px/1.15 var(--f-body); color: var(--ink-2); }
+.hr-txt.one { font-size: 13px; }
+@media (max-width: 370px) { .hr-stars .star { width: 18px; height: 18px; } .home-rating > b { font-size: 20px; } }
+#start.home .logo { margin-top: 0; }
+#start.home .wordmark { margin-top: 10px; }
+#start.home .tagline { margin-top: 14px; }

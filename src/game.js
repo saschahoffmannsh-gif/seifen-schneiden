@@ -235,6 +235,7 @@ export class Game {
     setItem(this.order, 0);
     this.take.clear(); this.supply.clear(); this.stocked = false; this.pending = 0;
     this.additives = []; this.warnedAdd = false;
+    this.soapStars = [];   // Shop-Bewertung: Sterne je fertiger Seife dieses Auftrags
     this.cutIds.clear();
     this.loose.clear();
     this.shelf.setSoaps([]);
@@ -1176,6 +1177,16 @@ export class Game {
     }, () => {
       this.packages.hide(i);
       const earned = this.price + (this.pkgType ? this.pkgType.bonus : 0) + this.deco.bonus;
+      // Shop-Bewertung je Seife: Genauigkeit der Mischung -> 0–5 Sterne, fehlender Wunsch-Zusatz / falsche Form je −1
+      {
+        const o = this.order, q = this.quality;
+        if (o && q) {
+          let st = q.accuracy / 20;
+          if (o.additive && !this.additives.includes(o.additive)) st -= 1;
+          if (o.shape && this.shape && this.shape !== o.shape) st -= 1;
+          (this.soapStars || (this.soapStars = [])).push(Math.max(1, Math.min(5, st)));
+        }
+      }
       this.deco.reset(); this.ui.setDeco(0);
       this.additives = []; this.quality = null;
       const o = this.order, more = o && o.cur < o.items.length - 1;
@@ -1190,6 +1201,9 @@ export class Game {
         this.lastEarned = total; this.pending = 0;
         this.coins += total; save.coins = this.coins;
         save.done = save.done + 1;
+        // Bestellung fertig: Durchschnitt ihrer Seifen geht als eine Bewertung (1–5 Sterne) in die Shop-Bewertung
+        if (this.soapStars && this.soapStars.length) save.addRating(this.soapStars.reduce((a, b) => a + b, 0) / this.soapStars.length);
+        this.soapStars = [];
         this.ui.setCoins(this.coins, true);
         sndCoins(); haptic(20);
         this.ui.popup(o && o.items.length > 1 ? `+${total} 🪙 für ${o.items.length} Seifen` : db > 0 ? `+${total} 🪙 (Deko +${db})` : `+${total} 🪙`);

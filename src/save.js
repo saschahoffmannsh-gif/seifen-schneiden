@@ -27,6 +27,15 @@ export const save = {
   /** Vorrat einer Sorte (Scheiben). */
   stock(id) { return data.stock[id] ?? STOCK_START; },
   setStock(id, n) { data.stock[id] = Math.max(0, Math.min(STOCK_MAX, n)); this.flush(); },
+  /**
+   * Shop-Bewertung (SS-13): je abgeschlossener Bestellung 1–5 Sterne, gespeichert als Summe + Anzahl.
+   * rating = { avg (0 = noch keine), n }.
+   */
+  get rating() { const r = data.rating || { sum: 0, n: 0 }; return { avg: r.n ? r.sum / r.n : 0, n: r.n }; },
+  addRating(stars) {
+    const r = data.rating && typeof data.rating === 'object' ? data.rating : { sum: 0, n: 0 };
+    r.sum += Math.max(1, Math.min(5, stars)); r.n += 1; data.rating = r; this.flush();
+  },
   flush() { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* privat-Modus: egal */ } },
 };
 
