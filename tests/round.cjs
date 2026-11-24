@@ -271,13 +271,20 @@ const out = process.argv[3] || '/workspace/seifen-shots';
   const idle = () => p.waitForFunction(() => !window.__game.drag && !window.__game.deco.busy, null, { timeout: 60000 });
   const tapShelf = async (grp) => { const q = await p.evaluate((x) => window.__game.testPx(x), grp); await p.mouse.click(q.x, q.y); await p.waitForFunction(() => document.getElementById('pkg-picker').classList.contains('open')); await p.waitForTimeout(500); };
   const cardIdx = (name) => p.$$eval('#pkg-list .pkg-card .pkg-name', (n, nm) => n.findIndex((x) => x.textContent === nm), name);
-  const card = async (name) => { const i = await cardIdx(name); const c = p.locator('#pkg-list .pkg-card').nth(i); await c.scrollIntoViewIfNeeded(); await p.waitForTimeout(250); return c; };
+  // Sheet erst messen, wenn es fertig hochgefahren ist (unter Swiftshader-Last steht die Transition sonst bis ~0,9 s auf dem Startwert)
+  const sheetSettled = () => p.waitForFunction(() => { const r = document.querySelector('#pkg-picker .sheet').getBoundingClientRect(), w = window.__sheetTop;
+    window.__sheetTop = r.top; return r.bottom <= innerHeight + 1 && w === r.top; }, null, { timeout: 20000, polling: 150 });
+  const card = async (name) => { await sheetSettled(); const i = await cardIdx(name); const c = p.locator('#pkg-list .pkg-card').nth(i); await c.scrollIntoViewIfNeeded(); await p.waitForTimeout(250); return c; };
   // gedrückt halten -> schwebt über dem Finger -> über dem Paket loslassen
   const dragTo = async (name, shot, miss) => {
     const bb = await (await card(name)).boundingBox(), pk = await p.evaluate(() => window.__game.testPx('pkg'));
     const sx = bb.x + bb.width / 2, sy = bb.y + bb.height / 2, tx = miss ? 40 : pk.x, ty = miss ? VH * 0.62 : pk.y + 40;
     await p.mouse.move(sx, sy); await p.mouse.down();
-    await p.waitForFunction(() => !!window.__game.drag, null, { timeout: 20000 });
+    await p.waitForFunction(() => !!window.__game.drag, null, { timeout: 20000 }).catch(async (e) => {
+      await p.screenshot({ path: out + '/fehler-drag.png' });
+      console.log('drag start failed', name, { sx, sy, bb }, await p.evaluate(([x, y]) => { const el = document.elementFromPoint(x, y); return [el && (el.id || el.className), window.__game.state, document.getElementById('pkg-picker').className]; }, [sx, sy]));
+      throw e;
+    });
     for (let k = 1; k <= 10; k++) { await p.mouse.move(sx + (tx - sx) * k / 10, sy + (ty - sy) * k / 10); await p.waitForTimeout(40); }
     await p.waitForTimeout(300);
     if (shot) await p.screenshot({ path: out + '/' + shot });
