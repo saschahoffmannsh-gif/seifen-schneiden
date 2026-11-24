@@ -73,7 +73,7 @@ export class LooseCubes {
     // Schräg gekippte Seife (Schneiden): Schnittfläche als Rutsche, in Block-Koordinaten.
     // m = Block->Welt, inv = Welt->Block (Elemente einer Matrix4), Flächen-z abhängig von der Höhe.
     this.slope = { on: false, m: new Float32Array(16), inv: new Float32Array(16), halfX: 0, topY: 0, bottomY: 0,
-      cutZ: 0, frontZ: 0, uncutTop: 0, lipFrontZ: 0, lipBottomY: 0, backZ: 0,
+      cutZ: 0, frontZ: 0, uncutTop: 0, colTop: new Float32Array(64), nCols: 0, lipFrontZ: 0, lipBottomY: 0, backZ: 0,
       bladeOn: false, bladeZ: 0, bladeY: 0, bladeVy: 0, bladeX0: 0, bladeTan: 0 };   // Klinge: Ebene z, Höhe der Schneide, Geschwindigkeit (Block-y/s)
     this.dirtyMin = MAX; this.dirtyMax = -1;
     this.colMin = MAX; this.colMax = -1;
@@ -152,7 +152,7 @@ export class LooseCubes {
         const ly = e[1] * x + e[5] * y + e[9] * z + e[13];
         const lz = e[2] * x + e[6] * y + e[10] * z + e[14];
         if (lx > -sl.halfX - HALF * 0.4 && lx < sl.halfX + HALF * 0.4 && ly > sl.lipBottomY - HALF * 0.5 && ly < sl.topY + HALF && lz > sl.backZ) {
-          let f = Math.max(this.surfZ(ly - HALF * 0.8), this.surfZ(ly + HALF * 0.8));
+          let f = Math.max(this.surfZ(ly - HALF * 0.8, lx), this.surfZ(ly + HALF * 0.8, lx));
           // Klinge: zwischen Schneide und Rücken liegt die Klingenflanke etwas vor der Schnittfläche;
           // direkt hinter der Schneide wächst das Anheben (Keil) -> Reihe für Reihe heben sich die Würfel ab
           let onBlade = false;
@@ -266,10 +266,13 @@ export class LooseCubes {
   }
 
   /** Flächen-z der Schräge auf Höhe ly (Block-Koordinaten); -1e9 = keine Fläche. */
-  surfZ(ly) {
+  surfZ(ly, lx) {
     const sl = this.slope;
     if (ly > sl.topY) return -1e9;
-    if (ly >= sl.uncutTop) return sl.cutZ;                // schon geschnitten: Fläche hinter der Scheibe
+    // schräge Klinge: je Würfelspalte unterschiedlich tief geschnitten
+    let ut = sl.uncutTop;
+    if (sl.nCols > 0 && lx !== undefined) { let c = Math.floor((lx + sl.halfX) / (2 * sl.halfX) * sl.nCols); c = c < 0 ? 0 : c >= sl.nCols ? sl.nCols - 1 : c; ut = sl.colTop[c]; }
+    if (ly >= ut) return sl.cutZ;                // schon geschnitten: Fläche hinter der Scheibe
     if (ly >= sl.bottomY) return sl.frontZ;               // noch stehender Rest der Scheibe (Stufe)
     if (ly >= sl.lipBottomY) return sl.lipFrontZ;         // Leiste des Bretts
     return -1e9;

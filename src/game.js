@@ -72,6 +72,13 @@ export class Game {
     this.tapNdc = new THREE.Vector2();
     const canvas = renderer.domElement;
     this.isAvailable = (x) => this.slicesLeft(x.id) > 0;   // nur Sorten mit Seife im Regal antippbar
+    const endSwitchTap = (e) => {
+      const t = this.switchTap; this.switchTap = null;
+      if (!t || e.pointerId !== t.id || this.state !== 'cutting' || e.type !== 'pointerup') return;
+      if (Math.hypot(e.clientX - t.x, e.clientY - t.y) < 12 && performance.now() - t.t < 600) this.switchSoap(t.i);
+    };
+    canvas.addEventListener('pointerup', endSwitchTap);
+    canvas.addEventListener('pointercancel', endSwitchTap);
     canvas.addEventListener('pointerdown', (e) => {
       const st = this.state;
       const r = canvas.getBoundingClientRect();
@@ -90,9 +97,11 @@ export class Game {
         return;
       }
       // beim Schneiden andere Seife im Regal antippen = Seife wechseln
+      // erst beim Loslassen und nur als echter Tipp (ohne Wischen): das schräge Messer ruht etwas höher,
+      // ein Wisch, der dort über einer Regal-Seife beginnt, darf die Seife nicht wechseln
       if (st === 'cutting') {
         const i = this.shelf.pick(this.tapNdc, this.camera, (s) => s !== this.block.soap, true);   // nur direkt getroffen (Wischen beginnt oft in der Nähe)
-        if (i >= 0) this.switchSoap(i);
+        this.switchTap = i >= 0 ? { i, x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId } : null;
         return;
       }
       if (st !== 'choose' && st !== 'shelf' && st !== 'pickPkg' && st !== 'pickSoap') return;
@@ -494,7 +503,7 @@ export class Game {
   stopCutting(next = -1) {
     if (this.state !== 'cutting') return;
     const soap = this.block.soap;
-    const used = this.slicesCut + (this.block.rowsCut > 0 ? 1 : 0);
+    const used = this.slicesCut + (this.block.colRows.some((r) => r > 0) ? 1 : 0);   // angeschnitten (auch nur an der Spitze) = verbraucht
     // verbrauchte Scheiben gehen vom vordersten Stück ab; ist es alle, rückt das nächste volle Stück nach
     const sup = this.supply.get(soap.id);
     sup.cur -= used;
@@ -1389,6 +1398,7 @@ export class Game {
       sl.inv.set(_invM.copy(this.rig.inner.matrixWorld).invert().elements);
       sl.halfX = b.halfX; sl.topY = b.topY; sl.bottomY = b.bottomY;
       sl.cutZ = b.cutZ; sl.frontZ = b.frontZ; sl.uncutTop = b.topY - b.rowsCut * CUBE;
+      sl.nCols = BLOCK.nx; for (let i = 0; i < BLOCK.nx; i++) sl.colTop[i] = b.topY - b.colRows[i] * CUBE;
       sl.lipFrontZ = this.rig.lipFrontZ; sl.lipBottomY = this.rig.lipBottomY; sl.backZ = -b.halfZ - 0.02;
       // Klinge steckt in der Scheibe (nicht beim Wechsel zur nächsten Scheibe): hebt die gelösten Würfel an
       sl.bladeOn = this.state === 'cutting' && !this.returning && this.knife.visible && this.knifeY - SKEW_RISE < b.topY;
