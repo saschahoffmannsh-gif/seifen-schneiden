@@ -47,18 +47,27 @@ function outlinePts(id) {
   }
 }
 
+// Freischalt-Kurve (Runde 13, schneller): Oval und Rund gibt es nach 2 bzw. 5 fertigen Aufträgen geschenkt
+// (gift = save.done), alle Formen sind außerdem deutlich billiger. Alt: 60/80/100/140/160/180/200/240.
 export const SOAP_SHAPES = [
   { id: 'klassisch', name: 'Klassisch', cost: 0, bonus: 0 },
-  { id: 'oval', name: 'Oval', cost: 60, bonus: 3 },
-  { id: 'rund', name: 'Rund', cost: 80, bonus: 4 },
-  { id: 'achteck', name: 'Achteck', cost: 100, bonus: 5 },
-  { id: 'herz', name: 'Herz', cost: 140, bonus: 7 },
-  { id: 'blume', name: 'Blume', cost: 160, bonus: 8 },
-  { id: 'kuppel', name: 'Kuppel', cost: 180, bonus: 9 },
-  { id: 'stern', name: 'Stern', cost: 200, bonus: 10 },
-  { id: 'muschel', name: 'Muschel', cost: 240, bonus: 12 },
+  { id: 'oval', name: 'Oval', cost: 25, bonus: 3, gift: 2 },
+  { id: 'rund', name: 'Rund', cost: 40, bonus: 4, gift: 5 },
+  { id: 'achteck', name: 'Achteck', cost: 55, bonus: 5 },
+  { id: 'herz', name: 'Herz', cost: 75, bonus: 7 },
+  { id: 'blume', name: 'Blume', cost: 90, bonus: 8 },
+  { id: 'kuppel', name: 'Kuppel', cost: 110, bonus: 9 },
+  { id: 'stern', name: 'Stern', cost: 130, bonus: 10 },
+  { id: 'muschel', name: 'Muschel', cost: 160, bonus: 12 },
 ];
-for (const s of SOAP_SHAPES) s.unlocked = s.cost === 0 || save.isUnlocked('shape:' + s.id);
+for (const s of SOAP_SHAPES) s.unlocked = s.cost === 0 || save.isUnlocked('shape:' + s.id) || (s.gift && save.done >= s.gift);
+
+/** Geschenkte Formen nach fertigen Aufträgen: schaltet frei, speichert, liefert die neu freigeschalteten. */
+export function giftShapes(done) {
+  const out = [];
+  for (const s of SOAP_SHAPES) if (!s.unlocked && s.gift && done >= s.gift) { s.unlocked = true; save.unlock('shape:' + s.id); out.push(s); }
+  return out;
+}
 export const SHAPE_BY_ID = Object.fromEntries(SOAP_SHAPES.map((s) => [s.id, s]));
 export const DEFAULT_SHAPE = SOAP_SHAPES[0];
 

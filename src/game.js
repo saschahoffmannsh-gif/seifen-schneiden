@@ -22,7 +22,7 @@ import { barsNeeded, makeOrder, orderSorts, setItem, slicesNeeded } from './orde
 import { ADDITIVES, ADD_CATS, MAX_ADDITIVES, additiveThumb } from './additives.js';
 import { cabinetLayout } from './cabinet.js';
 import { save, applyUnlocks, BAR_SLICES, BAR_PRICE, STOCK_MAX } from './save.js';
-import { SOAP_SHAPES, DEFAULT_SHAPE, shapeGeometry, shapeEmboss, shapeIconURL, insideShape, shapeTopY } from './shapes.js';
+import { SOAP_SHAPES, DEFAULT_SHAPE, giftShapes, shapeGeometry, shapeEmboss, shapeIconURL, insideShape, shapeTopY } from './shapes.js';
 import { PKG_CATS, PACKAGE_TYPES } from './decor.js';
 import { Deco } from './deco.js';
 import { Showcase } from './showcase.js';
@@ -1186,6 +1186,9 @@ export class Game {
         this.ui.setCoins(this.coins, true);
         sndCoins(); haptic(20);
         this.ui.popup(o && o.items.length > 1 ? `+${total} 🪙 für ${o.items.length} Seifen` : db > 0 ? `+${total} 🪙 (Deko +${db})` : `+${total} 🪙`);
+        // neue Seifenform geschenkt (Oval nach 2, Rund nach 5 Aufträgen) – kommt ab jetzt auch in Bestellungen vor
+        const gifts = giftShapes(save.done);
+        if (gifts.length) setTimeout(() => { sndStack(3); this.ui.popup(`Neue Form geschenkt: ${gifts.map((g) => g.name).join(', ')}`); }, 1300);
       }
       // Schale kommt zurück, Päckchen wieder ins Regal, neue Bestellung
       this.bowl.visible = true; this.bowlShadow.visible = true;
