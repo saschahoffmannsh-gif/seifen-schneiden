@@ -230,6 +230,7 @@ export function createMenu({ getCoins, board = null, rooms = null }) {
     $('ord-msg').textContent = st.active ? 'Eine Bestellung läuft gerade – tippe sie an, um weiterzumachen.' : st.canAccept ? 'Tippe eine Bestellung an, um sie anzunehmen.' : '';
     for (const c of $('ord-list').querySelectorAll('.ord-card')) {
       c.onclick = () => {
+        if (ordScrolled()) return;   // SS-16: war ein Scroll-Wisch, kein Tipp -> nichts annehmen
         const i = +c.dataset.i, s2 = board();
         c.classList.remove('wob'); void c.offsetWidth; c.classList.add('wob');
         // t95u: kein Sprung in die Küche – annehmen und in der Bestellungen-Ansicht bleiben (Zurück -> Hauptmenü)
@@ -240,6 +241,13 @@ export function createMenu({ getCoins, board = null, rooms = null }) {
       c.addEventListener('animationend', () => c.classList.remove('wob'));
     }
   }
+  // SS-16: Tipp vs. Scroll-Wisch unterscheiden (Finger bewegt oder Liste gescrollt seit dem Aufsetzen)
+  const ordTouch = { y: 0, x: 0, top: 0, moved: false };
+  $('ord-list').addEventListener('pointerdown', (e) => { ordTouch.x = e.clientX; ordTouch.y = e.clientY; ordTouch.top = $('ord-list').scrollTop; ordTouch.moved = false; }, { passive: true });
+  $('ord-list').addEventListener('pointermove', (e) => { if (Math.abs(e.clientY - ordTouch.y) > 10 || Math.abs(e.clientX - ordTouch.x) > 10) ordTouch.moved = true; }, { passive: true });
+  $('ord-list').addEventListener('pointercancel', () => { ordTouch.moved = true; }, { passive: true });
+  $('ord-list').addEventListener('scroll', () => { if (Math.abs($('ord-list').scrollTop - ordTouch.top) > 6) ordTouch.moved = true; }, { passive: true });
+  const ordScrolled = () => ordTouch.moved;
   function openOrders() { renderOrders(); $('ord-list').scrollTop = 0; start.classList.add('orders'); }
   function closeOrders() { start.classList.remove('orders'); refreshStart(); }
   $('ord-back').onclick = closeOrders;

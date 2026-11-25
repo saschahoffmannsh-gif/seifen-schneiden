@@ -538,7 +538,7 @@ body.has-actions #order-progress .mx-add { margin-top: 3px; font-size: 11.5px; }
 #start.orders .st-inner { display: none; }
 #start.orders .ord-view {
   position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center;
-  padding: calc(var(--sa-top) + 14px) 14px 0;
+  height: 100%; max-height: 100dvh; padding: calc(var(--sa-top) + 14px) 14px 0;
 }
 .ord-head { position: relative; width: 100%; max-width: 440px; display: flex; justify-content: center; align-items: center; min-height: 64px; }
 #ord-back { position: absolute; left: 0; top: 50%; transform: translateY(-50%); }
@@ -553,9 +553,12 @@ body.has-actions #order-progress .mx-add { margin-top: 3px; font-size: 11.5px; }
 }
 .ord-msg { min-height: 18px; margin: 8px 0 6px; font: 600 13px/1.3 var(--f-body); color: var(--ol); text-align: center; text-shadow: 0 1px 0 rgba(255, 255, 255, .8); }
 .ord-list {
-  width: 100%; max-width: 440px; flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-  display: flex; flex-direction: column; gap: 14px; padding: 4px 2px calc(var(--sa-bottom) + 20px);
+  width: 100%; max-width: 440px; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  touch-action: pan-y; display: flex; flex-direction: column; gap: 14px; padding: 4px 2px calc(var(--sa-bottom) + 28px);
 }
+/* SS-16: Karten nicht schrumpfen (sonst passt alles "rein" und nichts scrollt); Wischen auf Karten scrollt die Liste */
+.ord-list > * { flex: none; }
+.ord-card { touch-action: pan-y; }
 .ord-empty { margin-top: 30px; text-align: center; font: 400 18px var(--f-display); color: var(--ol); }
 .ord-card {
   --c-l: #e6fbf1; --c: #b9f0d6; --c-d: #3fbf86; --c-s: #f3fffa;
