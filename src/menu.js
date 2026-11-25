@@ -15,11 +15,10 @@ import icoShelf from './assets/home/shelf.webp';
 import icoKitchen from './assets/home/kitchen.webp';
 import icoPack from './assets/home/pack.webp';
 const HOME_ICONS = { orders: icoOrders, shelf: icoShelf, kitchen: icoKitchen, pack: icoPack };
-import avatarSheet from './assets/avatars/kunden.webp';
+import { avatarStyle } from './avatars.js';
 import { soapCss } from './cabinet.js';
 import { shapeIconURL, DEFAULT_SHAPE } from './shapes.js';
 // Kunden-Porträts (4×4-Blatt, generiert): Name -> Zelle
-const AVATAR = { Anna: 0, Lea: 1, Clara: 2, Mila: 3, Greta: 4, Ida: 5, Frieda: 6, Sophie: 7, Emil: 8, Ben: 9, Paul: 10, Jonas: 11, Oskar: 12, Theo: 14 };
 const CARD_COLORS = ['c-mint', 'c-sun', 'c-lilac', 'c-peach', 'c-sky'];
 
 const SAVE_KEY = 'seifen-save-v1';
@@ -196,10 +195,9 @@ export function createMenu({ getCoins, board = null }) {
         + (ext.length ? `<div class="oc-ext">${ext.join('')}</div>` : '')
         + `<div class="oc-chip"><i class="bar"></i>${items.length > 1 ? `Seife ${k + 1}` : '1 Seife'}</div></div>`;
     }).join('');
-    const av = AVATAR[o.customer] ?? (o.customer.length % 16);
     const live = st.active === o;
     return `<button class="ord-card ${CARD_COLORS[i % CARD_COLORS.length]}${live ? ' live' : ''}${!live && !st.canAccept ? ' wait' : ''}" data-i="${i}">`
-      + `<div class="oc-who"><span class="oc-av" style="background-image:url(${avatarSheet});background-position:${(av % 4) / 3 * 100}% ${Math.floor(av / 4) / 3 * 100}%"></span><b>${rich(o.customer)}</b></div>`
+      + `<div class="oc-who"><span class="oc-av" style="${avatarStyle(o.customer)}"></span><b>${rich(o.customer)}</b></div>`
       + `<div class="oc-slots n${Math.min(items.length, 2)}">${slots}</div>`
       + `<div class="oc-reward"><small>bis</small>${ICON.coin}<b>${Math.round((o.total || o.reward) * 1.25)}</b></div>`
       + (live ? '<div class="oc-badge">Läuft gerade</div>' : '') + '</button>';

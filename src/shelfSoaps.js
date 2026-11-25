@@ -68,7 +68,49 @@ function buildRack(scene) {
     m.position.set(compX(c), y0 + 0.07, WALL_Z + RACK_D + 0.03);   // Tafel vorne am Fach, über Leiste und Sockel
     scene.add(m); labels.push(m);
   }
-  return { cv, tex, labels, plinths };
+  return { cv, tex, labels, plinths, deco: buildStationDeco(scene) };
+}
+
+/** SS-15 Geschenktheke: Bandspulen, Geschenkpapierrollen, Washi-Tape und Holzstempel in den Bogenfächern (nur Deko). */
+function buildStationDeco(scene) {
+  const g = new THREE.Group(); g.visible = false; scene.add(g);
+  const z = SHELF_Z + 0.02, y0 = FLOOR_Y;
+  const wood = new THREE.MeshStandardMaterial({ color: 0xd9aa6e, roughness: 0.6 });
+  const darkWood = new THREE.MeshStandardMaterial({ color: 0x9a6338, roughness: 0.55 });
+  const cyl = new THREE.CylinderGeometry(1, 1, 1, 28);
+  const mat = (c, r = 0.5) => new THREE.MeshStandardMaterial({ color: c, roughness: r });
+  const add = (geo, m, x, y, zz, sx, sy, sz, rx = 0, ry = 0, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, zz); o.scale.set(sx, sy, sz); o.rotation.set(rx, ry, rz); g.add(o); return o; };
+  // Bandspule: Band (Zylinder, Achse quer) zwischen zwei Holzscheiben
+  const spool = (x, color, ry = 0) => {
+    const R = 0.1, W = 0.065, y = y0 + R + 0.012;
+    add(cyl, mat(color, 0.35), x, y, z, R * 0.9, W, R * 0.9, 0, ry, Math.PI / 2);
+    for (const s of [-1, 1]) add(cyl, wood, x + Math.cos(ry) * s * (W / 2 + 0.006), y, z - Math.sin(ry) * s * (W / 2 + 0.006), R + 0.012, 0.012, R + 0.012, 0, ry, Math.PI / 2);
+  };
+  const cx0 = compX(0), cx1 = compX(1), cx2 = compX(2), cx3 = compX(3);
+  spool(cx0 - 0.15, '#f29bb8', 0.15); spool(cx0 - 0.05, '#c9a6ee', 0.1); spool(cx0 + 0.05, '#e8e27a', 0.05); spool(cx0 + 0.15, '#f6c38f', 0);
+  spool(cx1 - 0.1, '#e0475c', -0.1); spool(cx1, '#58b878', -0.05); spool(cx1 + 0.1, '#7fb6e6', 0);
+  // Geschenkpapierrollen (stehend), Muster per Canvas
+  const paper = (bg, dots, kind) => {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 256; const x = c.getContext('2d');
+    x.fillStyle = bg; x.fillRect(0, 0, 128, 256);
+    for (let i = 0; i < 60; i++) {
+      const px = (i * 37) % 128, py = (i * 53) % 256; x.fillStyle = dots[i % dots.length];
+      if (kind === 'flower') { for (let k = 0; k < 5; k++) { x.beginPath(); x.arc(px + Math.cos(k * 1.256) * 5, py + Math.sin(k * 1.256) * 5, 3.5, 0, 7); x.fill(); } }
+      else if (kind === 'stripe') { x.fillRect(0, (i * 18) % 256, 128, 6); }
+      else { x.beginPath(); x.arc(px, py, 4, 0, 7); x.fill(); }
+    }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    return new THREE.MeshStandardMaterial({ map: t, roughness: 0.6 });
+  };
+  const rolls = [[-0.13, '#f7b6c9', ['#ffffff', '#e8679a'], 'flower', 0.46], [0, '#bfe0f5', ['#ffffff', '#f6c1d0', '#8fc7a3'], 'flower', 0.5], [0.13, '#fff1d6', ['#e9a8c4', '#c9a6ee'], 'stripe', 0.42]];
+  for (const [dx, bg, dots, kind, h] of rolls) add(cyl, paper(bg, dots, kind), cx2 + dx, y0 + h / 2, z, 0.05, h, 0.05);
+  // Washi-Tape-Rolle liegend + Holzstempel
+  add(cyl, mat('#f2b37c', 0.5), cx3 - 0.12, y0 + 0.11, z + 0.02, 0.1, 0.09, 0.1, Math.PI / 2, 0.25, 0);
+  add(cyl, mat('#fffaf0', 0.8), cx3 - 0.12, y0 + 0.11, z + 0.02, 0.06, 0.092, 0.06, Math.PI / 2, 0.25, 0);
+  add(new RoundedBoxGeometry(1, 1, 1, 2, 0.1), wood, cx3 + 0.1, y0 + 0.03, z, 0.17, 0.06, 0.13);
+  add(cyl, darkWood, cx3 + 0.1, y0 + 0.11, z, 0.025, 0.11, 0.025);
+  add(new THREE.SphereGeometry(1, 18, 12), darkWood, cx3 + 0.1, y0 + 0.19, z, 0.045, 0.04, 0.045);
+  return g;
 }
 
 const _m = new THREE.Matrix4(), _m2 = new THREE.Matrix4(), _q = new THREE.Quaternion();
@@ -158,6 +200,14 @@ export class ShelfSoaps {
     document.fonts && document.fonts.load('600 64px Fredoka').then(() => this.drawLabels()).catch(() => {});
   }
 
+  /** SS-15 Geschenktheke: statt der Rezept-Seifen liegen Bänder, Papier und Stempel im Regal. */
+  setStation(on) {
+    this.stationOn = on;
+    for (const m of [this.body, this.face, this.blob, this.spare]) m.visible = !on;
+    this.rack.deco.visible = on;
+    this.drawLabels();
+  }
+
   /** Fach für Platz i: Sorten mittig in die vier Bogenfächer verteilt. */
   comp(i) { return i + ((NC - Math.min(NC, this.soaps.length)) >> 1); }
 
@@ -168,8 +218,8 @@ export class ShelfSoaps {
     for (let i = 0; i < this.soaps.length; i++) bySlot[this.comp(i)] = i;
     for (let c = 0; c < NC; c++) {
       const y = c * LCH, i = bySlot[c], soap = i >= 0 ? this.soaps[i] : null;
-      this.rack.labels[c].visible = !!soap;                                    // leeres Fach: kein Schild, kein Sockel
-      this.rack.plinths.setMatrixAt(c, soap ? _m.makeTranslation(compX(c), MIDDLE_SHELF.y + RAIL + PLINTH_H / 2, SHELF_Z + 0.01) : _zero);
+      this.rack.labels[c].visible = !!soap && !this.stationOn;               // leeres Fach: kein Schild, kein Sockel
+      this.rack.plinths.setMatrixAt(c, soap || this.stationOn ? _m.makeTranslation(compX(c), MIDDLE_SHELF.y + RAIL + PLINTH_H / 2, SHELF_Z + 0.01) : _zero);
       g.fillStyle = '#b07a44'; g.fillRect(0, y, LCW, LCH);                     // Holzrahmen
       g.fillStyle = '#2f3a33'; g.fillRect(9, y + 9, LCW - 18, LCH - 18);       // Tafel
       if (!soap) continue;

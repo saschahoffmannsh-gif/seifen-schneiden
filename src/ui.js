@@ -5,6 +5,15 @@ import { soapThumb } from './soapLooks.js';
 import { sndCoins, sndPop } from './audio.js';
 import { shapeIconURL } from './shapes.js';
 import { ICON, rich, buttonLabel } from './icons.js';
+import { avatarStyle } from './avatars.js';
+
+// SS-15 Geschenktheke: bunte Kachel-Symbole (gefüllt, wie in der Vorlage)
+const TILE_ICON = {
+  box: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M6 17l18-8 18 8v19l-18 8-18-8z" fill="#d9a066" stroke="#5b3a1e" stroke-width="2.4" stroke-linejoin="round"/><path d="M6 17l18 8 18-8M24 25v19" fill="none" stroke="#5b3a1e" stroke-width="2.4" stroke-linejoin="round"/><path d="M15 13l18 8v6" fill="none" stroke="#f3dcb8" stroke-width="3"/></svg>',
+  bow: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 22c-6-9-17-10-17-3s9 8 17 3zm0 0c6-9 17-10 17-3s-9 8-17 3z" fill="#f27fb2" stroke="#7a2a55" stroke-width="2.4" stroke-linejoin="round"/><path d="M22 24l-7 15 5-2 3 4 1-15m2-2l7 15-5-2-3 4-1-15" fill="#f59cc6" stroke="#7a2a55" stroke-width="2.2" stroke-linejoin="round"/><circle cx="24" cy="22" r="4" fill="#f27fb2" stroke="#7a2a55" stroke-width="2.2"/></svg>',
+  sticker: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 5l5.6 11.4 12.6 1.8-9.1 8.9 2.1 12.5L24 33.7l-11.2 5.9 2.1-12.5-9.1-8.9 12.6-1.8z" fill="#ffd43b" stroke="#8a5a00" stroke-width="2.4" stroke-linejoin="round"/><path d="M18 18l3-1" stroke="#fff6c8" stroke-width="2.6" stroke-linecap="round"/></svg>',
+};
+const TILES = [['box', 'Schachtel'], ['bow', 'Schleife'], ['sticker', 'Sticker']];
 
 const $ = (id) => document.getElementById(id);
 
@@ -386,6 +395,31 @@ export function createUI() {
       $('q-rows').innerHTML = q.rows.map((r) => `<div class="q-row"><span>${rich(r.label)}</span><b class="${r.cls || ''}">${rich(r.value)}</b></div>`).join('');
       root.classList.add('show');
     },
+    /**
+     * SS-15 Geschenktheke unten: Wunsch-Karte (Avatar, Wünsche mit Haken, Lohn), Auswahlreihe der gewählten
+     * Kategorie und die Kategorie-Kacheln. d = null blendet alles aus.
+     */
+    station(d) {
+      const root = $('station');
+      document.body.classList.toggle('station', !!d);
+      root.classList.toggle('hidden', !d);
+      if (!d) { root.innerHTML = ''; return; }
+      const wishes = d.wishes.length ? d.wishes.map((w) => `<span class="sw ${w.ok ? 'ok' : 'miss'}" title="${w.name}">${w.icon}<i>${w.ok ? ICON.check : ICON.close}</i><small>${rich(w.name)}</small></span>`).join('')
+        : '<span class="sw-none">Keine Extrawünsche – einfach schön verpacken</span>';
+      const opts = d.options.map((o, k) => `<button class="so${o.sel ? ' sel' : ''}${o.locked ? ' locked' : ''}" data-k="${k}"><img src="${o.thumb}" alt=""><b>${rich(o.name)}</b><small>${o.locked ? `${ICON.lock}${o.cost}` : o.sub}</small></button>`).join('');
+      root.innerHTML = `<div class="st-card ticket"><span class="st-av" style="${avatarStyle(d.customer)}"></span>`
+        + `<div class="st-main"><div class="st-who"><b>${rich(d.customer)}</b> wünscht sich${d.seq ? ` <span class="st-seq">${d.seq}</span>` : ''}</div><div class="st-wishes">${wishes}</div></div>`
+        + `<div class="st-pay">${ICON.coin}<b>${d.pay}</b></div></div>`
+        + (d.extra ? `<div class="st-extra">${ICON.star}${rich(d.extra)}</div>` : '')
+        + `<div class="st-opts" role="listbox">${opts}</div>`
+        + `<div class="st-tiles">${TILES.map(([id, name]) => `<button class="st-tile t-${id}${d.tile === id ? ' sel' : ''}" data-t="${id}">${TILE_ICON[id]}<b>${name}</b></button>`).join('')}</div>`;
+      const card = root.querySelector('.st-card'); root.style.setProperty('--st-card-h', `${card.offsetHeight}px`);
+      for (const b of root.querySelectorAll('.st-tile')) b.onclick = () => d.onTile(b.dataset.t);
+      for (const b of root.querySelectorAll('.so')) b.onclick = () => d.onOption(d.options[+b.dataset.k]);
+      const sel = root.querySelector('.so.sel');
+      if (sel && d.scroll) sel.scrollIntoView({ inline: 'center', block: 'nearest' });
+    },
+
     /** Knöpfe unten setzen: [{label, alt, onClick}] */
     actions(list) {
       el.actions.innerHTML = '';

@@ -32,6 +32,7 @@ import { DECO_ITEMS, DECO_GROUPS, phaseOf, groupOf } from './decoItems.js';
 import { DECO_SPOTS, DECO_Y, SHELF_Z } from './setting/wall.js';
 import { KNIFE_X, SKEW_RISE, poseKnife, syncSlope } from './cutGeom.js';
 // Schneide-Kamera im Spiel (SS-14). Der Startbildschirm behält ZOOM_FIT_*/CLOSE_DIR aus cutGeom.js.
+const STATION_CAM = { dir: [0, 0.9, 1], fitW: 2.65, fitH: 3.0, ly: 0.75, lz: -0.2 };   // Schachtel über der Karte, Bogenregal ganz im Bild
 const CUT_CAM = { dir: new THREE.Vector3(0.2, 1.15, 1).normalize(), fitW: 3.2, fitH: 3.9, lookDy: 0.3 };
 
 const FILL_CAP = 40, FILL_MAX_KINDS = 4;     // Teile pro Füllungs-Sorte, verschiedene Füllungen
@@ -152,6 +153,7 @@ export class Game {
     // Kamera: Grundstellung <-> Nahaufnahme der Seife beim Schneiden (weich überblendet)
     this.zoomT = 0; this.zoomE = 0; this.camVersion = -1;
     this.closePos = new THREE.Vector3(); this.closeLook = new THREE.Vector3();
+    this.stPos = new THREE.Vector3(); this.stLook = new THREE.Vector3(); this.stT = 0; this.stE = 0;
 
     // Fertige Seife (Geometrie + Material einmalig; nur die Textur wechselt pro Seife)
     this.barMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0 });
@@ -744,35 +746,189 @@ export class Game {
     });
   }
 
-  /** "Verkaufen": Schale verschwindet, die fertige Seife legt sich auf den Tisch. */
+  /**
+   * "Verkaufen" -> SS-15 Geschenktheke: Schale verschwindet, die offene Schachtel steht mitten auf der
+   * Theke und die fertige Seife legt sich flach (auf die Seite) hinein. Verpacken läuft über die Kacheln unten.
+   */
   sell() {
     if (this.state !== 'unmolded') return;
     this.showcase.stop();
     this.ui.showQuality(null);
     if (this.quality) this.ui.setMixSummary(this.quality);
-    this.state = 'toTable';
+    this.state = 'packing';
     document.body.classList.add('table-mode');
     this.ui.actions([]);
     this.ui.hint('');
-    const bar = this.bar;
-    const p0 = bar.position.clone(), s0 = bar.scale.x, rx0 = bar.rotation.x;
+    this.inStation = true;
+    this.shelf.setStation(true);
+    const t = this.pkgType && this.pkgType.unlocked ? this.pkgType : PACKAGE_TYPES[0];
+    this.pkgType = t;
+    this.stTile = 'box';
+    this.stationBox(this.packages.slotOf(t.id));
+    this.setLidOpen(0);
+    const bar = this.bar, p0 = bar.position.clone(), s0 = bar.scale.x, rx0 = bar.rotation.x;
     const ry0 = ((bar.rotation.y % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
     const ry1 = Math.round(ry0 / Math.PI) * Math.PI;
-    const spot = TABLE_SPOT.soap;
-    this.play(0.75, (e, t) => {
+    this.play(0.8, (e, tt) => {
       const k = Math.max(0.001, 1 - e);
       this.bowl.scale.set(k, k, k); this.bowl.position.y = -0.25 * e;
       this.bowlShadow.scale.set(k, k, k);
-      bar.position.set(p0.x + (spot.x - p0.x) * e, p0.y + (TABLE_Y + BAR_HALF_H - p0.y) * e + Math.sin(t * Math.PI) * 0.35, p0.z + (spot.z - p0.z) * e);
+      this.barInBox(_b);
+      bar.position.set(p0.x + (_b.x - p0.x) * e, p0.y + (_b.y - p0.y) * e + Math.sin(tt * Math.PI) * 0.45, p0.z + (_b.z - p0.z) * e);
       bar.rotation.set(rx0 * (1 - e), ry0 + (ry1 - ry0) * e, 0);
-      const sc = s0 + (BAR_TABLE_SCALE - s0) * e; bar.scale.set(sc, sc, sc);
+      const sc = s0 + (_b.w - s0) * e; bar.scale.set(sc, sc, sc);
     }, () => {
       this.bowl.visible = false; this.bowlShadow.visible = false;
-      this.packages.setBlob(SHADOW_SOAP, spot.x, TABLE_Y + 0.003, spot.z, 1.35, 0.95);
-      sndThump(0.8); haptic(10);
-      this.state = 'pickPkg';
-      this.ui.hint('Wähle eine Verpackung im Regal');
+      sndThump(0.6); haptic(10);
+      this.state = 'station';
+      this.stationUI(true);
+      this.ui.actions([{ label: '✨ Verpacken & Verkaufen', onClick: () => this.packAndSell() }]);
     });
+  }
+
+  /** Lage der Seife in der Schachtel (flach liegend; Herz/rund etwas kleiner): out.xyz + out.w = Skalierung. */
+  barInBox(out) {
+    const P = TABLE_SPOT.pkg, fit = this.packages.fit(this.pkgSlot), sc = BAR_TABLE_SCALE * fit.s;
+    out.set(P.x, TABLE_Y + BAR_HALF_H * sc / BAR_TABLE_SCALE + PKG.wall, P.z + fit.dz); out.w = sc;
+    return out;
+  }
+
+  /** Schachtel-Sorte i steht offen mitten auf der Theke; die vorherige geht zurück ins Regal. */
+  stationBox(i) {
+    const pk = this.packages, P = TABLE_SPOT.pkg, old = this.pkgSlot;
+    if (old >= 0 && old !== i) {
+      if (pk.shelfSlot[old] >= 0) {
+        pk.onShelf[old] = 1; pk.setClosed(old, pk.home[old], 0, PKG_SHELF_SCALE);
+        const [fw, fd] = pk.footprint(old);
+        pk.setBlob(old, pk.home[old].x, pk.home[old].y + 0.003, pk.home[old].z, fw * PKG_SHELF_SCALE * 1.5, fd * PKG_SHELF_SCALE * 1.8);
+      } else pk.hide(old);
+    }
+    this.pkgSlot = i;
+    pk.setActive(i); pk.onShelf[i] = 0;
+    pk.setBody(i, P, 0, 1);
+    this.pkgShadow(i, P.x, P.z);
+    this.setLidOpen(this.lidK ?? 0);
+  }
+
+  /** Deckel: k = 1 zu (liegt auf), 0 = offen (weg, unsichtbar). Deckel-Deko hängt am Deckel. */
+  setLidOpen(k) {
+    this.lidK = k;
+    const P = TABLE_SPOT.pkg;
+    _a.copy(P); _a.y += this.packages.lidY + (1 - k) * 0.7;
+    this.packages.setLid(this.pkgSlot, _a, (1 - k) * 0.5, 0, 0, Math.max(1e-4, k));
+  }
+
+  /** Deckel weich auf-/zuklappen, danach then(). */
+  animLid(to, then) {
+    const from = this.lidK ?? 0;
+    if (from === to) { then && then(); return; }
+    this.stBusy = true;
+    this.play(0.4, (e) => this.setLidOpen(from + (to - from) * e), () => {
+      this.stBusy = false;
+      if (to === 1) { sndLid(); haptic(12); }
+      then && then();
+    });
+  }
+
+  /** Lohn dieser Seife mit Verpackung und Deko (wie beim Verschicken berechnet). */
+  stationPay() {
+    let b = (this.price || 0) + (this.pkgType ? this.pkgType.bonus : 0) + this.deco.bonus;
+    for (const it of this.pendingDeco || []) b += it.bonus;   // nach Schachtel-Wechsel: kommt beim Zuklappen wieder drauf
+    return b;
+  }
+
+  /** Karte + Auswahl unten neu zeichnen. */
+  stationUI(scroll = false) {
+    if (!this.inStation) { this.ui.station(null); return; }
+    const o = this.order, wishes = [];
+    if (o && o.additive) wishes.push({ icon: `<em>${o.additive.emoji}</em>`, name: o.additive.name, ok: this.additives.includes(o.additive) });
+    if (o && o.shape && o.shape !== DEFAULT_SHAPE) wishes.push({ icon: `<img src="${shapeIconURL(o.shape.id, 48)}" alt="">`, name: o.shape.name, ok: this.shape === o.shape });
+    let options;
+    if (this.stTile === 'box') {
+      const th = this.packages.makeThumbs(this.renderer);
+      options = this.packages.types.map((t, i) => ({ kind: 'pkg', type: t, id: t.id, name: t.name, thumb: th[i], locked: !t.unlocked, cost: t.cost, bonus: t.bonus,
+        sub: t.bonus ? `+${t.bonus} 🪙` : 'Standard', sel: this.pkgType === t }));
+    } else {
+      const group = this.stTile === 'bow' ? 'baender' : 'siegel', th = this.deco.makeThumbs(this.renderer, DECO_ITEMS);
+      options = DECO_ITEMS.filter((it) => it.group === group).map((it) => ({ kind: 'deco', item: it, id: it.id, name: it.name, thumb: th[it.id], locked: !it.unlocked, cost: it.cost, bonus: it.bonus,
+        sub: `+${it.bonus} 🪙`, sel: this.deco.has(it) }));
+    }
+    this.ui.station({
+      customer: o ? o.customer : '', seq: o && o.items.length > 1 ? `Seife ${o.cur + 1}/${o.items.length}` : '', wishes, pay: this.stationPay(),
+      tile: this.stTile, options, scroll,
+      extra: this.stTile === 'bow' ? (this.deco.applied.some((x) => x.group === 'baender') ? 'Extra: Schleife dran – bessere Bewertung (+½ Stern)' : 'Extra: Schleife = bessere Bewertung (+½ Stern)') : '',
+      onTile: (id) => this.stationTile(id), onOption: (x) => this.stationOption(x),
+    });
+  }
+
+  stationTile(id) {
+    if (this.state !== 'station' || this.stBusy || this.deco.busy) return;
+    this.stTile = id; sndPaper();
+    this.stationUI(true);
+    // Schachtel: offen (Seife sichtbar); Schleife/Sticker kommen auf den Deckel -> zuklappen
+    this.animLid(id === 'box' ? 0 : 1, () => { const l = this.pendingDeco; this.pendingDeco = null; if (l && id !== 'box') this.reapplyDeco(l); else this.pendingDeco = l; });
+  }
+
+  stationOption(x) {
+    if (this.state !== 'station' || this.stBusy || this.deco.busy) return;
+    if (x.locked) {
+      this.ui.openUnlock(x, this.coins, () => this.buy(x.cost, (x.kind === 'pkg' ? 'pkg:' : 'deco:') + x.id, () => {
+        if (x.kind === 'pkg') x.type.unlocked = true; else x.item.unlocked = true;
+        setTimeout(() => this.stationOption({ ...x, locked: false }), 50);
+      }));
+      return;
+    }
+    if (x.kind === 'pkg') {
+      if (this.pkgType === x.type) return;
+      // Deckel-Deko passt zur Form der Schachtel: beim Wechsel neu anlegen
+      const keep = this.deco.applied.filter((it) => phaseOf(it) === 'lid');
+      for (const it of keep) this.deco.removeLid(it.group);
+      this.deco.applied.length = 0;
+      this.pkgType = x.type;
+      this.stationBox(this.packages.slotOf(x.type.id));
+      this.barInBox(_b); this.bar.position.set(_b.x, _b.y, _b.z); this.bar.scale.setScalar(_b.w);
+      sndCardboard(); haptic(8);
+      this.reapplyDeco(keep);
+      this.stationUI();
+      return;
+    }
+    const it = x.item;
+    if (this.deco.has(it)) {                       // nochmal antippen = wieder abnehmen
+      this.deco.removeLid(it.group);
+      this.deco.applied.splice(this.deco.applied.indexOf(it), 1);
+      sndFabric(); this.stationUI();
+      return;
+    }
+    this.animLid(1, () => this.placeDeco(it, () => { this.ui.popup(`+${it.bonus} 🪙 ${it.name}`); this.stationUI(); }));
+  }
+
+  /** Deckel-Deko von oben auf den geschlossenen Deckel fallen lassen. */
+  placeDeco(it, done) {
+    _dragPos.copy(TABLE_SPOT.pkg); _dragPos.y = TABLE_Y + 0.75; _dragPos.z += 0.15;
+    this.deco.beginHand(it, _dragPos);
+    this.deco.drop(() => { sndFabric(); haptic(10); done && done(); });
+  }
+
+  /** Nach Schachtel-Wechsel: vorherige Schleife/Sticker nacheinander wieder auflegen (nur wenn der Deckel zu ist). */
+  reapplyDeco(list) {
+    if (!list.length) return;
+    if ((this.lidK ?? 0) < 1) { this.pendingDeco = list; return; }
+    const [it, ...rest] = list;
+    this.placeDeco(it, () => { this.stationUI(); this.reapplyDeco(rest); });
+  }
+
+  /** Großer Knopf: Deckel zu, Päckchen rutscht aus dem Bild (Lohn + Bewertung wie bisher). */
+  packAndSell() {
+    if (this.state !== 'station' || this.stBusy || this.deco.busy) return;
+    this.state = 'packing';
+    this.ui.actions([]);
+    const go = () => {
+      const list = this.pendingDeco; this.pendingDeco = null;
+      if (list && list.length) { this.reapplyDeco(list); setTimeout(go, 500); return; }
+      this.bar.visible = false;
+      this.sendPackage(1, TABLE_SPOT.pkg.x);
+    };
+    this.animLid(1, go);
   }
 
   /** Auswahlfenster mit allen Päckchen-Sorten (Spiel-Taps sind solange pausiert). */
@@ -996,10 +1152,10 @@ export class Game {
     }
     if ((st === 'shelf' || st === 'oven') && this.bowl.visible) add('schale-innen', box.set(_a.set(-BOWL.floorR, 0, -BOWL.floorR), _b.set(BOWL.floorR, BOWL.height * 0.5, BOWL.floorR)));
     if ((st === 'reveal' || st === 'unmolded' || st === 'pickPkg' || st === 'picker' || st === 'pickSoap') && this.bar.visible) add('seife', box.setFromObject(this.bar));
-    if ((st === 'pickSoap' || st === 'decorFill' || st === 'packed') && this.pkgSlot >= 0) {
+    if ((st === 'pickSoap' || st === 'decorFill' || st === 'packed' || this.inStation) && this.pkgSlot >= 0) {
       const P = TABLE_SPOT.pkg, [fw, fd] = this.packages.footprint(this.pkgSlot);
-      add('paeckchen', box.set(_a.set(P.x - fw / 2, TABLE_Y, P.z - fd / 2), _b.set(P.x + fw / 2, TABLE_Y + PKG.h + (st === 'packed' ? PKG.lidH : 0), P.z + fd / 2)));
-      if (st !== 'packed') { const r = this.lidRect(); out.push({ name: 'deckel', x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }); }
+      add('paeckchen', box.set(_a.set(P.x - fw / 2, TABLE_Y, P.z - fd / 2), _b.set(P.x + fw / 2, TABLE_Y + PKG.h + (st === 'packed' || this.inStation ? PKG.lidH : 0), P.z + fd / 2)));
+      if (st !== 'packed' && !this.inStation) { const r = this.lidRect(); out.push({ name: 'deckel', x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }); }
     }
     return out;
   }
@@ -1187,6 +1343,8 @@ export class Game {
           let st = q.accuracy / 20;
           if (o.additive && !this.additives.includes(o.additive)) st -= 1;
           if (o.shape && this.shape && this.shape !== o.shape) st -= 1;
+          // SS-15: Schleife ist ein freiwilliges Extra (kein Kundenwunsch) -> +0,5 Stern, gedeckelt bei 5
+          if (this.deco.applied.some((x) => x.group === 'baender')) st += 0.5;
           (this.soapStars || (this.soapStars = [])).push(Math.max(1, Math.min(5, st)));
         }
       }
@@ -1223,6 +1381,8 @@ export class Game {
       }, null, easeOut);
       this.packages.reset();
       document.body.classList.remove('table-mode');
+      this.inStation = false; this.lidK = 0; this.pendingDeco = null;
+      this.shelf.setStation(false); this.ui.station(null);
       if (more) {
         // nächste Seife desselben Auftrags: Regal (mit den Resten) bleibt, Schrank bleibt zu
         setItem(o, o.cur + 1);
@@ -1257,7 +1417,7 @@ export class Game {
       let need = 0;
       const H = window.innerHeight, vs = this.viewShift || 0;
       const work = ((st === 'shelf' || st === 'cutting' || st === 'oven' || st === 'flying' || st === 'between' || st === 'stocking') && this.bowl.visible)
-        || ((st === 'pickSoap' || st === 'decorFill' || st === 'packed') && this.pkgSlot >= 0);
+        || ((st === 'pickSoap' || st === 'decorFill' || st === 'packed' || (this.inStation && st !== 'sending')) && this.pkgSlot >= 0);
       const q = document.getElementById('quality');
       const present = !work && q && q.classList.contains('show') && this.bar.visible;
       if (work) {
@@ -1266,7 +1426,7 @@ export class Game {
         let low = -1e9;
         for (const r of this.focusRects()) low = Math.max(low, r.y1 + vs);
         // am Päckchen gleich Platz für das „+N Deko“-Schild lassen, damit das Bild später nicht nachrutscht
-        const reserve = (st === 'pickSoap' || st === 'decorFill' || st === 'packed') ? 30 : 0;
+        const reserve = (st === 'pickSoap' || st === 'decorFill' || st === 'packed') ? 30 : this.inStation ? 8 : 0;
         need = Math.max(0, low + 10 + reserve - dockTop);
       } else if (present) {
         // Präsentation: Seife unter die Ergebniskarte schieben (Bild nach unten = negative Verschiebung)
@@ -1409,12 +1569,17 @@ export class Game {
     this.zoomTarget = target;
     if (this.zoomT !== target) this.zoomT = target > this.zoomT ? Math.min(1, this.zoomT + dt / ZOOM_TIME) : Math.max(0, this.zoomT - dt / ZOOM_TIME);
     const e = smoother(this.zoomT);
-    if (e === this.zoomE && this.camVersion === this.camBase.version) return;
-    this.zoomE = e;
+    // SS-15 Geschenktheke: eigene Kamera auf Schachtel + Regal
+    const sOn = this.inStation ? 1 : 0;
+    if (this.stT !== sOn) this.stT = sOn > (this.stT || 0) ? Math.min(1, (this.stT || 0) + dt / ZOOM_TIME) : Math.max(0, this.stT - dt / ZOOM_TIME);
+    const se = smoother(this.stT || 0);
+    if (e === this.zoomE && se === this.stE && this.camVersion === this.camBase.version) return;
+    this.zoomE = e; this.stE = se;
     if (this.camVersion !== this.camBase.version) { this.camVersion = this.camBase.version; this.computeClose(); }
     const c = this.camera, B = this.camBase;
     c.position.lerpVectors(B.pos, this.closePos, e);
     _a.lerpVectors(B.look, this.closeLook, e);
+    if (se > 0) { c.position.lerp(this.stPos, se); _a.lerp(this.stLook, se); }
     c.lookAt(_a);
     c.updateMatrixWorld();
   }
@@ -1430,6 +1595,13 @@ export class Game {
     const vf = THREE.MathUtils.degToRad(c.fov), hf = 2 * Math.atan(Math.tan(vf / 2) * c.aspect);
     const dist = Math.max(CUT_CAM.fitW / 2 / Math.tan(hf / 2), CUT_CAM.fitH / 2 / Math.tan(vf / 2));
     this.closePos.copy(this.closeLook).addScaledVector(_camDir, dist);
+    // Geschenktheke: Blick auf die Schachtel, Bogenregal darüber im Bild
+    const S = STATION_CAM;
+    const P = TABLE_SPOT.pkg;
+    this.stLook.set(P.x, TABLE_Y + S.ly, P.z + S.lz);
+    _camDir.set(...S.dir).normalize();
+    const d2 = Math.max(S.fitW / 2 / Math.tan(hf / 2), S.fitH / 2 / Math.tan(vf / 2));
+    this.stPos.copy(this.stLook).addScaledVector(_camDir, d2);
   }
 
   completeSlice() {
