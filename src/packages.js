@@ -59,7 +59,7 @@ const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
  * Atlas-Material: Kachel pro Instanz (aTile), LID = Deckel-Zeile. REPX: wie oft die Kachel
  * waagerecht wiederholt wird (runde/sechseckige Wände), immer innerhalb der eigenen Kachel.
  */
-function atlasMaterial(map, rows, lid, repx = 1, extra = {}) {
+function atlasMaterial(map, rows, lid, repx = 1, extra = {}, fxMap = null) {
   // Papier/Karton: matt mit leichtem Schimmer (PBR, Umgebungslicht aus scene.environment)
   const mat = new THREE.MeshStandardMaterial({ map, roughness: 0.66, metalness: 0, envMapIntensity: 0.55, ...extra });
   mat.defines = { PKG_LID: lid ? '1.0' : '0.0', PKG_ROWS: rows.toFixed(1), PKG_COLS: ATLAS_COLS.toFixed(1), PKG_REPX: repx.toFixed(1) };
@@ -70,11 +70,16 @@ function atlasMaterial(map, rows, lid, repx = 1, extra = {}) {
         vTileUv = vec2(uv.x * PKG_REPX, uv.y);
         vCell = vec2(mod(aTile, PKG_COLS), floor(aTile / PKG_COLS) * 2.0 + (1.0 - PKG_LID));`);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vTileUv; varying vec2 vCell;')
+      .replace('#include <common>', '#include <common>\nvarying vec2 vTileUv; varying vec2 vCell; uniform sampler2D fxMap;')
       .replace('#include <map_fragment>', `
         vec2 tuv = vec2(fract(vTileUv.x), clamp(vTileUv.y, 0.0, 1.0));
         vec2 auv = vec2((vCell.x + 0.03 + 0.94 * tuv.x) / PKG_COLS, 1.0 - (vCell.y + 1.0 - (0.03 + 0.94 * tuv.y)) / PKG_ROWS);
-        diffuseColor *= texture2D(map, auv);`);
+        diffuseColor *= texture2D(map, auv);
+        vec4 pkgFx = texture2D(fxMap, auv);`)
+      // SS-17: Effekt-Maske – G = Lack-Glanz (glatter), R = Goldfolie (Metall, sehr glatt)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = mix(roughnessFactor, 0.22, pkgFx.g); roughnessFactor = mix(roughnessFactor, 0.2, pkgFx.r);')
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = mix(metalnessFactor, 1.0, pkgFx.r);');
+    sh.uniforms.fxMap = { value: fxMap };
   };
   mat.customProgramCacheKey = () => 'pkgA' + lid + repx;
   return mat;
@@ -174,7 +179,8 @@ export class Packages {
   constructor(scene) {
     const { w, h, d, wall: t, lidH, lidPad, r: R } = PKG;
     this.types = PACKAGE_TYPES;
-    const { tex: atlas, rows } = makePackageAtlas(this.types.map((x) => x.id));
+    const { tex: atlas, fx: atlasFx, rows } = makePackageAtlas(this.types);
+    this.mainScene = scene;
 
     // ---- Formen-Familien: je Familie EIN InstancedMesh für Schachteln und EINS für Deckel ----
     const rb = (W, H, D, x, y, z) => new RoundedBoxGeometry(W, H, D, 2, 0.008).translate(x, y, z);
@@ -193,7 +199,7 @@ export class Packages {
     };
     const round = cyl(R, 40), hex = cyl(HEX_R, 6);
     const heart = heartGeometries();
-    const A = (lid, repx, extra) => atlasMaterial(atlas, rows, lid, repx, extra);
+    const A = (lid, repx, extra) => atlasMaterial(atlas, rows, lid, repx, extra, atlasFx);
     const capB = A(false, 1, { side: THREE.DoubleSide }), capL = A(true, 1);
     const FAM = {
       box: { body: boxBody, lid: boxLid, mB: A(false, 1), mL: A(true, 1), foot: [w, d], tissue: tissueAlong(boxPath, 30, 3) },
@@ -435,6 +441,7 @@ export class Packages {
     const rt = new THREE.WebGLRenderTarget(S, S);
     rt.texture.colorSpace = THREE.SRGBColorSpace;
     const sc = new THREE.Scene();
+    sc.environment = this.mainScene.environment;   // Goldfolie/Lack spiegeln auch in den Vorschaubildern
     sc.add(new THREE.HemisphereLight(0xfff4e6, 0xa8744c, 1.25));
     const sun = new THREE.DirectionalLight(0xfff0dc, 1.4); sun.position.set(1.5, 4, 2.5); sc.add(sun);
     const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
