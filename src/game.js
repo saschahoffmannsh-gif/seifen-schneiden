@@ -85,6 +85,7 @@ export class Game {
       this.tapNdc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       if (this.inStation) {
         if (!this.stIdle()) return;
+        if (this.stStep === 'table' && this.hitStationSoap()) { this.openBoxStep(); return; }
         if (this.stStep === 'box' && (this.hitStationSoap() || this.hitBox())) { this.placeSoap(); return; }
         if (this.stStep === 'lid' && this.hitBox()) { this.putLid(); return; }
         if (st === 'packed') this.swipeStart(e);
@@ -890,6 +891,17 @@ export class Game {
     this.toWaiting();
   }
 
+  /** SS-18: Lage von Seife j flach auf der Theke, bevor eine Schachtel gewählt ist (out.w = Skalierung). */
+  soapTable(j, out) {
+    const n = this.stN || 1, P = TABLE_SPOT.pkg;
+    if (n <= 1) { out.set((P.x + STATION_SOAP.x) / 2, TABLE_Y + BAR_HALF_H, STATION_SOAP.z); out.w = BAR_TABLE_SCALE; return out; }
+    const sc = BAR_TABLE_SCALE * 0.8, hy = TABLE_Y + BAR_HALF_H * 0.8;
+    if (n === 4) out.set(P.x + (j % 2 ? 0.42 : -0.42), hy, P.z + (j < 2 ? -0.3 : 0.3));
+    else out.set(P.x + (j - (n - 1) / 2) * (n === 3 ? 0.76 : 0.84), hy, P.z);
+    out.w = sc;
+    return out;
+  }
+
   /** Wartende Lage von Seife j: eine Seife liegt neben der Schachtel; mehrere schweben schon in ihrer Ziel-Lage
    *  (gestapelt nebeneinander bzw. hochkant) über der offenen Schachtel. out.w = Skalierung, q = Drehung (nur bei mehreren). */
   soapWait(j, out, q) {
@@ -913,27 +925,58 @@ export class Game {
     this.stSoaps = this.order.finished; this.stN = this.stSoaps.length;
     TABLE_SPOT.pkg.x = this.stN > 1 ? 0 : -0.42;     // Sammel-Schachtel mittig, einzelne links neben der Seife
     this.camVersion = -1;                             // Stations-Kamera für die Schachtelgröße neu einpassen
-    this.inStation = true; this.stStep = 'box'; this.stTile = 'box';
+    this.inStation = true; this.stStep = 'table'; this.stTile = null;   // SS-18: erst liegen die Seifen auf der Theke
     this.shelf.setStation(true);
     let t = this.pkgType && this.pkgType.unlocked ? this.pkgType : PACKAGE_TYPES[0];
     if (!this.packages.fitsCount(this.packages.slotOf(t.id), this.stN)) t = PACKAGE_TYPES[0];
     this.pkgType = t;
     this.lidK = 0;
-    this.stationBox(this.packages.slotOf(t.id));
+    this.pkgSlot = -1;
     this.bowl.visible = false; this.bowlShadow.visible = false;
     this.stSoaps.forEach((f, j) => {
-      f.mesh.visible = true; f.mesh.rotation.x = 0;
-      const h = this.soapWait(j, f.home = new THREE.Vector3(), _qq);
+      f.mesh.visible = true;
+      if (f.ry == null) f.ry = f.mesh.rotation.y;
+      f.mesh.rotation.set(0, f.ry, 0);
+      const h = this.soapTable(j, f.home = new THREE.Vector3());
       f.mesh.scale.setScalar(h.w);
-      if (this.stN > 1) f.mesh.quaternion.copy(_qq);
     });
     this.play(0.5, (e) => { this.stSoaps.forEach((f) => f.mesh.position.set(f.home.x, f.home.y + (1 - e) * 0.9, f.home.z)); }, () => {
-      if (this.stN === 1) this.packages.setBlob(SHADOW_SOAP, STATION_SOAP.x, TABLE_Y + 0.003, STATION_SOAP.z, 1.35, 0.95);
+      if (this.stN === 1) this.packages.setBlob(SHADOW_SOAP, this.stSoaps[0].home.x, TABLE_Y + 0.003, STATION_SOAP.z, 1.35, 0.95);
       sndThump(0.6); haptic(10);
       this.state = 'station';
       this.stationUI(true);
     }, easeOut);
     return true;
+  }
+
+  /** SS-18: Tipp auf „Schachtel“: Auswahl klappt auf, die Schachtel kommt auf die Theke, die Seifen machen ihr Platz. */
+  openBoxStep() {
+    if (!this.stIdle() || this.stStep !== 'table') return;
+    this.state = 'packing';
+    this.stStep = 'box'; this.stTile = 'box';
+    this.packages.setBlob(SHADOW_SOAP, 0, 0, 0, 0, 0);
+    const i = this.packages.slotOf(this.pkgType.id);
+    this.stationBox(i);
+    const fs = this.stSoaps, from = fs.map((f) => ({ p: f.mesh.position.clone(), q: f.mesh.quaternion.clone(), s: f.mesh.scale.x }));
+    fs.forEach((f, j) => { const h = this.soapWait(j, f.home, _qq); f.toQ = this.stN > 1 ? _qq.clone() : f.mesh.quaternion.clone(); f.toS = h.w; });
+    const P = TABLE_SPOT.pkg;
+    sndCardboard(); haptic(8);
+    this.stationUI(true);
+    this.play(0.5, (e, t) => {
+      _a.copy(P); _a.y += (1 - e) * 0.6;
+      this.packages.setBody(i, _a, 0, 1);
+      fs.forEach((f, j) => {
+        const a = from[j];
+        f.mesh.position.lerpVectors(a.p, f.home, e); f.mesh.position.y += Math.sin(t * Math.PI) * 0.15;
+        f.mesh.quaternion.slerpQuaternions(a.q, f.toQ, e);
+        f.mesh.scale.setScalar(a.s + (f.toS - a.s) * e);
+      });
+    }, () => {
+      this.packages.setBody(i, P, 0, 1);
+      if (this.stN === 1) this.packages.setBlob(SHADOW_SOAP, STATION_SOAP.x, TABLE_Y + 0.003, STATION_SOAP.z, 1.35, 0.95);
+      this.state = 'station';
+      this.stationUI();
+    }, easeOut);
   }
 
   /** Lage von Seife j in der Schachtel: out.xyz (Mitte) + out.w = Skalierung; q = Drehung (mehrere: gestapelt/hochkant). */
@@ -1008,7 +1051,8 @@ export class Game {
       if (f.shape && f.shape !== DEFAULT_SHAPE) wishes.push({ icon: `<img src="${shapeIconURL(f.shape.id, 48)}" alt="">`, name: f.shape.name, ok: f.shapeOk });
     }
     let options;
-    if (this.stTile === 'box') {
+    if (!this.stTile) options = [];   // SS-18: Auswahl erst nach Tipp auf „Schachtel“
+    else if (this.stTile === 'box') {
       const th = this.packages.makeThumbs(this.renderer, n);
       options = this.packages.types.map((t, i) => ({ kind: 'pkg', type: t, id: t.id, name: n > 1 ? `${t.name} ×${n}` : t.name, thumb: th[i], locked: !t.unlocked, cost: t.cost, bonus: t.bonus * n,
         sub: t.bonus ? `+${t.bonus * n} 🪙` : 'Standard', sel: this.pkgType === t, fits: this.packages.fitsCount(i, n) })).filter((x) => x.fits);
@@ -1018,7 +1062,8 @@ export class Game {
         sub: `+${it.bonus} 🪙`, sel: this.deco.has(it) }));
     }
     const STEPS = {
-      box: { n: 1, text: n > 1 ? `Schachtel wählen, Seifen tippen` : 'Schachtel wählen, Seife tippen', icon: 'box' },
+      table: { n: 1, text: 'Tippe auf „Schachtel“', icon: 'box' },
+      box: { n: 2, text: n > 1 ? `Schachtel wählen, Seifen tippen` : 'Schachtel wählen, Seife tippen', icon: 'box' },
       lid: { n: 3, text: 'Deckel drauf!', icon: 'lid', onClick: () => this.putLid() },
       packed: { n: 4, text: 'Päckchen wegwischen', icon: 'hand' },
     };
@@ -1026,9 +1071,9 @@ export class Game {
     this.ui.station({
       customer: o ? o.customer : '', seq: n > 1 ? `${n} Seifen` : '', wishes, pay: this.stationPay(),
       tile: this.stTile, options, scroll,
-      enabled: { box: step === 'box', bow: step === 'packed', sticker: step === 'packed' },
-      optsOff: (this.stTile === 'box') !== (step === 'box'),
-      step: { ...STEPS[step], of: 4, done: step === 'box' ? 0 : step === 'lid' ? 2 : 3 },
+      enabled: { box: step === 'box' || step === 'table', bow: step === 'packed', sticker: step === 'packed' },
+      optsOff: !!this.stTile && (this.stTile === 'box') !== (step === 'box'),
+      step: { ...STEPS[step], of: 4, done: step === 'table' ? 0 : step === 'box' ? 1 : step === 'lid' ? 2 : 3 },
       extra: this.stTile === 'bow' && step === 'packed' ? (bowOn ? 'Extra: Schleife dran – bessere Bewertung (+½ Stern)' : 'Extra: Schleife = bessere Bewertung (+½ Stern)') : '',
       onTile: (id) => this.stationTile(id), onOption: (x) => this.stationOption(x),
     });
@@ -1036,8 +1081,9 @@ export class Game {
 
   stationTile(id) {
     if (!this.stIdle()) return;
+    if (id === 'box' && this.stStep === 'table') { this.openBoxStep(); return; }
     const ok = id === 'box' ? this.stStep === 'box' : this.stStep === 'packed';
-    if (!ok) { this.ui.popup(this.stStep === 'box' ? 'Erst Seife rein und Deckel drauf' : this.stStep === 'lid' ? 'Erst den Deckel drauf' : 'Die Schachtel ist schon zu'); return; }
+    if (!ok) { this.ui.popup(this.stStep === 'table' ? 'Erst auf „Schachtel“ tippen' : this.stStep === 'box' ? 'Erst Seife rein und Deckel drauf' : this.stStep === 'lid' ? 'Erst den Deckel drauf' : 'Die Schachtel ist schon zu'); return; }
     this.stTile = id; sndPaper();
     this.stationUI(true);
   }
@@ -1360,7 +1406,7 @@ export class Game {
     }
     if ((st === 'shelf' || st === 'oven') && this.bowl.visible) add('schale-innen', box.set(_a.set(-BOWL.floorR, 0, -BOWL.floorR), _b.set(BOWL.floorR, BOWL.height * 0.5, BOWL.floorR)));
     if ((st === 'reveal' || st === 'unmolded' || st === 'pickPkg' || st === 'picker' || st === 'pickSoap' || false) && this.bar.visible) add('seife', box.setFromObject(this.bar));
-    if (this.inStation && this.stStep === 'box' && this.stSoaps) for (const f of this.stSoaps) add('seife', box.setFromObject(f.mesh));
+    if (this.inStation && (this.stStep === 'box' || this.stStep === 'table') && this.stSoaps) for (const f of this.stSoaps) add('seife', box.setFromObject(f.mesh));
     if ((st === 'pickSoap' || st === 'decorFill' || st === 'packed' || this.inStation) && this.pkgSlot >= 0) {
       const P = TABLE_SPOT.pkg, [fw, fd] = this.packages.footprint(this.pkgSlot);
       add('paeckchen', box.set(_a.set(P.x - fw / 2, TABLE_Y, P.z - fd / 2), _b.set(P.x + fw / 2, TABLE_Y + this.packages.heightOf(this.pkgSlot) + (st === 'packed' || this.inStation ? PKG.lidH : 0), P.z + fd / 2)));
