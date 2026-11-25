@@ -15,6 +15,7 @@ import { BLOCK, BOWL, CUBE, CUT, OVEN_SECONDS, BLOCK_BASE_Y, SLICES, MOULD_CUBES
 import { SOAP_LIST, SOAP_BY_ID } from './soaps.js';
 import { makeMarbleTexture } from './marble.js';
 import { sndCut, sndPaper, sndDrawer, sndStack, sndWood, sndThump, sndGlass, sndCeramic, sndCardboard, sndLid, sndFabric, sndCoins, sndCreak, sndSlide, haptic } from './audio.js';
+import { SHELF_SCALE } from './shelfSoaps.js';
 import { PKG, TABLE_SPOT, PKG_SHELF_SCALE, SHADOW_SOAP, SHADOW_LID } from './packages.js';
 import { TABLE_Y, CABINET, SHELF_FRONT_Z } from './setting/wall.js';
 import { OrderNotes, NOTE_COUNT } from './orderNotes.js';
@@ -334,7 +335,7 @@ export class Game {
 
   /** Regal zeigt je Sorte das vorderste Stück (kürzer, wenn angeschnitten) und dahinter die vollen Ersatzstücke. */
   updateShelfSupply(list = this.shelf.soaps) {
-    list.forEach((x, i) => { const s = this.supply.get(x.id); this.shelf.setSpares(i, s ? Math.max(0, s.pieces - 1) : 0); });
+    list.forEach((x, i) => { const s = this.supply.get(x.id); this.shelf.setSpares(i, s ? Math.max(0, s.pieces - 1) : 0); this.shelf.setCount(i, s ? s.pieces : 0); });
   }
 
   /** Alle geholten Seifen fliegen (nacheinander) von oben auf das mittlere Brett. Ab jetzt ist der Schrank zu. */
@@ -353,7 +354,7 @@ export class Game {
         if (t <= 0) continue;
         const k = easeOut(t);
         _t.copy(home[i]); _t.y += (1 - k) * 0.9 + Math.sin(t * Math.PI) * 0.06;
-        this.shelf.place(i, _t, 0.36 * (0.4 + 0.6 * k));
+        this.shelf.place(i, _t, SHELF_SCALE * (0.4 + 0.6 * k));
       }
     }, () => {
       this.shelf.setSoaps(list, this.shelfFracs()); this.updateShelfSupply(list); sndWood();

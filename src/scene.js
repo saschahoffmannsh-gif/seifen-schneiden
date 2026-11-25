@@ -41,7 +41,7 @@ export function createScene(canvas) {
   // Holztisch: Bretter laufen von vorne nach hinten (Maserung per Canvas-Textur)
   const TABLE_FRONT = 7, TABLE_W = 20;
   const tableDepth = TABLE_FRONT - WALL_Z;
-  const tableTex = makeWoodTexture({ w: 512, h: 1024, planks: 4, seed: 7, aniso });
+  const tableTex = makeWoodTexture({ w: 512, h: 1024, planks: 4, seed: 7, aniso, tones: ['#c88e52', '#d0985a', '#bf864b', '#d4a063', '#c58d55'] })   // SS-14: honigfarbene Arbeitsplatte;
   tableTex.repeat.set(TABLE_W / 1.8, tableDepth / 3.6);
   const tableMat = new THREE.MeshLambertMaterial({ map: tableTex });
   const table = new THREE.Mesh(new THREE.PlaneGeometry(TABLE_W, tableDepth), tableMat);

@@ -7,15 +7,69 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { BLOCK, CUBE, BLOCK_BASE_Y, SOAP_RADIUS } from './config.js';
 import { makeReliefTexture, RELIEF_SLOPE } from './relief.js';
 import { makeBlobTexture } from './setting/textures.js';
-import { MIDDLE_SHELF, SHELF_Z } from './setting/wall.js';
+import { MIDDLE_SHELF, SHELF_Z, WALL_Z } from './setting/wall.js';
 import { makeFaceAtlas, hasMotif, ATLAS_COLS, ATLAS_ROWS } from './soapLooks.js';
 
 const MAX = 4;
 const SPARE_SHOWN = 4;                // so viele Ersatzstücke je Sorte werden hinter dem vordersten gezeigt
 const BW = BLOCK.nx * CUBE, BH = BLOCK.ny * CUBE, BD = BLOCK.nz * CUBE; // große Seife
-export const SHELF_SCALE = 0.36;                                       // Seife im Regal: 36 %
-const SPACING = 0.62;
+export const SHELF_SCALE = 0.42;                                       // Seife im Regal: 42 % (SS-14: groß genug zum Erkennen)
 const FLY_TIME = 0.55;
+
+// SS-14 Holzwerkstatt: lila Bogenregal auf dem mittleren Brett, vier Bogenfächer nebeneinander
+// (höchstens 4 Sorten je Auftrag). Je Fach ein Holzsockel mit Tafel-Schild: Sortenname + Anzahl Stücke.
+const NC = 4, COMP_W = 0.56, POST = 0.07, RAIL = 0.04, PLINTH_H = 0.1, RACK_H = 0.8;
+const RACK_W = NC * COMP_W + (NC + 1) * POST;
+const RACK_D = 0.35;
+const FLOOR_Y = MIDDLE_SHELF.y + RAIL + PLINTH_H;           // Oberkante der Sockel: hier stehen die Seifen
+const STAGGER_X = 0.036, STAGGER_Z = 0.03;                 // Ersatzstücke: gestaffelt nach hinten rechts
+const compX = (c) => -RACK_W / 2 + POST + COMP_W / 2 + c * (COMP_W + POST);
+const LABEL_W = 0.54, LABEL_H = 0.19, LCW = 512, LCH = 180;
+
+/** Holzsockel + lila Bogenrahmen + dunkle Rückwand. Ein Draw-Call je Teil, keine Schatten-Maps. */
+function buildRack(scene) {
+  const y0 = MIDDLE_SHELF.y;
+  const shape = new THREE.Shape();
+  const R = 0.06, L = -RACK_W / 2, Rt = RACK_W / 2, T = RACK_H;
+  shape.moveTo(L, 0); shape.lineTo(Rt, 0); shape.lineTo(Rt, T - R); shape.quadraticCurveTo(Rt, T, Rt - R, T);
+  shape.lineTo(L + R, T); shape.quadraticCurveTo(L, T, L, T - R); shape.lineTo(L, 0);
+  const archH = 0.15, sideTop = RACK_H - 0.08 - archH;
+  for (let c = 0; c < NC; c++) {
+    const x0 = compX(c) - COMP_W / 2, x1 = compX(c) + COMP_W / 2;
+    const h = new THREE.Path();
+    h.moveTo(x0, RAIL); h.lineTo(x1, RAIL); h.lineTo(x1, sideTop);
+    h.absellipse(compX(c), sideTop, COMP_W / 2, archH, 0, Math.PI, false);
+    h.lineTo(x0, RAIL);
+    shape.holes.push(h);
+  }
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: RACK_D - 0.02, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.008, bevelSegments: 2, curveSegments: 14 });
+  const lilac = new THREE.MeshStandardMaterial({ color: 0xa88bd4, roughness: 0.6, metalness: 0, envMapIntensity: 0.5 });
+  const frame = new THREE.Mesh(geo, lilac);
+  frame.position.set(0, y0, WALL_Z + 0.012);
+  scene.add(frame);
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(RACK_W - 0.02, RACK_H - 0.02), new THREE.MeshStandardMaterial({ color: 0x7a64a2, roughness: 0.85 }));
+  back.position.set(0, y0 + RACK_H / 2, WALL_Z + 0.014);
+  scene.add(back);
+  const plinths = new THREE.InstancedMesh(new RoundedBoxGeometry(0.44, PLINTH_H, 0.28, 2, 0.012),
+    new THREE.MeshStandardMaterial({ color: 0xcf9a5c, roughness: 0.62, envMapIntensity: 0.4 }), NC);
+  for (let c = 0; c < NC; c++) plinths.setMatrixAt(c, _m.makeTranslation(compX(c), y0 + RAIL + PLINTH_H / 2, SHELF_Z + 0.01));
+  scene.add(plinths);
+  // Tafel-Schilder: eine Canvas-Textur (4 Zeilen), je Fach eine Fläche vorne am Sockel
+  const cv = document.createElement('canvas'); cv.width = LCW; cv.height = LCH * NC;
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  tex.minFilter = THREE.LinearMipmapLinearFilter; tex.generateMipmaps = true;
+  const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
+  const labels = [];
+  for (let c = 0; c < NC; c++) {
+    const g = new THREE.PlaneGeometry(LABEL_W, LABEL_H), uv = g.attributes.uv;
+    for (let k = 0; k < uv.count; k++) uv.setY(k, (NC - 1 - c + uv.getY(k)) / NC);
+    const m = new THREE.Mesh(g, mat);
+    m.position.set(compX(c), y0 + 0.07, WALL_Z + RACK_D + 0.03);   // Tafel vorne am Fach, über Leiste und Sockel
+    scene.add(m); labels.push(m);
+  }
+  return { cv, tex, labels, plinths };
+}
 
 const _m = new THREE.Matrix4(), _m2 = new THREE.Matrix4(), _q = new THREE.Quaternion();
 const _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
@@ -98,7 +152,44 @@ export class ShelfSoaps {
     this.backFrom = new THREE.Vector3(); this.backAng = 0;
     this.ray = new THREE.Raycaster();
     this.bobSlot = -1;
+    this.count = new Int16Array(MAX).fill(-1);
+    this.rack = buildRack(scene);
+    this.drawLabels();
+    document.fonts && document.fonts.load('600 64px Fredoka').then(() => this.drawLabels()).catch(() => {});
   }
+
+  /** Fach für Platz i: Sorten mittig in die vier Bogenfächer verteilt. */
+  comp(i) { return i + ((NC - Math.min(NC, this.soaps.length)) >> 1); }
+
+  /** Tafel-Schilder neu malen (nur bei Änderung von Sorte/Anzahl). */
+  drawLabels() {
+    const { cv, tex } = this.rack, g = cv.getContext('2d');
+    const bySlot = new Array(NC).fill(-1);
+    for (let i = 0; i < this.soaps.length; i++) bySlot[this.comp(i)] = i;
+    for (let c = 0; c < NC; c++) {
+      const y = c * LCH, i = bySlot[c], soap = i >= 0 ? this.soaps[i] : null;
+      this.rack.labels[c].visible = !!soap;                                    // leeres Fach: kein Schild, kein Sockel
+      this.rack.plinths.setMatrixAt(c, soap ? _m.makeTranslation(compX(c), MIDDLE_SHELF.y + RAIL + PLINTH_H / 2, SHELF_Z + 0.01) : _zero);
+      g.fillStyle = '#b07a44'; g.fillRect(0, y, LCW, LCH);                     // Holzrahmen
+      g.fillStyle = '#2f3a33'; g.fillRect(9, y + 9, LCW - 18, LCH - 18);       // Tafel
+      if (!soap) continue;
+      const n = Math.max(0, this.count[i]);
+      g.textBaseline = 'middle';
+      g.fillStyle = n > 0 ? '#ffe9a8' : '#8d978f';
+      g.font = '700 124px Fredoka, "DM Sans", sans-serif'; g.textAlign = 'right';
+      const cnt = '×' + n; g.fillText(cnt, LCW - 20, y + LCH / 2 + 6);
+      const cw = g.measureText(cnt).width;
+      g.fillStyle = n > 0 ? '#fbf7ee' : '#9aa39c'; g.textAlign = 'left';
+      let fs = 112; g.font = `600 ${fs}px Fredoka, "DM Sans", sans-serif`;
+      const maxW = LCW - 20 - cw - 14 - 22;
+      while (g.measureText(soap.name).width > maxW && fs > 36) { fs -= 2; g.font = `600 ${fs}px Fredoka, "DM Sans", sans-serif`; }
+      g.fillText(soap.name, 22, y + LCH / 2 + 6);
+    }
+    tex.needsUpdate = true; this.rack.plinths.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Anzahl Stücke (inkl. angeschnittenem) einer Sorte fürs Schild. */
+  setCount(i, n) { if (this.count[i] !== n) { this.count[i] = n; this.drawLabels(); } }
 
   /** Rezept-Seifen ins Regal stellen (nur bei neuer Bestellung). */
   /** fracs[i]: Länge des Stücks (Anteil der Scheiben, angebrochene Stücke sind kürzer). */
@@ -106,16 +197,17 @@ export class ShelfSoaps {
     this.soaps = list.slice(0, MAX);
     for (let i = 0; i < MAX; i++) this.frac[i] = fracs && fracs[i] != null ? Math.max(0.08, fracs[i]) : 1;
     this.spareN.fill(0); this.drawSpares();
-    const n = this.soaps.length;
+    for (let i = 0; i < MAX; i++) this.count[i] = !this.soaps[i] ? -1 : fracs && fracs[i] === 0 ? 0 : 1;   // echte Anzahl kommt per setCount
+    this.drawLabels();
     for (let i = 0; i < MAX; i++) {
       const soap = this.soaps[i];
       if (!soap || (fracs && fracs[i] === 0)) { this.hide(i); continue; }   // Sorte ganz aufgebraucht
-      this.home[i].set((i - (n - 1) / 2) * SPACING, MIDDLE_SHELF.y + BH * SHELF_SCALE / 2, SHELF_Z);
+      this.home[i].set(compX(this.comp(i)) - 0.055, FLOOR_Y + BH * SHELF_SCALE / 2, SHELF_Z);
       _c.setRGB(soap.base[0], soap.base[1], soap.base[2], THREE.SRGBColorSpace);
       this.body.setColorAt(i, _c); this.face.setColorAt(i, _c.set(1, 1, 1));
       this.tile.array[i] = soap.id + (hasMotif(soap) ? 100 : 0);
       this.place(i, this.home[i], SHELF_SCALE);
-      _m.compose(_p.set(this.home[i].x, MIDDLE_SHELF.y + 0.003, SHELF_Z), _q.identity(), _s.set(BW * SHELF_SCALE * 1.7, 1, BD * SHELF_SCALE * 2.6));
+      _m.compose(_p.set(this.home[i].x, FLOOR_Y + 0.003, SHELF_Z), _q.identity(), _s.set(BW * SHELF_SCALE * 1.7, 1, BD * SHELF_SCALE * 2.6));
       this.blob.setMatrixAt(i, _m);
     }
     this.body.instanceColor.needsUpdate = true; this.face.instanceColor.needsUpdate = true; this.tile.needsUpdate = true;
@@ -125,12 +217,11 @@ export class ShelfSoaps {
   /** n Ersatzstücke hinter Platz i (0 = keins). */
   setSpares(i, n) { this.spareN[i] = Math.min(SPARE_SHOWN, n); this.drawSpares(); }
   drawSpares() {
-    const n = this.soaps.length;
     for (let i = 0; i < MAX; i++) for (let k = 0; k < SPARE_SHOWN; k++) {
       const idx = i * SPARE_SHOWN + k, soap = this.soaps[i];
       if (!soap || k >= this.spareN[i]) { this.spare.setMatrixAt(idx, _zero); continue; }
       // gestaffelt nach hinten rechts, damit man die Stücke zählen kann
-      _p.set((i - (n - 1) / 2) * SPACING + 0.075 * (k + 1), MIDDLE_SHELF.y + BH * SHELF_SCALE / 2, SHELF_Z - 0.05 * (k + 1));
+      _p.set(compX(this.comp(i)) - 0.055 + STAGGER_X * (k + 1), FLOOR_Y + BH * SHELF_SCALE / 2, SHELF_Z - STAGGER_Z * (k + 1));
       _m.compose(_p, _q.identity(), _s.set(SHELF_SCALE, SHELF_SCALE, SHELF_SCALE));
       this.spare.setMatrixAt(idx, _m);
       _c.setRGB(soap.base[0] * 0.93, soap.base[1] * 0.93, soap.base[2] * 0.93, THREE.SRGBColorSpace);
@@ -190,7 +281,7 @@ export class ShelfSoaps {
     const i = this.back; this.back = -1;
     if (!this.soaps[i]) return;
     this.place(i, this.home[i], SHELF_SCALE);
-    _m.compose(_p.set(this.home[i].x, MIDDLE_SHELF.y + 0.003, SHELF_Z), _q.identity(), _s.set(BW * SHELF_SCALE * 1.7, 1, BD * SHELF_SCALE * 2.6));
+    _m.compose(_p.set(this.home[i].x, FLOOR_Y + 0.003, SHELF_Z), _q.identity(), _s.set(BW * SHELF_SCALE * 1.7, 1, BD * SHELF_SCALE * 2.6));
     this.blob.setMatrixAt(i, _m); this.blob.instanceMatrix.needsUpdate = true;
   }
   /** Position auf der Flugbahn Regal (e=0) -> über der Schale (e=1). */

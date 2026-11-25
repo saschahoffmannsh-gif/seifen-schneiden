@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { daisyGeometry, cherryGeometry, peonyGeometry, gerberaGeometry, roseGeometry } from '../decoGeo.js';
-import { makeTileTextures, makeBoardTexture, makeShadeTexture, makeBlobTexture, rng } from './textures.js';
+import { makeWoodTexture, makeBoardTexture, makeShadeTexture, makeBlobTexture, rng } from './textures.js';
 
 export const WALL_Z = -1.75;          // Wand steht direkt hinter der Schale an der Tischkante
 export const TABLE_Y = -0.07;         // Tischplatte
@@ -85,11 +85,10 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
   scene.add(group);
 
   // ---------- Wand ----------
-  // Handgemachte Metro-/Zellige-Fliesen: eine Textur-Kachel = 4 x 8 Fliesen (je 0,36 x 0,18)
-  const tileTex = makeTileTextures({ repeat: [WALL_W / 1.44, WALL_H / 1.44], aniso });
-  const wallMat = new THREE.MeshStandardMaterial({
-    ...tileTex, normalScale: new THREE.Vector2(0.32, 0.32), roughness: 1, metalness: 0, envMap: env, envMapIntensity: 0.85, color: 0xffffff,
-  });
+  // SS-14 Holzwerkstatt: senkrechte, warme Holzbretter (eine Textur-Kachel = 4 Bretter à 0,3)
+  const wallTex = makeWoodTexture({ w: 512, h: 1024, planks: 4, seed: 9, tones: ['#a06a42', '#a9744a', '#98633d', '#ad794d', '#9c6840'], aniso });
+  wallTex.repeat.set(WALL_W / 1.2, WALL_H / 2.4);
+  const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.82, metalness: 0, envMap: env, envMapIntensity: 0.3, color: 0xfff1e4 });
   const wall = new THREE.Mesh(new THREE.PlaneGeometry(WALL_W, WALL_H), wallMat);
   wall.position.set(0, TABLE_Y + WALL_H / 2, WALL_Z);
   group.add(wall);
@@ -108,7 +107,7 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
   blobs.add(-0.35, 0.35, WALL_Z + 0.004, 3.4, 1.3, 1);
 
   // ---------- Ablagen: dicke Holzbretter auf Eisen-Konsolen ----------
-  const boardTex = makeBoardTexture({ aniso });
+  const boardTex = makeBoardTexture({ aniso, tone: '#c18a4c' });   // honigfarbene Bretter
   const boardMat = new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.72, metalness: 0, envMap: env, envMapIntensity: 0.35 });
   const iron = new THREE.MeshStandardMaterial({ color: 0x2d2622, metalness: 0.6, roughness: 0.55, envMap: env, envMapIntensity: 0.6 });
   const box = new THREE.BoxGeometry(1, 1, 1);
@@ -131,8 +130,9 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
   // ---------- Wandschrank (Seifen-Vorrat): Korpus, Sockelleiste, zwei Türen mit Füllung, Messingknäufe ----------
   {
     const C = CABINET, cz = WALL_Z + C.d / 2;
-    const darkWood = new THREE.MeshStandardMaterial({ map: boardTex, color: 0xb88a62, roughness: 0.7, envMap: env, envMapIntensity: 0.3 });
-    const doorWood = new THREE.MeshStandardMaterial({ map: boardTex, color: 0xe0bb92, roughness: 0.66, envMap: env, envMapIntensity: 0.3 });
+    // SS-14: lila lackierter Schrank wie die Werkstatt-Möbel
+    const darkWood = new THREE.MeshStandardMaterial({ color: 0x8466b0, roughness: 0.62, envMap: env, envMapIntensity: 0.35 });
+    const doorWood = new THREE.MeshStandardMaterial({ color: 0xa78bd2, roughness: 0.58, envMap: env, envMapIntensity: 0.35 });
     const brass = new THREE.MeshStandardMaterial({ color: 0xc9a04a, metalness: 0.85, roughness: 0.32, envMap: env, envMapIntensity: 1.0 });
     const body = new THREE.Mesh(box, darkWood);
     body.scale.set(C.w, C.h, C.d); body.position.set(C.x, C.bottom + C.h / 2, cz);
@@ -275,6 +275,42 @@ export function createKitchenWall(scene, { env, aniso = 1 }) {
     else ribbon(x, deco.y, RIBBONS[(k / 3 | 0) % RIBBONS.length]);
   }
 
-  for (const b of [shades, blobs, brackets, fillings, corks, tins, leaves, dishes, pearls, metalPearls, daisies, cherries, peonies, gerberas, roses, blocks]) b.build(group);
+  // ---------- SS-14: Gläser mit Seifenwürfeln links/rechts neben dem Seifenregal ----------
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.06, metalness: 0, transparent: true, opacity: 0.26, depthWrite: false, envMap: env, envMapIntensity: 1.3 });
+  const glasses = batch(cyl, glassMat);
+  const mid = SHELVES[1];
+  [[-1.62, '#f3b6c4', 0.2], [-2.0, '#f6e3a6', 0.16], [1.62, '#bfe3c9', 0.2], [2.02, '#f3b6c4', 0.17], [-2.5, '#d9c6ef', 0.18], [2.5, '#f6e3a6', 0.15]].forEach(([x, col, rr]) => {
+    const h = rr * 1.5;
+    glasses.add(x, mid.y + h / 2 + 0.002, zMid, rr, h, rr);
+    fillings.add(x, mid.y + h * 0.3 + 0.004, zMid, rr * 0.9, h * 0.58, rr * 0.9, 0, 0, 0, col);       // Würfel-Füllung
+    corks.add(x, mid.y + h + 0.02, zMid, rr * 0.82, 0.05, rr * 0.82);                                    // Holzdeckel
+    shelfBlobs.add(x, mid.y + 0.002, zMid, rr * 3.2, rr * 2.4, 1, -Math.PI / 2, 0, 0);
+  });
+
+  // ---------- SS-14: Lichterkette an der Vorderkante des oberen Bretts (unbeleuchtet = billig, nur emissiv) ----------
+  {
+    const top = SHELVES[2], zf = SHELF_FRONT_Z + 0.02;
+    const pts = [];
+    const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.024, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffe6a8 }), 60);
+    const glowC = document.createElement('canvas'); glowC.width = glowC.height = 64;
+    const gg = glowC.getContext('2d'), rg = gg.createRadialGradient(32, 32, 0, 32, 32, 32);
+    rg.addColorStop(0, 'rgba(255,214,140,0.85)'); rg.addColorStop(0.35, 'rgba(255,190,110,0.32)'); rg.addColorStop(1, 'rgba(255,170,90,0)');
+    gg.fillStyle = rg; gg.fillRect(0, 0, 64, 64);
+    const glowTex = new THREE.CanvasTexture(glowC); glowTex.colorSpace = THREE.SRGBColorSpace;
+    const glows = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.2, 0.2), new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }), 60);
+    const SAG = 0.9, y0 = top.y - SHELF_T * 0.4;
+    const yAt = (x) => y0 - 0.04 * Math.sin(Math.PI * (((x + 9) / SAG) % 1));
+    for (let x = -4.4; x <= 4.4; x += 0.05) pts.push(new THREE.Vector3(x, yAt(x), zf));
+    group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x4a3a2a })));
+    let n = 0;
+    for (let x = -4.35; x <= 4.35 && n < 60; x += 0.15, n++) {
+      _m.makeTranslation(x, yAt(x) - 0.022, zf + 0.004);
+      bulbs.setMatrixAt(n, _m); glows.setMatrixAt(n, _m);
+    }
+    bulbs.count = glows.count = n;
+    group.add(bulbs, glows);
+  }
+
+  for (const b of [shades, blobs, brackets, fillings, corks, glasses, tins, leaves, dishes, pearls, metalPearls, daisies, cherries, peonies, gerberas, roses, blocks]) b.build(group);
   return group;
 }

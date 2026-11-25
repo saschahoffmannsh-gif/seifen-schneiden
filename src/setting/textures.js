@@ -173,8 +173,8 @@ export function makeShadeTexture() {
 }
 
 /** Brett mit Maserung entlang der Länge (für die Ablagen). */
-export function makeBoardTexture({ aniso = 1 } = {}) {
-  const src = makeWoodCanvas({ w: 128, h: 1024, planks: 1, seed: 4, tones: ['#94603a'] });
+export function makeBoardTexture({ aniso = 1, tone = '#94603a' } = {}) {
+  const src = makeWoodCanvas({ w: 128, h: 1024, planks: 1, seed: 4, tones: [tone] });
   const [c, g] = canvas(1024, 128);
   g.translate(1024, 0); g.rotate(Math.PI / 2); g.drawImage(src, 0, 0);
   return toTex(c, { aniso });
