@@ -26,20 +26,43 @@ const HEX_R = 0.58, HEART_W = 1.35;
 // wie die Seife je Form im Päckchen liegt (Skalierung, Versatz nach hinten)
 const FIT = { box: { s: 1, dz: 0 }, round: { s: 0.9, dz: 0 }, hex: { s: 0.92, dz: 0 }, heart: { s: 0.75, dz: -0.107 } };
 
-// SS-15 t96u: Sammel-Schachteln für 2, 3 und 4 Seifen (nur eckige Sorten). Seifen liegen flach in Fächern:
-// c Spalten x r Reihen, s = Skalierung der Seife, Fächer durch niedrige Stege getrennt. Seife liegt 0.85 x 0.56.
-const SOAP_W = 0.85, SOAP_D = 0.56, GAP = 0.05, MARGIN = 0.05;
-export const MULTI = { 2: { c: 2, r: 1, s: 0.9 }, 3: { c: 3, r: 1, s: 0.75 }, 4: { c: 2, r: 2, s: 0.8 } };
-for (const L of Object.values(MULTI)) {
-  L.w = L.c * SOAP_W * L.s + (L.c - 1) * GAP + 2 * MARGIN;
-  L.d = Math.max(PKG.d, L.r * SOAP_D * L.s + (L.r - 1) * GAP + 2 * MARGIN + 0.03);
+// SS-17: kompakte Sammel-Schachteln für 2, 3 und 4 Seifen (nur eckige Sorten).
+//  'stack': flach liegend übereinander (höhere Schachtel), 'row': hochkant auf der langen Kante nebeneinander
+//  gereiht wie Kekse (schmale Stege dazwischen). s = Skalierung der Seife relativ zur Tisch-Größe.
+// Seife liegend (Tisch-Größe): 0.85 lang (x) x 0.306 dick (y) x 0.56 breit (z).
+const SOAP_L = 0.85, SOAP_T = 0.306, SOAP_B = 0.56, GAP = 0.03, MARGIN = 0.05;
+export const MULTI = { 2: { mode: 'stack', s: 0.9 }, 3: { mode: 'row', s: 0.85 }, 4: { mode: 'row', s: 0.8 } };
+for (const [n, L] of Object.entries(MULTI)) {
+  const k = +n, s = L.s;
+  if (L.mode === 'stack') { L.w = SOAP_L * s + 2 * MARGIN; L.d = Math.max(PKG.d, SOAP_B * s + 2 * MARGIN + 0.03); L.h = PKG.wall + k * SOAP_T * s + PKG.lidOver + 0.012; }
+  else { L.w = k * SOAP_T * s + (k - 1) * GAP + 2 * MARGIN; L.d = SOAP_L * s + 2 * MARGIN + 0.03; L.h = PKG.wall + SOAP_B * s + PKG.lidOver + 0.012; }
 }
-/** Lage von Seife j (lokal in der Schachtel, x/z) bei n Seifen. */
-export function multiSlot(n, j, out) {
+// hochkant: Längsachse nach hinten (z), Dicke quer (x), Breite nach oben (y)
+const STAND_Q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0)));
+/**
+ * Lage von Seife j bei n Seifen in der Schachtel: pos = Mitte der Seife relativ zur Schachtel-Unterkante (Mitte),
+ * quat = Drehung (liegend = keine). Gibt die Skalierung s (relativ zur Tisch-Größe) zurück.
+ */
+export function multiPose(n, j, pos, quat) {
   const L = MULTI[n];
-  if (!L) return out.set(0, 0, 0);
-  const c = j % L.c, r = Math.floor(j / L.c);
-  return out.set((c - (L.c - 1) / 2) * (SOAP_W * L.s + GAP), 0, (r - (L.r - 1) / 2) * (SOAP_D * L.s + GAP));
+  if (!L) { pos.set(0, PKG.wall + SOAP_T / 2, 0); quat.identity(); return 1; }
+  const s = L.s;
+  if (L.mode === 'stack') { pos.set(0, PKG.wall + SOAP_T * s * (j + 0.5), 0); quat.identity(); }
+  else { pos.set((j - (n - 1) / 2) * (SOAP_T * s + GAP), PKG.wall + SOAP_B * s / 2, 0); quat.copy(STAND_Q); }
+  return s;
+}
+
+/** Planare Atlas-UVs mit der Dichte der Grundschachtel (Muster wird wiederholt statt gestreckt). */
+function planarUV(geo, w0, h0, d0) {
+  const p = geo.attributes.position, nm = geo.attributes.normal, uv = geo.attributes.uv;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), ax = Math.abs(nm.getX(i)), ay = Math.abs(nm.getY(i)), az = Math.abs(nm.getZ(i));
+    if (ay >= ax && ay >= az) uv.setXY(i, x / w0 + 0.5, z / d0 + 0.5);
+    else if (az >= ax) uv.setXY(i, x / w0 + 0.5, y / h0);
+    else uv.setXY(i, z / d0 + 0.5, y / h0);
+  }
+  uv.needsUpdate = true;
+  return geo;
 }
 
 // Plätze auf dem Tisch (Schale ist dann weg): Seife links, Päckchen rechts, Deckel liegt flach
@@ -59,10 +82,10 @@ const _zero = new THREE.Matrix4().makeScale(0, 0, 0);
  * Atlas-Material: Kachel pro Instanz (aTile), LID = Deckel-Zeile. REPX: wie oft die Kachel
  * waagerecht wiederholt wird (runde/sechseckige Wände), immer innerhalb der eigenen Kachel.
  */
-function atlasMaterial(map, rows, lid, repx = 1, extra = {}, fxMap = null) {
+function atlasMaterial(map, rows, lid, repx = 1, extra = {}, fxMap = null, wrapY = false) {
   // Papier/Karton: matt mit leichtem Schimmer (PBR, Umgebungslicht aus scene.environment)
   const mat = new THREE.MeshStandardMaterial({ map, roughness: 0.66, metalness: 0, envMapIntensity: 0.55, ...extra });
-  mat.defines = { PKG_LID: lid ? '1.0' : '0.0', PKG_ROWS: rows.toFixed(1), PKG_COLS: ATLAS_COLS.toFixed(1), PKG_REPX: repx.toFixed(1) };
+  mat.defines = { PKG_LID: lid ? '1.0' : '0.0', PKG_ROWS: rows.toFixed(1), PKG_COLS: ATLAS_COLS.toFixed(1), PKG_REPX: repx.toFixed(1), PKG_WRAPY: wrapY ? '1.0' : '0.0' };
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float aTile;\nvarying vec2 vTileUv; varying vec2 vCell;')
@@ -72,7 +95,7 @@ function atlasMaterial(map, rows, lid, repx = 1, extra = {}, fxMap = null) {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vTileUv; varying vec2 vCell; uniform sampler2D fxMap;')
       .replace('#include <map_fragment>', `
-        vec2 tuv = vec2(fract(vTileUv.x), clamp(vTileUv.y, 0.0, 1.0));
+        vec2 tuv = vec2(fract(vTileUv.x), PKG_WRAPY > 0.5 ? fract(vTileUv.y) : clamp(vTileUv.y, 0.0, 1.0));
         vec2 auv = vec2((vCell.x + 0.03 + 0.94 * tuv.x) / PKG_COLS, 1.0 - (vCell.y + 1.0 - (0.03 + 0.94 * tuv.y)) / PKG_ROWS);
         diffuseColor *= texture2D(map, auv);
         vec4 pkgFx = texture2D(fxMap, auv);`)
@@ -81,7 +104,7 @@ function atlasMaterial(map, rows, lid, repx = 1, extra = {}, fxMap = null) {
       .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n metalnessFactor = mix(metalnessFactor, 1.0, pkgFx.r);');
     sh.uniforms.fxMap = { value: fxMap };
   };
-  mat.customProgramCacheKey = () => 'pkgA' + lid + repx;
+  mat.customProgramCacheKey = () => 'pkgA' + lid + repx + wrapY;
   return mat;
 }
 
@@ -199,7 +222,7 @@ export class Packages {
     };
     const round = cyl(R, 40), hex = cyl(HEX_R, 6);
     const heart = heartGeometries();
-    const A = (lid, repx, extra) => atlasMaterial(atlas, rows, lid, repx, extra, atlasFx);
+    const A = (lid, repx, extra, wrapY = false) => atlasMaterial(atlas, rows, lid, repx, extra, atlasFx, wrapY);
     const capB = A(false, 1, { side: THREE.DoubleSide }), capL = A(true, 1);
     const FAM = {
       box: { body: boxBody, lid: boxLid, mB: A(false, 1), mL: A(true, 1), foot: [w, d], tissue: tissueAlong(boxPath, 30, 3) },
@@ -209,19 +232,20 @@ export class Packages {
         tissue: tissueAlong((t) => [Math.cos(t * 6.283) * (HEX_R * 0.87 - 0.09), Math.sin(t * 6.283) * (HEX_R * 0.87 - 0.09)], 26, 7) },
       heart: { body: heart.body, lid: heart.lid, mB: A(false, 1, { side: THREE.DoubleSide }), mL: A(true, 1), foot: [HEART_W, HEART_W * 0.97], tissue: heart.tissue },
     };
-    // Sammel-Schachteln: gleiche Sorten-Kacheln (Atlas), breiter/tiefer, mit Fach-Stegen
+    // SS-17 Sammel-Schachteln: kompakt (gestapelt bzw. hochkant gereiht), Muster planar in Grund-Dichte
     for (const [n, L] of Object.entries(MULTI)) {
-      const W = L.w, D = L.d, parts = [
+      const W = L.w, D = L.d, H = L.h, parts = [
         rb(W, t, D, 0, t / 2, 0),
-        rb(W, h, t, 0, h / 2, D / 2 - t / 2), rb(W, h, t, 0, h / 2, -D / 2 + t / 2),
-        rb(t, h, D - 2 * t, W / 2 - t / 2, h / 2, 0), rb(t, h, D - 2 * t, -W / 2 + t / 2, h / 2, 0),
+        rb(W, H, t, 0, H / 2, D / 2 - t / 2), rb(W, H, t, 0, H / 2, -D / 2 + t / 2),
+        rb(t, H, D - 2 * t, W / 2 - t / 2, H / 2, 0), rb(t, H, D - 2 * t, -W / 2 + t / 2, H / 2, 0),
       ];
-      const sh = h * 0.55, st = t * 0.7;
-      for (let c = 1; c < L.c; c++) parts.push(rb(st, sh, D - 2 * t, -W / 2 + MARGIN + c * (SOAP_W * L.s + GAP) - GAP / 2, sh / 2, 0));
-      for (let r = 1; r < L.r; r++) parts.push(rb(W - 2 * t, sh, st, 0, sh / 2, -D / 2 + 0.015 + MARGIN + r * (SOAP_D * L.s + GAP) - GAP / 2));
-      const rep = Math.max(1, Math.round(W / w));
-      FAM['box' + n] = { body: mergeGeometries(parts), lid: new RoundedBoxGeometry(W + 2 * lidPad, lidH, D + 2 * lidPad, 2, 0.02).translate(0, lidH / 2, 0),
-        mB: A(false, rep), mL: A(true, rep), foot: [W, D], tissue: FAM.box.tissue, members: 'box', multi: +n };
+      if (L.mode === 'row') {   // niedrige Stege zwischen den hochkant stehenden Seifen
+        const sh = H * 0.42, st = 0.012;
+        for (let c = 1; c < +n; c++) parts.push(rb(st, sh, D - 2 * t, -W / 2 + MARGIN + c * (SOAP_T * L.s + GAP) - GAP / 2, sh / 2, 0));
+      }
+      const body = planarUV(mergeGeometries(parts), w, h, d);
+      const lid = planarUV(new RoundedBoxGeometry(W + 2 * lidPad, lidH, D + 2 * lidPad, 2, 0.02).translate(0, lidH / 2, 0), w + 2 * lidPad, lidH, d + 2 * lidPad);
+      FAM['box' + n] = { body, lid, mB: A(false, 1, {}, true), mL: A(true, 1, {}, true), foot: [W, D], h: H, tissue: FAM.box.tissue, members: 'box', multi: +n };
     }
     this.fams = FAM;
     for (const [key, f] of Object.entries(FAM)) {
@@ -317,7 +341,7 @@ export class Packages {
     old.bodyMesh.instanceMatrix.needsUpdate = old.lidMesh.instanceMatrix.needsUpdate = true;
     if (old.multi) old.bodyMesh.visible = old.lidMesh.visible = this.slots.some((x) => x.fam === old && x !== sl);
     sl.fam = want;
-    sl.fit = want.multi ? { s: MULTI[want.multi].s, dz: 0 } : FIT[sl.type.shape];
+    sl.fit = want.multi ? { s: MULTI[want.multi].s, dz: 0 } : FIT[sl.type.shape];   // (Sammel-Schachteln: Lage je Seife über multiPose)
     if (want.multi) want.bodyMesh.visible = want.lidMesh.visible = true;
   }
 
@@ -373,10 +397,13 @@ export class Packages {
     if (i === this.active) { this.lidContent.matrix.copy(_m); this.lidContent.matrixWorldNeedsUpdate = true; }
   }
   /** Höhe der Deckel-Unterkante über der Schachtel-Unterkante, wenn geschlossen. */
-  get lidY() { return PKG.h - PKG.lidOver; }
+  get lidY() { return this.lidYOf(this.active); }
+  /** Schachtel-Höhe von Sorte i in ihrer aktuellen Größe (Sammel-Schachteln sind höher). */
+  heightOf(i) { const f = i >= 0 && this.slots[i] ? this.slots[i].fam : null; return (f && f.h) || PKG.h; }
+  lidYOf(i) { return this.heightOf(i) - PKG.lidOver; }
   setClosed(i, pos, rotY, scale) {
     this.setBody(i, pos, rotY, scale);
-    _p.copy(pos); _p.y += this.lidY * scale;
+    _p.copy(pos); _p.y += this.lidYOf(i) * scale;
     this.setLid(i, _p, 0, rotY, 0, scale);
   }
   setBlob(i, x, y, z, sx, sz, ry = 0) {
@@ -461,7 +488,7 @@ export class Packages {
         bg.setAttribute('aTile', new THREE.InstancedBufferAttribute(new Float32Array([this.slotOf(sl.type.id)]), 1));
         lg.setAttribute('aTile', new THREE.InstancedBufferAttribute(new Float32Array([this.slotOf(sl.type.id)]), 1));
         const b = new THREE.InstancedMesh(bg, f.mB, 1), l = new THREE.InstancedMesh(lg, f.mL, 1);
-        b.setMatrixAt(0, _m.identity()); l.setMatrixAt(0, _m.makeTranslation(0, this.lidY, 0));
+        b.setMatrixAt(0, _m.identity()); l.setMatrixAt(0, _m.makeTranslation(0, (f.h || PKG.h) - PKG.lidOver, 0));
         const k = 0.95 / Math.max(f.foot[0], 0.95);
         g.scale.setScalar(k);
         g.add(b, l); temp.push(bg, lg);

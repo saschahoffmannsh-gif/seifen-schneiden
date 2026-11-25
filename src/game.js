@@ -16,7 +16,7 @@ import { SOAP_LIST, SOAP_BY_ID } from './soaps.js';
 import { makeMarbleTexture } from './marble.js';
 import { sndCut, sndPaper, sndDrawer, sndStack, sndWood, sndThump, sndGlass, sndCeramic, sndCardboard, sndLid, sndFabric, sndCoins, sndCreak, sndSlide, haptic } from './audio.js';
 import { SHELF_SCALE } from './shelfSoaps.js';
-import { PKG, TABLE_SPOT, PKG_SHELF_SCALE, SHADOW_SOAP, SHADOW_LID, MULTI, multiSlot } from './packages.js';
+import { PKG, TABLE_SPOT, PKG_SHELF_SCALE, SHADOW_SOAP, SHADOW_LID, MULTI, multiPose } from './packages.js';
 import { TABLE_Y, CABINET, SHELF_FRONT_Z } from './setting/wall.js';
 import { OrderNotes, NOTE_COUNT } from './orderNotes.js';
 import { barsNeeded, makeOrder, orderSorts, setItem, slicesNeeded } from './orders.js';
@@ -33,6 +33,7 @@ import { DECO_SPOTS, DECO_Y, SHELF_Z } from './setting/wall.js';
 import { KNIFE_X, SKEW_RISE, poseKnife, syncSlope } from './cutGeom.js';
 // Schneide-Kamera im Spiel (SS-14). Der Startbildschirm behält ZOOM_FIT_*/CLOSE_DIR aus cutGeom.js.
 const STATION_SOAP = new THREE.Vector3(0.72, 0, -0.62);   // Seife wartet rechts neben der Schachtel (y = Tisch)
+const STATION_MULTI = { ly: 0.1, lz: 0.24 };   // SS-17: Zusatz-Blickpunkt für Sammel-Schachteln
 const STATION_CAM = { dir: [0, 0.9, 1], fitW: 2.65, fitH: 3.0, ly: 0.75, lz: -0.2 };   // Schachtel über der Karte, Bogenregal ganz im Bild
 const CUT_CAM = { dir: new THREE.Vector3(0.2, 1.15, 1).normalize(), fitW: 3.2, fitH: 3.9, lookDy: 0.3 };
 
@@ -889,12 +890,16 @@ export class Game {
     this.toWaiting();
   }
 
-  /** Wartende Lage von Seife j: eine Seife liegt neben der Schachtel, mehrere schweben in einer Reihe darüber. */
-  soapWait(j, out) {
+  /** Wartende Lage von Seife j: eine Seife liegt neben der Schachtel; mehrere schweben schon in ihrer Ziel-Lage
+   *  (gestapelt nebeneinander bzw. hochkant) über der offenen Schachtel. out.w = Skalierung, q = Drehung (nur bei mehreren). */
+  soapWait(j, out, q) {
     const n = this.stN, P = TABLE_SPOT.pkg;
-    if (n <= 1) return out.set(STATION_SOAP.x, TABLE_Y + BAR_HALF_H, STATION_SOAP.z);
-    const L = MULTI[n], sp = Math.min(0.95, (L.w + 0.5) / n);
-    return out.set(P.x + (j - (n - 1) / 2) * sp, TABLE_Y + PKG.h + 0.42 + BAR_HALF_H, P.z + 0.15);
+    if (n <= 1) { out.set(STATION_SOAP.x, TABLE_Y + BAR_HALF_H, STATION_SOAP.z); out.w = BAR_TABLE_SCALE; return out; }
+    this.barInBox(out, j, q);
+    const L = MULTI[n];
+    if (L.mode === 'stack') { out.x = P.x + (j - (n - 1) / 2) * 0.9; out.y = TABLE_Y + L.h + 0.32 + BAR_HALF_H * L.s; }
+    else { out.x = P.x + (out.x - P.x) * 1.4; out.y += L.h + 0.3; }
+    return out;
   }
 
   /** Kachel "Verpacken": Geschenktheke aufbauen; leere offene Schachtel, die Seife(n) daneben bzw. darüber. */
@@ -916,8 +921,12 @@ export class Game {
     this.lidK = 0;
     this.stationBox(this.packages.slotOf(t.id));
     this.bowl.visible = false; this.bowlShadow.visible = false;
-    const sc = this.stN > 1 ? BAR_TABLE_SCALE * 0.8 : BAR_TABLE_SCALE;
-    this.stSoaps.forEach((f, j) => { f.mesh.visible = true; f.mesh.scale.set(sc, sc, sc); f.mesh.rotation.x = 0; this.soapWait(j, f.home = new THREE.Vector3()); });
+    this.stSoaps.forEach((f, j) => {
+      f.mesh.visible = true; f.mesh.rotation.x = 0;
+      const h = this.soapWait(j, f.home = new THREE.Vector3(), _qq);
+      f.mesh.scale.setScalar(h.w);
+      if (this.stN > 1) f.mesh.quaternion.copy(_qq);
+    });
     this.play(0.5, (e) => { this.stSoaps.forEach((f) => f.mesh.position.set(f.home.x, f.home.y + (1 - e) * 0.9, f.home.z)); }, () => {
       if (this.stN === 1) this.packages.setBlob(SHADOW_SOAP, STATION_SOAP.x, TABLE_Y + 0.003, STATION_SOAP.z, 1.35, 0.95);
       sndThump(0.6); haptic(10);
@@ -927,11 +936,17 @@ export class Game {
     return true;
   }
 
-  /** Lage von Seife j in der Schachtel (flach liegend, in ihrem Fach): out.xyz + out.w = Skalierung. */
-  barInBox(out, j = 0) {
-    const P = TABLE_SPOT.pkg, fit = this.packages.fit(this.pkgSlot), sc = BAR_TABLE_SCALE * fit.s;
-    multiSlot(this.stN || 1, j, _t);
-    out.set(P.x + _t.x, TABLE_Y + BAR_HALF_H * sc / BAR_TABLE_SCALE + PKG.wall, P.z + fit.dz + _t.z); out.w = sc;
+  /** Lage von Seife j in der Schachtel: out.xyz (Mitte) + out.w = Skalierung; q = Drehung (mehrere: gestapelt/hochkant). */
+  barInBox(out, j = 0, q = null) {
+    const P = TABLE_SPOT.pkg, n = this.stN || 1;
+    if (n > 1) {
+      const s = multiPose(n, j, _t, _qq2);
+      out.set(P.x + _t.x, TABLE_Y + _t.y * 1, P.z + _t.z); out.w = BAR_TABLE_SCALE * s;
+      if (q) q.copy(_qq2);
+      return out;
+    }
+    const fit = this.packages.fit(this.pkgSlot), sc = BAR_TABLE_SCALE * fit.s;
+    out.set(P.x, TABLE_Y + BAR_HALF_H * sc / BAR_TABLE_SCALE + PKG.wall, P.z + fit.dz); out.w = sc;
     return out;
   }
 
@@ -1062,16 +1077,18 @@ export class Game {
     this.packages.setBlob(SHADOW_SOAP, 0, 0, 0, 0, 0);
     haptic(8);
     const fs = this.stSoaps, n = fs.length, lag = 0.14, part = 0.6;
-    const from = fs.map((f) => ({ p: f.mesh.position.clone(), s: f.mesh.scale.x, ry: f.mesh.rotation.y }));
+    const from = fs.map((f) => ({ p: f.mesh.position.clone(), s: f.mesh.scale.x, ry: f.mesh.rotation.y, q: f.mesh.quaternion.clone() }));
     const dur = part + lag * (n - 1);
     let landed = 0;
     this.play(dur, (_e, t) => {
       const T = t * dur;
       fs.forEach((f, j) => {
         const u = Math.min(1, Math.max(0, (T - j * lag) / part)), e = easeInOut(u), a = from[j];
-        this.barInBox(_b, j);
-        f.mesh.position.set(a.p.x + (_b.x - a.p.x) * e, a.p.y + (_b.y - a.p.y) * e + Math.sin(u * Math.PI) * 0.5, a.p.z + (_b.z - a.p.z) * e);
-        f.mesh.rotation.set(Math.sin(u * Math.PI) * 0.25, a.ry, 0);
+        this.barInBox(_b, j, _qq);
+        const arc = n > 1 ? Math.sin(u * Math.PI) * 0.12 : Math.sin(u * Math.PI) * 0.5;
+        f.mesh.position.set(a.p.x + (_b.x - a.p.x) * e, a.p.y + (_b.y - a.p.y) * e + arc, a.p.z + (_b.z - a.p.z) * e);
+        if (n > 1) f.mesh.quaternion.slerpQuaternions(a.q, _qq, e);
+        else f.mesh.rotation.set(Math.sin(u * Math.PI) * 0.25, a.ry, 0);
         const sc = a.s + (_b.w - a.s) * e; f.mesh.scale.set(sc, sc, sc);
         if (u >= 1 && landed <= j) { landed = j + 1; sndThump(0.45); }
       });
@@ -1105,7 +1122,7 @@ export class Game {
 
   /** Deckel-Deko von oben auf den geschlossenen Deckel fallen lassen. */
   placeDeco(it, done) {
-    _dragPos.copy(TABLE_SPOT.pkg); _dragPos.y = TABLE_Y + 0.75; _dragPos.z += 0.15;
+    _dragPos.copy(TABLE_SPOT.pkg); _dragPos.y = TABLE_Y + this.packages.heightOf(this.pkgSlot) + 0.42; _dragPos.z += 0.15;
     this.deco.beginHand(it, _dragPos);
     this.deco.drop(() => { sndFabric(); haptic(10); done && done(); });
   }
@@ -1115,7 +1132,7 @@ export class Game {
     const P = TABLE_SPOT.pkg, [fw, fd] = this.packages.footprint(this.pkgSlot);
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
     for (let k = 0; k < 8; k++) {
-      _t.set(P.x + (k & 1 ? fw : -fw) / 2, TABLE_Y + (k & 2 ? PKG.h : 0), P.z + (k & 4 ? fd : -fd) / 2).project(this.camera);
+      _t.set(P.x + (k & 1 ? fw : -fw) / 2, TABLE_Y + (k & 2 ? this.packages.heightOf(this.pkgSlot) : 0), P.z + (k & 4 ? fd : -fd) / 2).project(this.camera);
       x0 = Math.min(x0, _t.x); x1 = Math.max(x1, _t.x); y0 = Math.min(y0, _t.y); y1 = Math.max(y1, _t.y);
     }
     const pad = 0.06, n = this.tapNdc;
@@ -1346,7 +1363,7 @@ export class Game {
     if (this.inStation && this.stStep === 'box' && this.stSoaps) for (const f of this.stSoaps) add('seife', box.setFromObject(f.mesh));
     if ((st === 'pickSoap' || st === 'decorFill' || st === 'packed' || this.inStation) && this.pkgSlot >= 0) {
       const P = TABLE_SPOT.pkg, [fw, fd] = this.packages.footprint(this.pkgSlot);
-      add('paeckchen', box.set(_a.set(P.x - fw / 2, TABLE_Y, P.z - fd / 2), _b.set(P.x + fw / 2, TABLE_Y + PKG.h + (st === 'packed' || this.inStation ? PKG.lidH : 0), P.z + fd / 2)));
+      add('paeckchen', box.set(_a.set(P.x - fw / 2, TABLE_Y, P.z - fd / 2), _b.set(P.x + fw / 2, TABLE_Y + this.packages.heightOf(this.pkgSlot) + (st === 'packed' || this.inStation ? PKG.lidH : 0), P.z + fd / 2)));
       if (st !== 'packed' && !this.inStation) { const r = this.lidRect(); out.push({ name: 'deckel', x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1 }); }
     }
     return out;
@@ -1430,7 +1447,7 @@ export class Game {
     if (phaseOf(item) === 'lid' && this.state === 'decorFill') { this.lidFirst(); return; }
     const why = this.decoBlocked(item);
     if (why) { this.ui.hint(why); return; }
-    _dragPos.copy(TABLE_SPOT.pkg); _dragPos.y = TABLE_Y + 0.75; _dragPos.z += 0.15;
+    _dragPos.copy(TABLE_SPOT.pkg); _dragPos.y = TABLE_Y + this.packages.heightOf(this.pkgSlot) + 0.42; _dragPos.z += 0.15;
     this.deco.beginHand(item, _dragPos);
     this.deco.drop(() => { sndFabric(); haptic(10); this.ui.popup(`+${item.bonus} 🪙 ${item.name}`); this.decoActions(); });
     this.ui.hint(this.state === 'decorFill' ? 'Mehr Deko – oder auf den Deckel tippen' : 'Mehr Deko – oder zum Versenden zur Seite wischen');
@@ -1777,8 +1794,9 @@ export class Game {
     // Geschenktheke: Blick auf die Schachtel, Bogenregal darüber im Bild
     const S = STATION_CAM;
     const P = TABLE_SPOT.pkg;
-    const nS = this.stN || 1, fitW = nS > 1 ? Math.max(S.fitW, MULTI[nS].w + 0.75) : S.fitW;
-    this.stLook.set(nS > 1 ? P.x : (P.x + STATION_SOAP.x) / 2, TABLE_Y + S.ly + (nS > 1 ? 0.12 : 0), P.z + S.lz + (nS > 1 ? (MULTI[nS].r > 1 ? 0.34 : 0.08) : 0));   // tiefe 4er-Schachtel: Blick weiter nach vorn -> Schachtel rutscht über die Karte
+    const nS = this.stN || 1, fitW = nS > 1 ? Math.max(S.fitW, MULTI[nS].w + 1.2) : S.fitW;
+    // Sammel-Schachteln: mittig, Blick etwas höher (höhere Schachtel + schwebende Seifen ganz im Bild, über der Wunschkarte)
+    this.stLook.set(nS > 1 ? P.x : (P.x + STATION_SOAP.x) / 2, TABLE_Y + S.ly + (nS > 1 ? STATION_MULTI.ly : 0), P.z + S.lz + (nS > 1 ? STATION_MULTI.lz : 0));
     _camDir.set(...S.dir).normalize();
     const d2 = Math.max(fitW / 2 / Math.tan(hf / 2), S.fitH * (fitW / S.fitW) / 2 / Math.tan(vf / 2));
     this.stPos.copy(this.stLook).addScaledVector(_camDir, d2);

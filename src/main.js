@@ -1,4 +1,4 @@
-import { barsNeeded } from './orders.js';
+import { barsNeeded, makeOrder } from './orders.js';
 import './sound.js';   // zuerst: Ton an/aus (vor dem ersten AudioContext)
 import { ADDITIVES } from './additives.js';
 import { DECO_ITEMS } from './decoItems.js';
@@ -63,6 +63,7 @@ layoutUI();
 window.addEventListener('resize', layoutUI);
 window.__game = game; // für Tests/Debugging
 window.__barsNeeded = barsNeeded;   // Tests: Stücke je Sorte für einen Auftrag
+window.__makeOrder = makeOrder;   // Tests: Auftrag mit fester Seifenzahl (SS-17 3er/4er-Probe)
 window.__menu = createMenu({
   getCoins: () => game.coins,
   // Bestellungen-Ansicht: echte Aufträge vom Brett; annehmen wie über den Zettel
