@@ -30,7 +30,7 @@ const FIT = { box: { s: 1, dz: 0 }, round: { s: 0.9, dz: 0 }, hex: { s: 0.92, dz
 // vorne daneben (deutlicher Abstand, leicht gedreht, eigener Schatten).
 export const TABLE_SPOT = {
   soap: new THREE.Vector3(-0.62, TABLE_Y, -0.25),
-  pkg: new THREE.Vector3(0, TABLE_Y, -0.7),          // SS-15: Schachtel mitten auf der Theke (Geschenktheke)
+  pkg: new THREE.Vector3(-0.42, TABLE_Y, -0.7),          // SS-15: Schachtel mitten auf der Theke (Geschenktheke)
   lid: new THREE.Vector3(0.3, TABLE_Y, 0.68),
   lidRy: -0.26,
 };

@@ -411,11 +411,13 @@ export function createUI() {
         + `<div class="st-main"><div class="st-who"><b>${rich(d.customer)}</b> wünscht sich${d.seq ? ` <span class="st-seq">${d.seq}</span>` : ''}</div><div class="st-wishes">${wishes}</div></div>`
         + `<div class="st-pay">${ICON.coin}<b>${d.pay}</b></div></div>`
         + (d.extra ? `<div class="st-extra">${ICON.star}${rich(d.extra)}</div>` : '')
-        + `<div class="st-opts" role="listbox">${opts}</div>`
-        + `<div class="st-tiles">${TILES.map(([id, name]) => `<button class="st-tile t-${id}${d.tile === id ? ' sel' : ''}" data-t="${id}">${TILE_ICON[id]}<b>${name}</b></button>`).join('')}</div>`;
+        + `<div class="st-opts${d.optsOff ? ' off' : ''}" role="listbox">${opts}</div>`
+        + `<div class="st-tiles">${TILES.map(([id, name]) => `<button class="st-tile t-${id}${d.tile === id ? ' sel' : ''}${d.enabled && !d.enabled[id] ? ' off' : ''}" data-t="${id}">${TILE_ICON[id]}<b>${name}</b></button>`).join('')}</div>`
+        + (d.step ? `<${d.step.onClick ? 'button' : 'div'} class="st-step${d.step.onClick ? ' btn' : ''}"><span class="st-dots">${Array.from({ length: d.step.of }, (_, k) => `<i class="${k < d.step.done ? 'done' : k === d.step.n - 1 ? 'now' : ''}"></i>`).join('')}</span>${ICON[d.step.icon] || ''}<b>${rich(d.step.text)}</b></${d.step.onClick ? 'button' : 'div'}>` : '');
       const card = root.querySelector('.st-card'); root.style.setProperty('--st-card-h', `${card.offsetHeight}px`);
       for (const b of root.querySelectorAll('.st-tile')) b.onclick = () => d.onTile(b.dataset.t);
       for (const b of root.querySelectorAll('.so')) b.onclick = () => d.onOption(d.options[+b.dataset.k]);
+      const stp = root.querySelector('button.st-step'); if (stp) stp.onclick = d.step.onClick;
       const sel = root.querySelector('.so.sel');
       if (sel && d.scroll) sel.scrollIntoView({ inline: 'center', block: 'nearest' });
     },

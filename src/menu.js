@@ -34,7 +34,7 @@ function hasProgress() {
 function openModal(id) { const m = $(id); m.classList.add('open'); }
 function closeModal(id) { $(id).classList.remove('open'); }
 
-export function createMenu({ getCoins, board = null }) {
+export function createMenu({ getCoins, board = null, rooms = null }) {
   const start = $('start');
   let started = false, openedAt = 0, stopT = 0;
   const scene3d = createStartScene($('st-canvas'));
@@ -61,6 +61,7 @@ export function createMenu({ getCoins, board = null }) {
         : '<span class="hr-txt one">Noch keine Bewertung</span>');
     $('home-rating').setAttribute('aria-label', rt.n ? `Shop-Bewertung ${rt.avg.toFixed(1)} von 5 Sternen aus ${rt.n} Bewertungen` : 'Noch keine Shop-Bewertung');
     $('home-bar').innerHTML = `<span class="hb-coin">${ICON.coin}<b>${getCoins()}</b></span><span class="hb-track"><i style="width:${Math.max(6, Math.round(un / all * 100))}%"></i><em>${un}/${all}</em></span><span class="hb-star">${ICON.star}</span>`;
+    packBadge();
     placeSoaps();
   }
   // 3D-Seifen mittig in den freien Raum zwischen Wortmarke und Menü setzen
@@ -159,10 +160,29 @@ export function createMenu({ getCoins, board = null }) {
     b.querySelector('img').src = HOME_ICONS[b.dataset.tile];
     b.addEventListener('click', () => {
       b.classList.remove('wob'); void b.offsetWidth; b.classList.add('wob');   // kleiner Wackler (noch ohne eigene Seite)
-      if (b.dataset.tile === 'kitchen') setTimeout(() => { if (start.classList.contains('open')) hide(); }, 320);   // Küche = bisheriges Spiel
-      if (b.dataset.tile === 'orders' && board) setTimeout(openOrders, 220);
+      const t = b.dataset.tile;
+      if (t === 'kitchen') setTimeout(() => { if (start.classList.contains('open')) { rooms && rooms.enterKitchen(); hide(); } }, 320);
+      if (t === 'orders' && board) setTimeout(openOrders, 220);
+      if (t === 'pack' && rooms) setTimeout(() => {
+        if (!start.classList.contains('open')) return;
+        if (rooms.packReady()) { hide(); rooms.enterPack(); } else toast('Noch keine fertige Seife – erst in der Küche eine machen');
+      }, 320);
     });
     b.addEventListener('animationend', () => b.classList.remove('wob'));
+  }
+
+  // kurzer Hinweis im Hauptmenü (z. B. "Noch keine fertige Seife")
+  let toastT = 0;
+  function toast(msg) {
+    let el = start.querySelector('.home-toast');
+    if (!el) { el = document.createElement('div'); el.className = 'home-toast'; el.setAttribute('role', 'status'); start.appendChild(el); }
+    el.textContent = msg; el.classList.add('on');
+    clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 2400);
+  }
+  // Verpacken-Kachel: Abzeichen, wenn eine fertige Seife wartet
+  function packBadge() {
+    const b = start.querySelector('.tile.t-pack');
+    if (b) b.classList.toggle('ready', !!(rooms && rooms.packReady()));
   }
 
   // ---------- Bestellungen: die echten Aufträge vom Brett (game.notes.orders), je Seife ein Schüssel-Slot ----------
@@ -211,9 +231,10 @@ export function createMenu({ getCoins, board = null }) {
       c.onclick = () => {
         const i = +c.dataset.i, s2 = board();
         c.classList.remove('wob'); void c.offsetWidth; c.classList.add('wob');
-        if (s2.active && s2.orders[i] === s2.active) { setTimeout(() => hide(), 260); return; }   // laufende Bestellung: zurück ins Spiel
+        // t95u: kein Sprung in die Küche – annehmen und in der Bestellungen-Ansicht bleiben (Zurück -> Hauptmenü)
+        if (s2.active && s2.orders[i] === s2.active) { $('ord-msg').textContent = 'Läuft gerade – weiter geht’s in der Küche (Zurück → Küche).'; return; }
         if (!s2.canAccept) { $('ord-msg').textContent = 'Erst die laufende Bestellung abschließen.'; return; }
-        setTimeout(() => { hide(); s2.accept(i); }, 260);   // annehmen -> Spiel startet mit dieser Bestellung (Regal)
+        setTimeout(() => { s2.accept(i); renderOrders(); $('ord-msg').textContent = 'Angenommen! Zurück ins Menü und ab in die Küche.'; }, 260);
       };
       c.addEventListener('animationend', () => c.classList.remove('wob'));
     }

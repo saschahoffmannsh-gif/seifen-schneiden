@@ -699,3 +699,24 @@ body.landscape #station { position: fixed; left: 12px; bottom: calc(var(--sa-bot
 @media (max-height: 800px) { .st-tile { min-height: 54px; font-size: 14px; } .st-tile svg { width: 28px; height: 28px; } .so img { width: 36px; height: 36px; } .st-av { width: 44px; height: 44px; } #station { gap: 6px; } }
 .st-extra { position: absolute; left: 50%; top: var(--st-card-h, 70px); transform: translate(-50%, -2px); z-index: 2; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; padding: 3px 11px; border-radius: 999px; background: #fff8dc; border: 2px solid var(--ol); font: 600 11.5px var(--f-body); color: var(--ol); }
 .st-extra .star { width: 14px; height: 14px; color: #f6a91a; }
+/* SS-15b Schritte: nur passende Kacheln aktiv, Schritt-Hinweis unten im Knopf-Stil */
+.st-tile.off { filter: grayscale(.85) opacity(.5); box-shadow: none; }
+.st-opts.off { opacity: .45; pointer-events: none; }
+.st-step { align-self: center; display: inline-flex; align-items: center; gap: 8px; min-height: 50px; padding: 0 18px 2px; border-radius: 999px; border: 3px solid var(--ol);
+  background: linear-gradient(180deg, var(--mint-l) 0%, var(--mint) 48%, var(--mint-d) 100%); color: #fff; --to: var(--mint-e); text-shadow: var(--txt-ol);
+  box-shadow: inset 0 -4px 0 rgba(0, 0, 0, .12), inset 0 3px 0 rgba(255, 255, 255, .45), 0 4px 0 var(--ol), 0 8px 14px rgba(60, 25, 70, .22); font: 400 15.5px/1.1 var(--f-display); max-width: 100%; }
+div.st-step { animation: stPulse 2.4s var(--ease) infinite; }
+@keyframes stPulse { 0%, 100% { transform: none; } 50% { transform: scale(1.03); } }
+.st-step .ic { width: 20px; height: 20px; color: #fff; flex: none; }
+.st-dots { display: inline-flex; gap: 4px; flex: none; }
+.st-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, .45); border: 1.5px solid var(--mint-e); }
+.st-dots i.done { background: #fff; }
+.st-dots i.now { background: #ffd43b; width: 14px; border-radius: 5px; }
+/* t95u Räume: Hinweis im Hauptmenü + Abzeichen auf "Verpacken", wenn eine Seife wartet */
+.home-toast { position: absolute; left: 50%; bottom: calc(var(--sa-bottom, 0px) + 22px); transform: translate(-50%, 12px); opacity: 0; pointer-events: none; z-index: 5;
+  padding: 10px 16px; border-radius: 999px; border: 3px solid var(--ol); background: #fffaf0; color: var(--ink, #3c2246); font: 600 14.5px/1.2 var(--f-body, 'DM Sans', sans-serif);
+  box-shadow: 0 4px 0 var(--ol), 0 8px 14px rgba(60, 25, 70, .2); transition: opacity .2s, transform .2s var(--ease-back); width: max-content; max-width: 88%; text-align: center; }
+.home-toast.on { opacity: 1; transform: translate(-50%, 0); }
+.tile.t-pack.ready::after { content: '1'; position: absolute; top: -6px; right: -6px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: #ff6b8b; color: #fff; border: 3px solid var(--ol); font: 400 15px/1 var(--f-display); box-shadow: 0 3px 0 var(--ol); animation: stPulse 1.6s var(--ease) infinite; }
+@media (max-width: 380px) { .st-step { font-size: 13px; padding: 0 10px 2px; gap: 5px; white-space: nowrap; } .st-dots i { width: 7px; height: 7px; } .st-dots i.now { width: 12px; } }

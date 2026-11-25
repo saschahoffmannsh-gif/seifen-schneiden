@@ -67,7 +67,10 @@ window.__menu = createMenu({
   getCoins: () => game.coins,
   // Bestellungen-Ansicht: echte Aufträge vom Brett; annehmen wie über den Zettel
   board: () => ({ orders: game.notes.orders, active: game.order, canAccept: game.state === 'choose' && !game.order, accept: (i) => game.acceptOrder(i) }),
+  // t95u Räume: Hauptmenü-Kacheln navigieren selbst; nach einem Raum-Schritt kommt das Spiel hierher zurück
+  rooms: { packReady: () => game.packReady, enterPack: () => game.enterStation(), enterKitchen: () => game.enterKitchen() },
 });
+game.onRoomDone = () => window.__menu.show();
 window.__decoItems = DECO_ITEMS;
 window.__additives = ADDITIVES;
 
