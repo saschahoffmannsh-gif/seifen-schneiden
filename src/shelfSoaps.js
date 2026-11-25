@@ -11,7 +11,7 @@ import { MIDDLE_SHELF, SHELF_Z, WALL_Z } from './setting/wall.js';
 import { makeFaceAtlas, hasMotif, ATLAS_COLS, ATLAS_ROWS } from './soapLooks.js';
 
 const MAX = 4;
-const SPARE_SHOWN = 4;                // so viele Ersatzstücke je Sorte werden hinter dem vordersten gezeigt
+const SPARE_SHOWN = 2;                // SS-17: so viele Ersatzstücke je Sorte liegen UNTER dem obersten (Stapel max. 3, Schild zeigt die echte Anzahl)
 const BW = BLOCK.nx * CUBE, BH = BLOCK.ny * CUBE, BD = BLOCK.nz * CUBE; // große Seife
 export const SHELF_SCALE = 0.42;                                       // Seife im Regal: 42 % (SS-14: groß genug zum Erkennen)
 const FLY_TIME = 0.55;
@@ -22,7 +22,10 @@ const NC = 4, COMP_W = 0.56, POST = 0.07, RAIL = 0.04, PLINTH_H = 0.1, RACK_H = 
 const RACK_W = NC * COMP_W + (NC + 1) * POST;
 const RACK_D = 0.35;
 const FLOOR_Y = MIDDLE_SHELF.y + RAIL + PLINTH_H;           // Oberkante der Sockel: hier stehen die Seifen
-const STAGGER_X = 0.036, STAGGER_Z = 0.03;                 // Ersatzstücke: gestaffelt nach hinten rechts
+// SS-17: Seifen liegen im Fach auf der Seite (um z gedreht, Prägung zeigt weiter nach vorn), mehrere flach gestapelt.
+const LIE = Math.PI / 2, STACK_MAX_H = 0.54;                // Stapelhöhe passt unter den Bogen
+const STACK_JIT = [0, 0.018, -0.014];                       // leicht versetzt gestapelt (natürlicher, Stücke zählbar)
+const _zAxis = new THREE.Vector3(0, 0, 1), _qz = new THREE.Quaternion();
 const compX = (c) => -RACK_W / 2 + POST + COMP_W / 2 + c * (COMP_W + POST);
 const LABEL_W = 0.54, LABEL_H = 0.19, LCW = 512, LCH = 180;
 
@@ -189,6 +192,7 @@ export class ShelfSoaps {
     this.spareN = new Uint8Array(MAX);
     this.soaps = [];                       // Seife pro Platz (oder null)
     this.home = Array.from({ length: MAX }, () => new THREE.Vector3());
+    this.hs = new Float32Array(MAX).fill(SHELF_SCALE);   // Skalierung je Fach (hohe Stapel etwas kleiner)
     this.fly = -1; this.flyT = 0; this.onArrive = null;
     this.back = -1; this.backT = 0;          // Seife fliegt von der Schale zurück ins Regal
     this.backFrom = new THREE.Vector3(); this.backAng = 0;
@@ -246,33 +250,53 @@ export class ShelfSoaps {
   setSoaps(list, fracs = null) {
     this.soaps = list.slice(0, MAX);
     for (let i = 0; i < MAX; i++) this.frac[i] = fracs && fracs[i] != null ? Math.max(0.08, fracs[i]) : 1;
-    this.spareN.fill(0); this.drawSpares();
+    this.spareN.fill(0); this.drawSpares();   // Stapel kommen danach per setSpares
     for (let i = 0; i < MAX; i++) this.count[i] = !this.soaps[i] ? -1 : fracs && fracs[i] === 0 ? 0 : 1;   // echte Anzahl kommt per setCount
     this.drawLabels();
     for (let i = 0; i < MAX; i++) {
       const soap = this.soaps[i];
       if (!soap || (fracs && fracs[i] === 0)) { this.hide(i); continue; }   // Sorte ganz aufgebraucht
-      this.home[i].set(compX(this.comp(i)) - 0.055, FLOOR_Y + BH * SHELF_SCALE / 2, SHELF_Z);
+      this.layoutHome(i);
       _c.setRGB(soap.base[0], soap.base[1], soap.base[2], THREE.SRGBColorSpace);
       this.body.setColorAt(i, _c); this.face.setColorAt(i, _c.set(1, 1, 1));
       this.tile.array[i] = soap.id + (hasMotif(soap) ? 100 : 0);
-      this.place(i, this.home[i], SHELF_SCALE);
-      _m.compose(_p.set(this.home[i].x, FLOOR_Y + 0.003, SHELF_Z), _q.identity(), _s.set(BW * SHELF_SCALE * 1.7, 1, BD * SHELF_SCALE * 2.6));
-      this.blob.setMatrixAt(i, _m);
+      this.place(i, this.home[i], this.hs[i]);
+      this.setBlobAt(i);
     }
     this.body.instanceColor.needsUpdate = true; this.face.instanceColor.needsUpdate = true; this.tile.needsUpdate = true;
     this.blob.instanceMatrix.needsUpdate = true;
   }
 
-  /** n Ersatzstücke hinter Platz i (0 = keins). */
-  setSpares(i, n) { this.spareN[i] = Math.min(SPARE_SHOWN, n); this.drawSpares(); }
+  /** Stapel in Fach i: Skalierung (passt unter den Bogen) und Lage des obersten Stücks (das fliegt). */
+  layoutHome(i) {
+    const n = 1 + this.spareN[i];
+    this.hs[i] = Math.min(SHELF_SCALE, STACK_MAX_H / (n * BW));
+    const h = BW * this.hs[i];                              // liegend: Breite wird zur Höhe
+    this.home[i].set(compX(this.comp(i)) + STACK_JIT[n - 1], FLOOR_Y + h * (n - 0.5), SHELF_Z);
+  }
+  setBlobAt(i) {
+    const k = this.hs[i];
+    _m.compose(_p.set(compX(this.comp(i)), FLOOR_Y + 0.003, SHELF_Z), _q.identity(), _s.set(BH * k * 1.25, 1, BD * k * 2.4));
+    this.blob.setMatrixAt(i, _m);
+  }
+
+  /** n Ersatzstücke UNTER dem obersten Stück in Fach i (0 = keins). */
+  setSpares(i, n) {
+    n = Math.min(SPARE_SHOWN, n);
+    if (this.spareN[i] === n) return;
+    this.spareN[i] = n; this.drawSpares();
+    if (!this.soaps[i]) return;
+    this.layoutHome(i);
+    if (i !== this.fly && i !== this.back && this.isShown(i)) { this.place(i, this.home[i], this.hs[i]); this.setBlobAt(i); this.blob.instanceMatrix.needsUpdate = true; }
+  }
   drawSpares() {
     for (let i = 0; i < MAX; i++) for (let k = 0; k < SPARE_SHOWN; k++) {
       const idx = i * SPARE_SHOWN + k, soap = this.soaps[i];
       if (!soap || k >= this.spareN[i]) { this.spare.setMatrixAt(idx, _zero); continue; }
-      // gestaffelt nach hinten rechts, damit man die Stücke zählen kann
-      _p.set(compX(this.comp(i)) - 0.055 + STAGGER_X * (k + 1), FLOOR_Y + BH * SHELF_SCALE / 2, SHELF_Z - STAGGER_Z * (k + 1));
-      _m.compose(_p, _q.identity(), _s.set(SHELF_SCALE, SHELF_SCALE, SHELF_SCALE));
+      // flach liegend gestapelt: Stück k liegt unten (k = 0 auf dem Sockel), das oberste ist das aktive
+      const n = 1 + this.spareN[i], sc = Math.min(SHELF_SCALE, STACK_MAX_H / (n * BW)), h = BW * sc;
+      _p.set(compX(this.comp(i)) + STACK_JIT[k], FLOOR_Y + h * (k + 0.5), SHELF_Z - 0.004 * k);
+      _m.compose(_p, _q.setFromAxisAngle(_zAxis, LIE), _s.set(sc, sc, sc));
       this.spare.setMatrixAt(idx, _m);
       _c.setRGB(soap.base[0] * 0.93, soap.base[1] * 0.93, soap.base[2] * 0.93, THREE.SRGBColorSpace);
       this.spare.setColorAt(idx, _c);
@@ -280,8 +304,10 @@ export class ShelfSoaps {
     this.spare.instanceMatrix.needsUpdate = true; this.spare.instanceColor.needsUpdate = true;
   }
 
-  place(i, pos, scale, rotX = 0) {
+  /** lie: 1 = liegend (im Regal), 0 = aufrecht (über der Schale); dazwischen beim Flug. */
+  place(i, pos, scale, rotX = 0, lie = 1) {
     if (rotX) _q.setFromAxisAngle(_xAxis, rotX); else _q.identity();
+    if (lie) _q.multiply(_qz.setFromAxisAngle(_zAxis, LIE * lie));
     _m.compose(pos, _q, _s.set(scale, scale, scale * this.frac[i]));
     this.body.setMatrixAt(i, _m);
     this.face.setMatrixAt(i, _m2.multiplyMatrices(_m, this.faceOffset));
@@ -330,16 +356,15 @@ export class ShelfSoaps {
   landBack() {
     const i = this.back; this.back = -1;
     if (!this.soaps[i]) return;
-    this.place(i, this.home[i], SHELF_SCALE);
-    _m.compose(_p.set(this.home[i].x, FLOOR_Y + 0.003, SHELF_Z), _q.identity(), _s.set(BW * SHELF_SCALE * 1.7, 1, BD * SHELF_SCALE * 2.6));
-    this.blob.setMatrixAt(i, _m); this.blob.instanceMatrix.needsUpdate = true;
+    this.place(i, this.home[i], this.hs[i]);
+    this.setBlobAt(i); this.blob.instanceMatrix.needsUpdate = true;
   }
   /** Position auf der Flugbahn Regal (e=0) -> über der Schale (e=1). */
   flyPose(i, t) {
     const e = t * t * (3 - 2 * t), h = this.home[i];
     const back = i === this.back, f = back ? this.backFrom : _to.set(0, BLOCK_BASE_Y + BH / 2, 0);
     _p.set(h.x + (f.x - h.x) * e, h.y + (f.y - h.y) * e + Math.sin(t * Math.PI) * 0.45, h.z + (f.z - h.z) * e);
-    this.place(i, _p, SHELF_SCALE + (1 - SHELF_SCALE) * e, back ? this.backAng * e : 0);
+    this.place(i, _p, this.hs[i] + (1 - this.hs[i]) * e, back ? this.backAng * e : 0, 1 - e);
   }
 
   /** Pro Frame: Flug animieren, nächste gewünschte Seife leicht hüpfen lassen. Keine Allokationen. */
@@ -361,13 +386,13 @@ export class ShelfSoaps {
       if (this.backT >= 1) this.landBack();
     }
     if (bobSlot !== this.bobSlot) {           // vorher hüpfende Seife zurück auf ihren Platz
-      if (this.bobSlot >= 0 && this.bobSlot !== this.fly && this.bobSlot !== this.back && this.soaps[this.bobSlot] && this.isShown(this.bobSlot)) this.place(this.bobSlot, this.home[this.bobSlot], SHELF_SCALE);
+      if (this.bobSlot >= 0 && this.bobSlot !== this.fly && this.bobSlot !== this.back && this.soaps[this.bobSlot] && this.isShown(this.bobSlot)) this.place(this.bobSlot, this.home[this.bobSlot], this.hs[this.bobSlot]);
       this.bobSlot = bobSlot;
     }
     if (bobSlot >= 0 && bobSlot !== this.fly && bobSlot !== this.back) {
       const hop = Math.max(0, Math.sin(time * 5)) * 0.035 * (Math.sin(time * 2.5) > 0 ? 1 : 0);
       _p.copy(this.home[bobSlot]); _p.y += hop;
-      this.place(bobSlot, _p, SHELF_SCALE);
+      this.place(bobSlot, _p, this.hs[bobSlot]);
     }
   }
 

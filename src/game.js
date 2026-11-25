@@ -359,6 +359,8 @@ export class Game {
     for (const [id, n] of this.take) this.supply.set(id, { pieces: n, cur: SLICES });
     const list = this.shelfSorts();
     this.shelf.setSoaps(list, this.shelfFracs());
+    this.updateShelfSupply(list);                  // SS-17: Stapelhöhe steht vorher fest (oberstes Stück landet obendrauf)
+    this.shelf.spare.visible = false;
     const home = this.shelf.home, n = list.length;
     for (let i = 0; i < n; i++) this.shelf.hide(i);
     this.play(0.5 + n * 0.12, (e) => {
@@ -368,9 +370,10 @@ export class Game {
         if (t <= 0) continue;
         const k = easeOut(t);
         _t.copy(home[i]); _t.y += (1 - k) * 0.9 + Math.sin(t * Math.PI) * 0.06;
-        this.shelf.place(i, _t, SHELF_SCALE * (0.4 + 0.6 * k));
+        this.shelf.place(i, _t, this.shelf.hs[i] * (0.4 + 0.6 * k));
       }
     }, () => {
+      this.shelf.spare.visible = true;
       this.shelf.setSoaps(list, this.shelfFracs()); this.updateShelfSupply(list); sndWood();
       if (this.checkEnough()) this.toShelf();
     }, (t) => t);
