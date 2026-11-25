@@ -30,7 +30,9 @@ import { Showcase } from './showcase.js';
 import { CutRig } from './cutRig.js';
 import { DECO_ITEMS, DECO_GROUPS, phaseOf, groupOf } from './decoItems.js';
 import { DECO_SPOTS, DECO_Y, SHELF_Z } from './setting/wall.js';
-import { KNIFE_X, SKEW_RISE, ZOOM_FIT_W, ZOOM_FIT_H, CLOSE_DIR, poseKnife, syncSlope } from './cutGeom.js';
+import { KNIFE_X, SKEW_RISE, poseKnife, syncSlope } from './cutGeom.js';
+// Schneide-Kamera im Spiel (SS-14). Der Startbildschirm behält ZOOM_FIT_*/CLOSE_DIR aus cutGeom.js.
+const CUT_CAM = { dir: new THREE.Vector3(0.2, 1.15, 1).normalize(), fitW: 3.2, fitH: 3.9, lookDy: 0.3 };
 
 const FILL_CAP = 40, FILL_MAX_KINDS = 4;     // Teile pro Füllungs-Sorte, verschiedene Füllungen
 const DRAG_LIFT = 55;                        // px: Deko schwebt so weit über dem Finger
@@ -1421,10 +1423,12 @@ export class Game {
   computeClose() {
     const c = this.camera, B = this.camBase;
     this.rig.fullTiltCenter(this.closeLook, -0.1);
-    // etwas flacher und leicht von rechts: so liest man die Neigung (Seitenkante + Brett) und die Schnittkante
-    _camDir.copy(CLOSE_DIR);
+    this.closeLook.y += CUT_CAM.lookDy;
+    // SS-14 Werkstatt-Perspektive: steiler von oben und etwas weiter weg -> Schale steht kleiner auf der
+    // Theke, die Seife hängt geneigt darüber, Messer klar unterhalb des Bogenregals (Schilder frei lesbar)
+    _camDir.copy(CUT_CAM.dir);
     const vf = THREE.MathUtils.degToRad(c.fov), hf = 2 * Math.atan(Math.tan(vf / 2) * c.aspect);
-    const dist = Math.max(ZOOM_FIT_W / 2 / Math.tan(hf / 2), ZOOM_FIT_H / 2 / Math.tan(vf / 2));
+    const dist = Math.max(CUT_CAM.fitW / 2 / Math.tan(hf / 2), CUT_CAM.fitH / 2 / Math.tan(vf / 2));
     this.closePos.copy(this.closeLook).addScaledVector(_camDir, dist);
   }
 

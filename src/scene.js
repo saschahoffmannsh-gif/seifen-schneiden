@@ -76,7 +76,7 @@ export function createScene(canvas) {
   scene.add(bowl);
 
   // Kamera so weit weg, dass Breite UND Höhe der Szene ins Bild passen (Hoch- und Querformat)
-  const FIT_W = 2.95;
+  const FIT_W0 = 2.95;
   const camBase = { pos: new THREE.Vector3(), look: new THREE.Vector3(), version: 0 };
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
@@ -84,7 +84,10 @@ export function createScene(canvas) {
     camera.aspect = w / h;
     // Querformat: mehr Höhe zeigen, damit alle drei Regalbretter (Päckchen oben) ins Bild passen
     const land = camera.aspect > 1.15;
-    const FIT_H = land ? 4.5 : 3.1, lift = land ? 0.8 : 0.32;  // etwas angehoben: unterer Teil des Wandschranks sichtbar
+    // SS-14: im Hochformat etwas mehr Breite (Schale ~80 % Bildbreite) und stärker angehoben -> Schale steht
+    // tiefer auf der Theke, das Bogenregal mit den Schildern ist darüber frei sichtbar
+    const FIT_H = land ? 4.5 : 3.1, lift = land ? 0.8 : 0.6;
+    const FIT_W = land ? FIT_W0 : 3.3;
     const vf = THREE.MathUtils.degToRad(camera.fov);
     const hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
     const dist = Math.max(FIT_W / 2 / Math.tan(hf / 2), FIT_H / 2 / Math.tan(vf / 2));
