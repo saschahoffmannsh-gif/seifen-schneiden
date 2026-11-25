@@ -659,8 +659,8 @@ export class Game {
     const q = this.quality || this.rateMix();
     this.price = q.price;
     this.buildBarBits();
-    this.ui.showQuality(q);
-    this.ui.hint((q.stars === 3 ? 'Perfekt' : q.stars === 2 ? 'Eine schöne Seife' : 'Fast') + ' – dreh sie mit dem Finger');
+    // SS-18: keine Bewertung vor dem Verschicken – die (einzige) Bewertung kommt nach dem Wegwischen
+    this.ui.hint('Dreh sie mit dem Finger');
     this.showcase.start(this.bar);
     {
       const o = this.order, more = o && o.cur < o.items.length - 1;
@@ -794,10 +794,10 @@ export class Game {
     const addOk = !o.additive || this.additives.includes(o.additive), shapeOk = !o.shape || !this.shape || this.shape === o.shape;
     if (!addOk) st -= 1;
     if (!shapeOk) st -= 1;
-    (o.finished || (o.finished = [])).push({ mesh, price: this.price || 0, stars: st, additive: o.additive, addOk, shape: o.shape, shapeOk, map: this.barMat.map });
+    (o.finished || (o.finished = [])).push({ mesh, price: this.price || 0, stars: st, acc: q.accuracy, additive: o.additive, addOk, shape: o.shape, shapeOk, map: this.barMat.map });
     this.showcase.stop();
     this.ui.showQuality(null);
-    if (this.quality) this.ui.setMixSummary(this.quality);
+    this.ui.setMixSummary();
     this.bar.visible = false;
     this.additives = []; this.quality = null; this.price = 0;
     this.bowl.visible = true; this.bowlShadow.visible = true;
@@ -1558,11 +1558,19 @@ export class Game {
         this.lastEarned = total; this.pending = 0;
         this.coins += total; save.coins = this.coins;
         save.done = save.done + 1;
-        if (stars.length) save.addRating(stars.reduce((a, b) => a + b, 0) / stars.length);
+        const avg = stars.length ? stars.reduce((a, b) => a + b, 0) / stars.length : 0;
+        if (stars.length) save.addRating(avg);
+        // SS-18: die einzige Bewertung der Bestellung – erst jetzt, nach dem Verschicken
+        if (stars.length) this.ui.showRating({
+          customer: o && o.customer, avg,
+          rows: [...fs.map((f, j) => ({ label: fs.length > 1 ? `Seife ${j + 1}` : 'Seife', value: `${f.acc} % genau${!f.addOk ? ' · Zusatz fehlt' : ''}${!f.shapeOk ? ' · falsche Form' : ''}`, cls: f.acc >= 90 && f.addOk && f.shapeOk ? 'good' : f.acc < 70 ? 'bad' : '' })),
+            ...(bow ? [{ label: 'Schleife', value: '+½ Stern', cls: 'good' }] : []),
+            { label: 'Lohn', value: `+${total} 🪙` }],
+        });
         this.soapStars = [];
         this.ui.setCoins(this.coins, true);
         sndCoins(); haptic(20);
-        this.ui.popup(fs.length > 1 ? `+${total} 🪙 für ${fs.length} Seifen` : db > 0 ? `+${total} 🪙 (Deko +${db})` : `+${total} 🪙`);
+        if (!stars.length) this.ui.popup(fs.length > 1 ? `+${total} 🪙 für ${fs.length} Seifen` : db > 0 ? `+${total} 🪙 (Deko +${db})` : `+${total} 🪙`);
         const gifts = giftShapes(save.done);
         if (gifts.length) setTimeout(() => { sndStack(3); this.ui.popup(`Neue Form geschenkt: ${gifts.map((g) => g.name).join(', ')}`); }, 1300);
       }
@@ -1594,7 +1602,10 @@ export class Game {
   /** Päckchen weggewischt: Münz-Popup kurz zeigen, dann zurück ins Hauptmenü (kein Sprung in die Küche). */
   roomDoneSoon() {
     clearTimeout(this.roomT);
-    this.roomT = setTimeout(() => this.onRoomDone && this.onRoomDone(), 1100);
+    // SS-18: Bewertungskarte stehen lassen (Antippen = weiter), dann zurück ins Menü
+    const go = () => { clearTimeout(this.roomT); removeEventListener('pointerdown', go, true); this.ui.showQuality(null); this.onRoomDone && this.onRoomDone(); };
+    this.roomT = setTimeout(go, this.rateHold || 3600);   // rateHold: Test-Hook (langsame Probes)
+    setTimeout(() => addEventListener('pointerdown', go, true), 700);
   }
 
   // ---------- pro Frame ----------

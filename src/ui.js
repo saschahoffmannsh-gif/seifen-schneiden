@@ -77,8 +77,9 @@ export function createUI() {
       document.documentElement.style.setProperty('--order-h', o.classList.contains('hidden') ? '50px' : `${o.offsetHeight}px`);
     },
     /** Nach dem Ausformen: statt der Balken nur noch eine Zeile mit dem Ergebnis. */
-    setMixSummary(q) {
-      el.orderProgress.innerHTML = `<div class="mx-sum"><span class="mini-stars">${[0, 1, 2].map((k) => `<span class="${k < q.stars ? 'on' : 'off'}">${ICON.star}</span>`).join('')}</span> Mischung ${q.accuracy} % genau</div>`;
+    setMixSummary() {
+      // SS-18: ohne Sterne/Genauigkeit – bewertet wird erst nach dem Verschicken
+      el.orderProgress.innerHTML = `<div class="mx-sum">${ICON.check || '✔'} Seife fertig – wartet aufs Verpacken</div>`;
       this._mixKey = '';
       this.layoutOrder();
     },
@@ -386,7 +387,8 @@ export function createUI() {
     /** Ergebnis-Karte nach dem Ausformen: Genauigkeit, Sterne, Zeilen, Preis. null = ausblenden. */
     showQuality(q) {
       const root = $('quality');
-      if (!q) { root.classList.remove('show'); return; }
+      if (!q) { root.classList.remove('show', 'order'); return; }
+      root.classList.remove('order');
       // Sterne ploppen nacheinander auf (mit Funkeln) – je Stern ein weicher Plopp
       $('q-stars').innerHTML = [0, 1, 2].map((k) => `<span class="qs ${k < q.stars ? 'on' : 'off'}" style="--d:${(0.35 + k * 0.32).toFixed(2)}s">${ICON.star}</span>`).join('');
       for (let k = 0; k < q.stars; k++) sndPop(0.8, 0.35 + k * 0.32 + 0.2, k + 1);
@@ -394,6 +396,16 @@ export function createUI() {
       $('q-title').textContent = `Mischung ${q.accuracy} % genau`;
       $('q-rows').innerHTML = q.rows.map((r) => `<div class="q-row"><span>${rich(r.label)}</span><b class="${r.cls || ''}">${rich(r.value)}</b></div>`).join('');
       root.classList.add('show');
+    },
+    /** SS-18: die einzige Bewertung einer Bestellung, nach dem Verschicken (1–5 Sterne, Durchschnitt der Seifen). */
+    showRating(r) {
+      const root = $('quality'), n = Math.max(1, Math.min(5, Math.round(r.avg)));
+      $('q-stars').innerHTML = [0, 1, 2, 3, 4].map((k) => `<span class="qs ${k < n ? 'on' : 'off'}" style="--d:${(0.3 + k * 0.2).toFixed(2)}s">${ICON.star}</span>`).join('');
+      for (let k = 0; k < n; k++) sndPop(0.8, 0.3 + k * 0.2 + 0.2, Math.min(3, k + 1));
+      $('q-banner').textContent = n >= 5 ? 'Begeistert!' : n >= 4 ? 'Sehr zufrieden' : n >= 3 ? 'Zufrieden' : 'Naja …';
+      $('q-title').textContent = `${r.customer || 'Kundschaft'} bewertet: ${(Math.round(r.avg * 2) / 2).toLocaleString('de-DE')} von 5`;
+      $('q-rows').innerHTML = r.rows.map((x) => `<div class="q-row"><span>${rich(x.label)}</span><b class="${x.cls || ''}">${rich(x.value)}</b></div>`).join('');
+      root.classList.add('show', 'order');
     },
     /**
      * SS-15 Geschenktheke unten: Wunsch-Karte (Avatar, Wünsche mit Haken, Lohn), Auswahlreihe der gewählten
