@@ -182,7 +182,8 @@ export function createMenu({ getCoins, board = null, rooms = null }) {
   // Verpacken-Kachel: Abzeichen, wenn eine fertige Seife wartet
   function packBadge() {
     const b = start.querySelector('.tile.t-pack');
-    if (b) b.classList.toggle('ready', !!(rooms && rooms.packReady()));
+    const n = rooms && rooms.packReady() ? Math.max(1, rooms.packCount ? rooms.packCount() : 1) : 0;
+    if (b) { b.classList.toggle('ready', n > 0); b.dataset.n = n > 1 ? `${n}` : '1'; b.setAttribute('aria-label', n ? `Verpacken – ${n} ${n === 1 ? 'Seife wartet' : 'Seifen warten'}` : 'Verpacken'); }
   }
 
   // ---------- Bestellungen: die echten Aufträge vom Brett (game.notes.orders), je Seife ein Schüssel-Slot ----------

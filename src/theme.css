@@ -717,6 +717,6 @@ div.st-step { animation: stPulse 2.4s var(--ease) infinite; }
   padding: 10px 16px; border-radius: 999px; border: 3px solid var(--ol); background: #fffaf0; color: var(--ink, #3c2246); font: 600 14.5px/1.2 var(--f-body, 'DM Sans', sans-serif);
   box-shadow: 0 4px 0 var(--ol), 0 8px 14px rgba(60, 25, 70, .2); transition: opacity .2s, transform .2s var(--ease-back); width: max-content; max-width: 88%; text-align: center; }
 .home-toast.on { opacity: 1; transform: translate(-50%, 0); }
-.tile.t-pack.ready::after { content: '1'; position: absolute; top: -6px; right: -6px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+.tile.t-pack.ready::after { content: attr(data-n); position: absolute; top: -6px; right: -6px; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
   background: #ff6b8b; color: #fff; border: 3px solid var(--ol); font: 400 15px/1 var(--f-display); box-shadow: 0 3px 0 var(--ol); animation: stPulse 1.6s var(--ease) infinite; }
 @media (max-width: 380px) { .st-step { font-size: 13px; padding: 0 10px 2px; gap: 5px; white-space: nowrap; } .st-dots i { width: 7px; height: 7px; } .st-dots i.now { width: 12px; } }

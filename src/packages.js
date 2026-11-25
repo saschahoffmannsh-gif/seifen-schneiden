@@ -26,6 +26,22 @@ const HEX_R = 0.58, HEART_W = 1.35;
 // wie die Seife je Form im Päckchen liegt (Skalierung, Versatz nach hinten)
 const FIT = { box: { s: 1, dz: 0 }, round: { s: 0.9, dz: 0 }, hex: { s: 0.92, dz: 0 }, heart: { s: 0.75, dz: -0.107 } };
 
+// SS-15 t96u: Sammel-Schachteln für 2, 3 und 4 Seifen (nur eckige Sorten). Seifen liegen flach in Fächern:
+// c Spalten x r Reihen, s = Skalierung der Seife, Fächer durch niedrige Stege getrennt. Seife liegt 0.85 x 0.56.
+const SOAP_W = 0.85, SOAP_D = 0.56, GAP = 0.05, MARGIN = 0.05;
+export const MULTI = { 2: { c: 2, r: 1, s: 0.9 }, 3: { c: 3, r: 1, s: 0.75 }, 4: { c: 2, r: 2, s: 0.8 } };
+for (const L of Object.values(MULTI)) {
+  L.w = L.c * SOAP_W * L.s + (L.c - 1) * GAP + 2 * MARGIN;
+  L.d = Math.max(PKG.d, L.r * SOAP_D * L.s + (L.r - 1) * GAP + 2 * MARGIN + 0.03);
+}
+/** Lage von Seife j (lokal in der Schachtel, x/z) bei n Seifen. */
+export function multiSlot(n, j, out) {
+  const L = MULTI[n];
+  if (!L) return out.set(0, 0, 0);
+  const c = j % L.c, r = Math.floor(j / L.c);
+  return out.set((c - (L.c - 1) / 2) * (SOAP_W * L.s + GAP), 0, (r - (L.r - 1) / 2) * (SOAP_D * L.s + GAP));
+}
+
 // Plätze auf dem Tisch (Schale ist dann weg): Seife links, Päckchen rechts, Deckel liegt flach
 // vorne daneben (deutlicher Abstand, leicht gedreht, eigener Schatten).
 export const TABLE_SPOT = {
@@ -187,15 +203,30 @@ export class Packages {
         tissue: tissueAlong((t) => [Math.cos(t * 6.283) * (HEX_R * 0.87 - 0.09), Math.sin(t * 6.283) * (HEX_R * 0.87 - 0.09)], 26, 7) },
       heart: { body: heart.body, lid: heart.lid, mB: A(false, 1, { side: THREE.DoubleSide }), mL: A(true, 1), foot: [HEART_W, HEART_W * 0.97], tissue: heart.tissue },
     };
+    // Sammel-Schachteln: gleiche Sorten-Kacheln (Atlas), breiter/tiefer, mit Fach-Stegen
+    for (const [n, L] of Object.entries(MULTI)) {
+      const W = L.w, D = L.d, parts = [
+        rb(W, t, D, 0, t / 2, 0),
+        rb(W, h, t, 0, h / 2, D / 2 - t / 2), rb(W, h, t, 0, h / 2, -D / 2 + t / 2),
+        rb(t, h, D - 2 * t, W / 2 - t / 2, h / 2, 0), rb(t, h, D - 2 * t, -W / 2 + t / 2, h / 2, 0),
+      ];
+      const sh = h * 0.55, st = t * 0.7;
+      for (let c = 1; c < L.c; c++) parts.push(rb(st, sh, D - 2 * t, -W / 2 + MARGIN + c * (SOAP_W * L.s + GAP) - GAP / 2, sh / 2, 0));
+      for (let r = 1; r < L.r; r++) parts.push(rb(W - 2 * t, sh, st, 0, sh / 2, -D / 2 + 0.015 + MARGIN + r * (SOAP_D * L.s + GAP) - GAP / 2));
+      const rep = Math.max(1, Math.round(W / w));
+      FAM['box' + n] = { body: mergeGeometries(parts), lid: new RoundedBoxGeometry(W + 2 * lidPad, lidH, D + 2 * lidPad, 2, 0.02).translate(0, lidH / 2, 0),
+        mB: A(false, rep), mL: A(true, rep), foot: [W, D], tissue: FAM.box.tissue, members: 'box', multi: +n };
+    }
     this.fams = FAM;
     for (const [key, f] of Object.entries(FAM)) {
-      const members = this.types.filter((x) => x.shape === key);
+      const members = this.types.filter((x) => x.shape === (f.members || key));
       f.n = Math.max(1, members.length);
       f.body.setAttribute('aTile', new THREE.InstancedBufferAttribute(new Float32Array(f.n), 1));
       f.lid.setAttribute('aTile', new THREE.InstancedBufferAttribute(new Float32Array(f.n), 1));
       f.bodyMesh = new THREE.InstancedMesh(f.body, f.mB, f.n);
       f.lidMesh = new THREE.InstancedMesh(f.lid, f.mL, f.n);
       f.used = 0;
+      if (f.multi) f.bodyMesh.visible = f.lidMesh.visible = false;   // nur sichtbar, solange eine Sammel-Schachtel benutzt wird
     }
 
     // Schleifen auf den Deckeln
@@ -218,8 +249,9 @@ export class Packages {
     const shelfIds = this.types.filter((x) => x.shelf);
     this.slots = this.types.map((ty, i) => {
       const f = FAM[ty.shape];
-      const sl = { type: ty, fam: f, inst: f.used++, bow: -1, fit: FIT[ty.shape] };
+      const sl = { type: ty, fam: f, base: f, inst: f.used++, bow: -1, fit: FIT[ty.shape] };
       f.body.attributes.aTile.array[sl.inst] = i; f.lid.attributes.aTile.array[sl.inst] = i;
+      if (ty.shape === 'box') for (const n of Object.keys(MULTI)) { const m = FAM['box' + n]; m.body.attributes.aTile.array[sl.inst] = i; m.lid.attributes.aTile.array[sl.inst] = i; }
       if (ty.bow) { sl.bow = wi; this.bow.setColorAt(wi, new THREE.Color(ty.bow)); wi++; }
       return sl;
     });
@@ -267,8 +299,25 @@ export class Packages {
   /** Höhe der Deckel-Oberseite über der Deckel-Unterkante. */
   lidTop(i) { return this.types[i].shape === 'heart' ? PKG.lidH + 0.024 : PKG.lidH; }
 
+  /** Darf Sorte i für n Seifen genommen werden? (Sammel-Schachteln nur eckig) */
+  fitsCount(i, n) { return n <= 1 || this.types[i].shape === 'box'; }
+  /** Sorte i als Schachtel für n Seifen (1 = normale Größe). Wechselt die Geometrie-Familie der Sorte. */
+  useSize(i, n) {
+    const sl = this.slots[i];
+    const want = n > 1 && sl.type.shape === 'box' ? this.fams['box' + n] : sl.base;
+    if (sl.fam === want) return;
+    const old = sl.fam;
+    old.bodyMesh.setMatrixAt(sl.inst, _zero); old.lidMesh.setMatrixAt(sl.inst, _zero);
+    old.bodyMesh.instanceMatrix.needsUpdate = old.lidMesh.instanceMatrix.needsUpdate = true;
+    if (old.multi) old.bodyMesh.visible = old.lidMesh.visible = this.slots.some((x) => x.fam === old && x !== sl);
+    sl.fam = want;
+    sl.fit = want.multi ? { s: MULTI[want.multi].s, dz: 0 } : FIT[sl.type.shape];
+    if (want.multi) want.bodyMesh.visible = want.lidMesh.visible = true;
+  }
+
   /** Alle Päckchen (zu) zurück ins Regal. */
   reset() {
+    for (let i = 0; i < N; i++) this.useSize(i, 1);
     this.setActive(-1);
     for (let i = 0; i < N; i++) {
       if (this.shelfSlot[i] < 0) { this.onShelf[i] = 0; this.hide(i); continue; }
@@ -369,7 +418,18 @@ export class Packages {
    * Vorschaubilder für das Auswahlfenster: einmalig mit dem Spiel-Renderer in ein kleines
    * Render-Target gezeichnet (gleiche Geometrie, Materialien und Licht-Stimmung wie im Spiel).
    */
-  makeThumbs(renderer) {
+  makeThumbs(renderer, n = 1) {
+    this.thumbsN = this.thumbsN || {};
+    if (n > 1) {
+      if (this.thumbsN[n]) return this.thumbsN[n];
+      const keepT = this.thumbs;
+      this.slots.forEach((sl) => { sl.thumbFam = sl.type.shape === 'box' ? this.fams['box' + n] : sl.base; });
+      this.thumbs = null;
+      const res = this.makeThumbs(renderer, 1);
+      this.slots.forEach((sl) => { sl.thumbFam = null; });
+      this.thumbs = keepT;
+      return (this.thumbsN[n] = res);
+    }
     if (this.thumbs) return this.thumbs;
     const S = 256;
     const rt = new THREE.WebGLRenderTarget(S, S);
@@ -390,7 +450,7 @@ export class Packages {
       const g = new THREE.Group();
       const temp = [];
       {
-        const f = sl.fam, bg = f.body.clone(), lg = f.lid.clone();
+        const f = sl.thumbFam || sl.base, bg = f.body.clone(), lg = f.lid.clone();
         bg.setAttribute('aTile', new THREE.InstancedBufferAttribute(new Float32Array([this.slotOf(sl.type.id)]), 1));
         lg.setAttribute('aTile', new THREE.InstancedBufferAttribute(new Float32Array([this.slotOf(sl.type.id)]), 1));
         const b = new THREE.InstancedMesh(bg, f.mB, 1), l = new THREE.InstancedMesh(lg, f.mL, 1);

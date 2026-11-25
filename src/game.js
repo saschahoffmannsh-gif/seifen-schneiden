@@ -16,7 +16,7 @@ import { SOAP_LIST, SOAP_BY_ID } from './soaps.js';
 import { makeMarbleTexture } from './marble.js';
 import { sndCut, sndPaper, sndDrawer, sndStack, sndWood, sndThump, sndGlass, sndCeramic, sndCardboard, sndLid, sndFabric, sndCoins, sndCreak, sndSlide, haptic } from './audio.js';
 import { SHELF_SCALE } from './shelfSoaps.js';
-import { PKG, TABLE_SPOT, PKG_SHELF_SCALE, SHADOW_SOAP, SHADOW_LID } from './packages.js';
+import { PKG, TABLE_SPOT, PKG_SHELF_SCALE, SHADOW_SOAP, SHADOW_LID, MULTI, multiSlot } from './packages.js';
 import { TABLE_Y, CABINET, SHELF_FRONT_Z } from './setting/wall.js';
 import { OrderNotes, NOTE_COUNT } from './orderNotes.js';
 import { barsNeeded, makeOrder, orderSorts, setItem, slicesNeeded } from './orders.js';
@@ -84,8 +84,8 @@ export class Game {
       this.tapNdc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       if (this.inStation) {
         if (!this.stIdle()) return;
-        if (this.stStep === 'box' && (this.hitBar() || this.hitBox())) { this.placeSoap(); return; }
-        if (this.stStep === 'lid' && (this.hitBox() || this.hitBar())) { this.putLid(); return; }
+        if (this.stStep === 'box' && (this.hitStationSoap() || this.hitBox())) { this.placeSoap(); return; }
+        if (this.stStep === 'lid' && this.hitBox()) { this.putLid(); return; }
         if (st === 'packed') this.swipeStart(e);
         return;
       }
@@ -169,6 +169,7 @@ export class Game {
     this.barTopMat = new THREE.MeshStandardMaterial({ roughness: 0.35, metalness: 0, bumpScale: 7 });
     this.shape = DEFAULT_SHAPE;
     this.bar = new THREE.Mesh(shapeGeometry(DEFAULT_SHAPE.id), [this.barTopMat, this.barMat]);
+    this.keptMaps = new Set(); this.stSoaps = []; this.stN = 0;
     this.bar.visible = false;
     scene.add(this.bar);
     // geschmolzene Seife in der Schale (Kegelstumpf, Höhe per Skalierung)
@@ -245,6 +246,7 @@ export class Game {
 
   /** Auftrag (wieder) von vorn: Seife 1, nichts geholt, Schale leer, vorgemerkte Münzen weg. */
   resetOrderProgress() {
+    this.dropFinished();
     setItem(this.order, 0);
     this.take.clear(); this.supply.clear(); this.stocked = false; this.pending = 0;
     this.additives = []; this.warnedAdd = false;
@@ -599,7 +601,7 @@ export class Game {
       if (a.fx.specks) fx.specks.push(a.fx.specks);
       sheen += a.fx.sheen || 0;
     }
-    if (this.barMat.map) this.barMat.map.dispose();
+    if (this.barMat.map && !this.keptMaps.has(this.barMat.map)) this.barMat.map.dispose();   // fertige, wartende Seifen behalten ihre Textur
     this.barMat.map = makeMarbleTexture(parts, 256, fx);
     this.barMat.roughness = Math.max(0.12, 0.35 - sheen);
     this.barMat.needsUpdate = true;
@@ -656,7 +658,11 @@ export class Game {
     this.ui.showQuality(q);
     this.ui.hint((q.stars === 3 ? 'Perfekt' : q.stars === 2 ? 'Eine schöne Seife' : 'Fast') + ' – dreh sie mit dem Finger');
     this.showcase.start(this.bar);
-    this.ui.actions([{ label: `✔ Fertig – ab zur Verpackung (${this.price} 🪙)`, alt: true, onClick: () => this.parkSoap() }]);
+    {
+      const o = this.order, more = o && o.cur < o.items.length - 1;
+      this.ui.actions([more ? { label: `✔ Weiter mit Seife ${o.cur + 2} von ${o.items.length}`, alt: true, onClick: () => this.nextSoap() }
+        : { label: o && o.items.length > 1 ? `✔ Fertig – alle ${o.items.length} ab zur Verpackung` : `✔ Fertig – ab zur Verpackung (${this.price} 🪙)`, alt: true, onClick: () => this.parkSoap() }]);
+    }
     this.bar.scale.set(0.6, 0.6, 0.6); this.bar.rotation.set(0, 0, 0);
     // Schale verschwindet für die Präsentation (die Seife steht frei im Licht)
     this.play(0.25, (e) => {
@@ -764,42 +770,114 @@ export class Game {
    * Küche fertig (ausgeformt) -> Seife wartet (Zustand 'waiting'), zurück ins Hauptmenü.
    * Die Kachel "Verpacken" öffnet dann die Geschenktheke (enterStation).
    */
-  parkSoap() {
-    if (this.state !== 'unmolded') return;
+  /**
+   * t96u: Fertige Seife "einfrieren" (eigenes Mesh + Materialien), hängt am Auftrag (o.finished).
+   * So kann die Küche gleich mit der nächsten Seife desselben Auftrags weitermachen.
+   */
+  finishSoap() {
+    const o = this.order, q = this.quality || this.rateMix();
+    const m0 = this.barTopMat.clone(), m1 = this.barMat.clone();
+    const mesh = this.bar.clone(false);
+    mesh.material = [m0, m1];
+    for (const c of [this.pearlMesh, this.flakeMesh]) if (c && c.count > 0) mesh.add(c.clone());
+    const ry = ((this.bar.rotation.y % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    mesh.rotation.set(0, Math.round(ry / Math.PI) * Math.PI, 0);
+    mesh.visible = false;
+    this.scene.add(mesh);
+    if (this.barMat.map) this.keptMaps.add(this.barMat.map);
+    // Bewertung je Seife wie bisher: Genauigkeit -> 0–5 Sterne, fehlender Wunsch-Zusatz / falsche Form je −1
+    let st = q.accuracy / 20;
+    const addOk = !o.additive || this.additives.includes(o.additive), shapeOk = !o.shape || !this.shape || this.shape === o.shape;
+    if (!addOk) st -= 1;
+    if (!shapeOk) st -= 1;
+    (o.finished || (o.finished = [])).push({ mesh, price: this.price || 0, stars: st, additive: o.additive, addOk, shape: o.shape, shapeOk, map: this.barMat.map });
     this.showcase.stop();
     this.ui.showQuality(null);
     if (this.quality) this.ui.setMixSummary(this.quality);
-    const ry = ((this.bar.rotation.y % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-    this.parkRy = Math.round(ry / Math.PI) * Math.PI;
     this.bar.visible = false;
+    this.additives = []; this.quality = null; this.price = 0;
     this.bowl.visible = true; this.bowlShadow.visible = true;
-    this.bowl.scale.set(1, 1, 1); this.bowl.position.y = 0; this.bowlShadow.scale.set(1, 1, 1);
+    this.bowl.scale.set(1, 1, 1); this.bowl.position.y = 0; this.bowl.rotation.set(0, 0, 0); this.bowlShadow.scale.set(1, 1, 1);
+  }
+
+  /** Nur für Tests/Probes: n fertige Seifen (verschiedene Farben) an den laufenden Auftrag hängen, Küche wartet. */
+  debugFill(n) {
+    if (this.state === 'choose') this.acceptOrder(this.notes.orders.findIndex(Boolean));
+    if (!this.order) return false;
+    const sorts = SOAP_BY_ID.filter(Boolean);
+    for (let k = 0; k < n; k++) {
+      if (this.barMat.map && !this.keptMaps.has(this.barMat.map)) this.barMat.map.dispose();
+      this.barMat.map = makeMarbleTexture([{ rgb: sorts[k % sorts.length].base, w: 2 }, { rgb: sorts[(k + 3) % sorts.length].base, w: 1 }], 128, { tint: [], specks: [] });
+      this.barTopMat.map = this.barMat.map; this.barMat.needsUpdate = this.barTopMat.needsUpdate = true;
+      this.quality = { accuracy: 80 + k * 4 }; this.price = 20 + k;
+      this.finishSoap();
+    }
+    this.toWaiting();
+    return true;
+  }
+
+  /** Fertige Seifen eines Auftrags wegräumen (nach dem Verschicken oder wenn der Auftrag abgebrochen wird). */
+  dropFinished(o = this.order) {
+    if (!o || !o.finished) return;
+    for (const f of o.finished) {
+      this.scene.remove(f.mesh);
+      for (const m of f.mesh.material) m.dispose();
+      if (f.map) { this.keptMaps.delete(f.map); if (f.map !== this.barMat.map) f.map.dispose(); }
+    }
+    o.finished = [];
+  }
+
+  /** Küche: Seife k von n fertig -> gleich weiter mit der nächsten Seife desselben Auftrags (kein Raumwechsel). */
+  nextSoap() {
+    if (this.state !== 'unmolded') return;
+    this.finishSoap();
+    const o = this.order;
+    sndCardboard(0.6); haptic(10);
+    this.ui.popup(`Seife ${o.cur + 1} von ${o.items.length} fertig`);
+    setItem(o, o.cur + 1);
+    this.cutIds.clear();
+    this.ui.setOrder(o); this.refreshMix();
+    this.toShelf();
+    this.checkEnough();
+  }
+
+  /**
+   * SS-15/t95u Räume: kein Schritt springt selbst in den nächsten Raum.
+   * Letzte Seife des Auftrags fertig -> alle warten (Zustand 'waiting'), zurück ins Hauptmenü.
+   * Die Kachel "Verpacken" öffnet dann die Geschenktheke (enterStation).
+   */
+  parkSoap() {
+    if (this.state !== 'unmolded') return;
+    this.finishSoap();
     this.toWaiting();
     sndCardboard(0.6); haptic(10);
     this.onRoomDone && this.onRoomDone();
   }
 
-  /** Küche, während eine fertige Seife auf die Verpackung wartet: nichts zu tun, Hinweis auf "Verpacken". */
+  /** Küche gesperrt, solange der fertige Auftrag auf die Verpackung wartet. */
   toWaiting() {
     this.state = 'waiting';
-    this.ui.hint('Deine Seife wartet an der Geschenktheke – im Menü auf „Verpacken“');
+    const n = this.packCount;
+    this.ui.hint(n > 1 ? `Deine ${n} Seifen warten an der Geschenktheke – im Menü auf „Verpacken“` : 'Deine Seife wartet an der Geschenktheke – im Menü auf „Verpacken“');
     this.ui.actions([{ label: '🏠 Zum Menü', onClick: () => this.onRoomDone && this.onRoomDone() }]);
   }
 
-  /** Wartet gerade eine fertige Seife auf die Verpackung (oder ist die Geschenktheke offen)? */
+  /** Wartet gerade ein fertiger Auftrag auf die Verpackung (oder ist die Geschenktheke offen)? */
   get packReady() { return this.state === 'waiting' || this.inStation; }
+  /** Anzahl wartender Seifen (für das Abzeichen an "Verpacken"). */
+  get packCount() { return this.packReady && this.order && this.order.finished ? this.order.finished.length : 0; }
 
-  /** Kachel "Küche": aus der Geschenktheke heraus -> Station abbauen, Seife wartet weiter. */
+  /** Kachel "Küche": aus der Geschenktheke heraus -> Station abbauen, Seifen warten weiter. */
   enterKitchen() { if (this.inStation) this.leaveStation(); }
 
-  /** Geschenktheke verlassen (über das Menü): Verpackung/Deko zurück, die Seife wartet weiter. */
+  /** Geschenktheke verlassen (über das Menü): Verpackung/Deko zurück, die Seifen warten weiter. */
   leaveStation() {
     if (!this.inStation) return;
     this.anims.length = 0; this.stBusy = false;
     this.deco.reset(); this.ui.setDeco(0);
     this.packages.reset(); this.pkgSlot = -1;
     this.packages.setBlob(SHADOW_SOAP, 0, 0, 0, 0, 0);
-    this.bar.visible = false;
+    for (const f of this.stSoaps) f.mesh.visible = false;
     this.bowl.visible = true; this.bowlShadow.visible = true;
     this.bowl.scale.set(1, 1, 1); this.bowl.position.y = 0; this.bowlShadow.scale.set(1, 1, 1);
     document.body.classList.remove('table-mode');
@@ -808,28 +886,37 @@ export class Game {
     this.toWaiting();
   }
 
-  /** Kachel "Verpacken": Geschenktheke aufbauen; leere offene Schachtel, die Seife liegt daneben. */
+  /** Wartende Lage von Seife j: eine Seife liegt neben der Schachtel, mehrere schweben in einer Reihe darüber. */
+  soapWait(j, out) {
+    const n = this.stN, P = TABLE_SPOT.pkg;
+    if (n <= 1) return out.set(STATION_SOAP.x, TABLE_Y + BAR_HALF_H, STATION_SOAP.z);
+    const L = MULTI[n], sp = Math.min(0.95, (L.w + 0.5) / n);
+    return out.set(P.x + (j - (n - 1) / 2) * sp, TABLE_Y + PKG.h + 0.42 + BAR_HALF_H, P.z + 0.15);
+  }
+
+  /** Kachel "Verpacken": Geschenktheke aufbauen; leere offene Schachtel, die Seife(n) daneben bzw. darüber. */
   enterStation() {
     if (this.inStation) return true;
-    if (this.state !== 'waiting') return false;
+    if (this.state !== 'waiting' || !this.order || !this.order.finished || !this.order.finished.length) return false;
     this.state = 'packing';
     document.body.classList.add('table-mode');
     this.ui.actions([]);
     this.ui.hint('');
+    this.stSoaps = this.order.finished; this.stN = this.stSoaps.length;
+    TABLE_SPOT.pkg.x = this.stN > 1 ? 0 : -0.42;     // Sammel-Schachtel mittig, einzelne links neben der Seife
+    this.camVersion = -1;                             // Stations-Kamera für die Schachtelgröße neu einpassen
     this.inStation = true; this.stStep = 'box'; this.stTile = 'box';
     this.shelf.setStation(true);
-    const t = this.pkgType && this.pkgType.unlocked ? this.pkgType : PACKAGE_TYPES[0];
+    let t = this.pkgType && this.pkgType.unlocked ? this.pkgType : PACKAGE_TYPES[0];
+    if (!this.packages.fitsCount(this.packages.slotOf(t.id), this.stN)) t = PACKAGE_TYPES[0];
     this.pkgType = t;
     this.lidK = 0;
     this.stationBox(this.packages.slotOf(t.id));
-    const bar = this.bar, S = STATION_SOAP, y1 = TABLE_Y + BAR_HALF_H;
-    bar.visible = true;
-    bar.rotation.set(0, this.parkRy || 0, 0);
-    bar.scale.set(BAR_TABLE_SCALE, BAR_TABLE_SCALE, BAR_TABLE_SCALE);
     this.bowl.visible = false; this.bowlShadow.visible = false;
-    this.play(0.5, (e) => { bar.position.set(S.x, y1 + (1 - e) * 0.9, S.z); }, () => {
-      this.packages.setBlob(SHADOW_SOAP, S.x, TABLE_Y + 0.003, S.z, 1.35, 0.95);
-      this.barBaseY = bar.position.y;
+    const sc = this.stN > 1 ? BAR_TABLE_SCALE * 0.8 : BAR_TABLE_SCALE;
+    this.stSoaps.forEach((f, j) => { f.mesh.visible = true; f.mesh.scale.set(sc, sc, sc); f.mesh.rotation.x = 0; this.soapWait(j, f.home = new THREE.Vector3()); });
+    this.play(0.5, (e) => { this.stSoaps.forEach((f) => f.mesh.position.set(f.home.x, f.home.y + (1 - e) * 0.9, f.home.z)); }, () => {
+      if (this.stN === 1) this.packages.setBlob(SHADOW_SOAP, STATION_SOAP.x, TABLE_Y + 0.003, STATION_SOAP.z, 1.35, 0.95);
       sndThump(0.6); haptic(10);
       this.state = 'station';
       this.stationUI(true);
@@ -837,10 +924,11 @@ export class Game {
     return true;
   }
 
-  /** Lage der Seife in der Schachtel (flach liegend; Herz/rund etwas kleiner): out.xyz + out.w = Skalierung. */
-  barInBox(out) {
+  /** Lage von Seife j in der Schachtel (flach liegend, in ihrem Fach): out.xyz + out.w = Skalierung. */
+  barInBox(out, j = 0) {
     const P = TABLE_SPOT.pkg, fit = this.packages.fit(this.pkgSlot), sc = BAR_TABLE_SCALE * fit.s;
-    out.set(P.x, TABLE_Y + BAR_HALF_H * sc / BAR_TABLE_SCALE + PKG.wall, P.z + fit.dz); out.w = sc;
+    multiSlot(this.stN || 1, j, _t);
+    out.set(P.x + _t.x, TABLE_Y + BAR_HALF_H * sc / BAR_TABLE_SCALE + PKG.wall, P.z + fit.dz + _t.z); out.w = sc;
     return out;
   }
 
@@ -848,6 +936,7 @@ export class Game {
   stationBox(i) {
     const pk = this.packages, P = TABLE_SPOT.pkg, old = this.pkgSlot;
     if (old >= 0 && old !== i) {
+      pk.useSize(old, 1);
       if (pk.shelfSlot[old] >= 0) {
         pk.onShelf[old] = 1; pk.setClosed(old, pk.home[old], 0, PKG_SHELF_SCALE);
         const [fw, fd] = pk.footprint(old);
@@ -855,6 +944,7 @@ export class Game {
       } else pk.hide(old);
     }
     this.pkgSlot = i;
+    pk.useSize(i, this.stN || 1);
     pk.setActive(i); pk.onShelf[i] = 0;
     pk.setBody(i, P, 0, 1);
     this.pkgShadow(i, P.x, P.z);
@@ -884,33 +974,39 @@ export class Game {
   /** Geschenktheke bereit für Eingaben (keine Animation läuft). */
   stIdle() { return (this.state === 'station' || this.state === 'packed') && !this.stBusy && !this.deco.busy && !this.anims.length; }
 
-  /** Lohn dieser Seife mit Verpackung und Deko (wie beim Verschicken berechnet). */
-  stationPay() { return (this.price || 0) + (this.pkgType ? this.pkgType.bonus : 0) + this.deco.bonus; }
+  /** Lohn des ganzen Auftrags: alle Seifen + Verpackung (Aufpreis je Seife, wie bisher) + Deko. */
+  stationPay() {
+    const fs = this.stSoaps || [], n = Math.max(1, fs.length);
+    return fs.reduce((a, f) => a + f.price, 0) + (this.pkgType ? this.pkgType.bonus * n : 0) + this.deco.bonus;
+  }
 
   /** Karte, Auswahl, Kacheln (nur die zum Schritt passenden aktiv) und Schritt-Hinweis unten neu zeichnen. */
   stationUI(scroll = false) {
     if (!this.inStation) { this.ui.station(null); return; }
-    const o = this.order, wishes = [], step = this.stStep;
-    if (o && o.additive) wishes.push({ icon: `<em>${o.additive.emoji}</em>`, name: o.additive.name, ok: this.additives.includes(o.additive) });
-    if (o && o.shape && o.shape !== DEFAULT_SHAPE) wishes.push({ icon: `<img src="${shapeIconURL(o.shape.id, 48)}" alt="">`, name: o.shape.name, ok: this.shape === o.shape });
+    const o = this.order, wishes = [], step = this.stStep, n = this.stN || 1;
+    // Wünsche aller Seifen des Auftrags (je Seife ein Icon, Haken wenn erfüllt)
+    for (const f of this.stSoaps || []) {
+      if (f.additive) wishes.push({ icon: `<em>${f.additive.emoji}</em>`, name: f.additive.name, ok: f.addOk });
+      if (f.shape && f.shape !== DEFAULT_SHAPE) wishes.push({ icon: `<img src="${shapeIconURL(f.shape.id, 48)}" alt="">`, name: f.shape.name, ok: f.shapeOk });
+    }
     let options;
     if (this.stTile === 'box') {
-      const th = this.packages.makeThumbs(this.renderer);
-      options = this.packages.types.map((t, i) => ({ kind: 'pkg', type: t, id: t.id, name: t.name, thumb: th[i], locked: !t.unlocked, cost: t.cost, bonus: t.bonus,
-        sub: t.bonus ? `+${t.bonus} 🪙` : 'Standard', sel: this.pkgType === t }));
+      const th = this.packages.makeThumbs(this.renderer, n);
+      options = this.packages.types.map((t, i) => ({ kind: 'pkg', type: t, id: t.id, name: n > 1 ? `${t.name} ×${n}` : t.name, thumb: th[i], locked: !t.unlocked, cost: t.cost, bonus: t.bonus * n,
+        sub: t.bonus ? `+${t.bonus * n} 🪙` : 'Standard', sel: this.pkgType === t, fits: this.packages.fitsCount(i, n) })).filter((x) => x.fits);
     } else {
       const group = this.stTile === 'bow' ? 'baender' : 'siegel', th = this.deco.makeThumbs(this.renderer, DECO_ITEMS);
       options = DECO_ITEMS.filter((it) => it.group === group).map((it) => ({ kind: 'deco', item: it, id: it.id, name: it.name, thumb: th[it.id], locked: !it.unlocked, cost: it.cost, bonus: it.bonus,
         sub: `+${it.bonus} 🪙`, sel: this.deco.has(it) }));
     }
     const STEPS = {
-      box: { n: 1, text: 'Schachtel wählen, Seife tippen', icon: 'box' },
+      box: { n: 1, text: n > 1 ? `Schachtel wählen, Seifen tippen` : 'Schachtel wählen, Seife tippen', icon: 'box' },
       lid: { n: 3, text: 'Deckel drauf!', icon: 'lid', onClick: () => this.putLid() },
       packed: { n: 4, text: 'Päckchen wegwischen', icon: 'hand' },
     };
     const bowOn = this.deco.applied.some((x) => x.group === 'baender');
     this.ui.station({
-      customer: o ? o.customer : '', seq: o && o.items.length > 1 ? `Seife ${o.cur + 1}/${o.items.length}` : '', wishes, pay: this.stationPay(),
+      customer: o ? o.customer : '', seq: n > 1 ? `${n} Seifen` : '', wishes, pay: this.stationPay(),
       tile: this.stTile, options, scroll,
       enabled: { box: step === 'box', bow: step === 'packed', sticker: step === 'packed' },
       optsOff: (this.stTile === 'box') !== (step === 'box'),
@@ -956,23 +1052,30 @@ export class Game {
     this.placeDeco(it, () => { this.ui.popup(`+${it.bonus} 🪙 ${it.name}`); this.stationUI(); });
   }
 
-  /** Schritt 2: Seife (angetippt) fliegt in die offene Schachtel und legt sich flach hinein. */
+  /** Schritt 2: ein Tipp auf eine Seife (oder die Schachtel) -> alle Seifen fliegen nacheinander in ihre Fächer und legen sich flach hin. */
   placeSoap() {
     if (!this.stIdle() || this.stStep !== 'box') return;
     this.state = 'packing';
-    const bar = this.bar, p0 = bar.position.clone(), s0 = bar.scale.x, ry0 = bar.rotation.y;
     this.packages.setBlob(SHADOW_SOAP, 0, 0, 0, 0, 0);
     haptic(8);
-    this.play(0.6, (e, t) => {
-      this.barInBox(_b);
-      bar.position.set(p0.x + (_b.x - p0.x) * e, p0.y + (_b.y - p0.y) * e + Math.sin(t * Math.PI) * 0.6, p0.z + (_b.z - p0.z) * e);
-      bar.rotation.set(Math.sin(t * Math.PI) * 0.25, ry0, 0);
-      const sc = s0 + (_b.w - s0) * e; bar.scale.set(sc, sc, sc);
+    const fs = this.stSoaps, n = fs.length, lag = 0.14, part = 0.6;
+    const from = fs.map((f) => ({ p: f.mesh.position.clone(), s: f.mesh.scale.x, ry: f.mesh.rotation.y }));
+    const dur = part + lag * (n - 1);
+    let landed = 0;
+    this.play(dur, (_e, t) => {
+      const T = t * dur;
+      fs.forEach((f, j) => {
+        const u = Math.min(1, Math.max(0, (T - j * lag) / part)), e = easeInOut(u), a = from[j];
+        this.barInBox(_b, j);
+        f.mesh.position.set(a.p.x + (_b.x - a.p.x) * e, a.p.y + (_b.y - a.p.y) * e + Math.sin(u * Math.PI) * 0.5, a.p.z + (_b.z - a.p.z) * e);
+        f.mesh.rotation.set(Math.sin(u * Math.PI) * 0.25, a.ry, 0);
+        const sc = a.s + (_b.w - a.s) * e; f.mesh.scale.set(sc, sc, sc);
+        if (u >= 1 && landed <= j) { landed = j + 1; sndThump(0.45); }
+      });
     }, () => {
-      sndThump(0.6);
       this.stStep = 'lid'; this.state = 'station';
       this.stationUI();
-    });
+    }, (t) => t);
   }
 
   /** Schritt 3: Deckel drauf; danach Schleife/Sticker und Wegwischen (alte Wisch-Geste, Zustand 'packed'). */
@@ -980,10 +1083,21 @@ export class Game {
     if (!this.stIdle() || this.stStep !== 'lid') return;
     this.state = 'packing';
     this.animLid(1, () => {
-      this.bar.visible = false;
+      for (const f of this.stSoaps) f.mesh.visible = false;
       this.stStep = 'packed'; this.state = 'packed'; this.stTile = 'bow';
       this.stationUI(true);
     });
+  }
+
+  /** Antippen einer wartenden Seife an der Geschenktheke. */
+  hitStationSoap() {
+    _ray.setFromCamera(this.tapNdc, this.camera);
+    for (const f of this.stSoaps) {
+      if (_ray.intersectObject(f.mesh, false).length) return true;
+      _t.copy(f.mesh.position).project(this.camera);
+      if (Math.hypot(_t.x - this.tapNdc.x, (_t.y - this.tapNdc.y) * 0.6) < 0.16) return true;
+    }
+    return false;
   }
 
   /** Deckel-Deko von oben auf den geschlossenen Deckel fallen lassen. */
@@ -1225,7 +1339,8 @@ export class Game {
       add('landezone', box.set(_a.set(-this.block.halfX - 0.1, 0, _t.z - 0.1), _b.set(this.block.halfX + 0.1, 0.25, Math.min(BOWL.floorR * 0.9, _t.z + 0.45))));
     }
     if ((st === 'shelf' || st === 'oven') && this.bowl.visible) add('schale-innen', box.set(_a.set(-BOWL.floorR, 0, -BOWL.floorR), _b.set(BOWL.floorR, BOWL.height * 0.5, BOWL.floorR)));
-    if ((st === 'reveal' || st === 'unmolded' || st === 'pickPkg' || st === 'picker' || st === 'pickSoap' || (this.inStation && this.stStep === 'box')) && this.bar.visible) add('seife', box.setFromObject(this.bar));
+    if ((st === 'reveal' || st === 'unmolded' || st === 'pickPkg' || st === 'picker' || st === 'pickSoap' || false) && this.bar.visible) add('seife', box.setFromObject(this.bar));
+    if (this.inStation && this.stStep === 'box' && this.stSoaps) for (const f of this.stSoaps) add('seife', box.setFromObject(f.mesh));
     if ((st === 'pickSoap' || st === 'decorFill' || st === 'packed' || this.inStation) && this.pkgSlot >= 0) {
       const P = TABLE_SPOT.pkg, [fw, fd] = this.packages.footprint(this.pkgSlot);
       add('paeckchen', box.set(_a.set(P.x - fw / 2, TABLE_Y, P.z - fd / 2), _b.set(P.x + fw / 2, TABLE_Y + PKG.h + (st === 'packed' || this.inStation ? PKG.lidH : 0), P.z + fd / 2)));
@@ -1409,43 +1524,29 @@ export class Game {
       this.pkgShadow(i, _a.x, _a.z);
     }, () => {
       this.packages.hide(i);
-      const earned = this.price + (this.pkgType ? this.pkgType.bonus : 0) + this.deco.bonus;
-      // Shop-Bewertung je Seife: Genauigkeit der Mischung -> 0–5 Sterne, fehlender Wunsch-Zusatz / falsche Form je −1
-      {
-        const o = this.order, q = this.quality;
-        if (o && q) {
-          let st = q.accuracy / 20;
-          if (o.additive && !this.additives.includes(o.additive)) st -= 1;
-          if (o.shape && this.shape && this.shape !== o.shape) st -= 1;
-          // SS-15: Schleife ist ein freiwilliges Extra (kein Kundenwunsch) -> +0,5 Stern, gedeckelt bei 5
-          if (this.deco.applied.some((x) => x.group === 'baender')) st += 0.5;
-          (this.soapStars || (this.soapStars = [])).push(Math.max(1, Math.min(5, st)));
-        }
-      }
+      // t96u: ein Päckchen = der ganze Auftrag. Lohn = alle Seifen + Verpackung (Aufpreis je Seife) + Deko,
+      // Bewertung = Durchschnitt der Seifen (je Seife wie bisher), Schleife +0,5 Stern (gedeckelt bei 5)
+      const o = this.order, fs = this.stSoaps || [];
+      const earned = this.stationPay();
+      const bow = this.deco.applied.some((x) => x.group === 'baender');
+      const stars = fs.map((f) => Math.max(1, Math.min(5, f.stars + (bow ? 0.5 : 0))));
+      const db = this.deco.bonus;
       this.deco.reset(); this.ui.setDeco(0);
       this.additives = []; this.quality = null;
-      const o = this.order, more = o && o.cur < o.items.length - 1;
-      const db = earned - this.price - (this.pkgType ? this.pkgType.bonus : 0);
-      if (more) {
-        // Seife k von n fertig: Münzen werden vorgemerkt und erst mit der letzten Seife ausgezahlt
-        this.pending += earned;
-        sndCardboard(0.7); haptic(14);
-        this.ui.popup(`Seife ${o.cur + 1} von ${o.items.length} fertig · +${earned} 🪙`);
-      } else {
+      {
         const total = earned + this.pending;
         this.lastEarned = total; this.pending = 0;
         this.coins += total; save.coins = this.coins;
         save.done = save.done + 1;
-        // Bestellung fertig: Durchschnitt ihrer Seifen geht als eine Bewertung (1–5 Sterne) in die Shop-Bewertung
-        if (this.soapStars && this.soapStars.length) save.addRating(this.soapStars.reduce((a, b) => a + b, 0) / this.soapStars.length);
+        if (stars.length) save.addRating(stars.reduce((a, b) => a + b, 0) / stars.length);
         this.soapStars = [];
         this.ui.setCoins(this.coins, true);
         sndCoins(); haptic(20);
-        this.ui.popup(o && o.items.length > 1 ? `+${total} 🪙 für ${o.items.length} Seifen` : db > 0 ? `+${total} 🪙 (Deko +${db})` : `+${total} 🪙`);
-        // neue Seifenform geschenkt (Oval nach 2, Rund nach 5 Aufträgen) – kommt ab jetzt auch in Bestellungen vor
+        this.ui.popup(fs.length > 1 ? `+${total} 🪙 für ${fs.length} Seifen` : db > 0 ? `+${total} 🪙 (Deko +${db})` : `+${total} 🪙`);
         const gifts = giftShapes(save.done);
         if (gifts.length) setTimeout(() => { sndStack(3); this.ui.popup(`Neue Form geschenkt: ${gifts.map((g) => g.name).join(', ')}`); }, 1300);
       }
+      this.dropFinished(o); this.stSoaps = []; this.stN = 0;
       // Schale kommt zurück, Päckchen wieder ins Regal, neue Bestellung
       this.bowl.visible = true; this.bowlShadow.visible = true;
       this.play(0.45, (e) => {
@@ -1457,16 +1558,6 @@ export class Game {
       document.body.classList.remove('table-mode');
       this.inStation = false; this.lidK = 0; this.stStep = null;
       this.shelf.setStation(false); this.ui.station(null);
-      if (more) {
-        // nächste Seife desselben Auftrags: Regal (mit den Resten) bleibt, Schrank bleibt zu
-        setItem(o, o.cur + 1);
-        this.cutIds.clear();
-        this.ui.setOrder(o); this.refreshMix();
-        this.toShelf();
-        this.checkEnough();
-        this.roomDoneSoon();
-        return;
-      }
       // fertiger Zettel verschwindet, ein neuer klappt an seinem Platz herunter
       const ni = this.activeNote;
       this.activeNote = -1;
@@ -1555,7 +1646,9 @@ export class Game {
     if (this.state === 'pickPkg') pb = 0;   // Standard-Päckchen hüpft
     this.packages.update(time, pb);
     // Seife auf dem Tisch hüpft leicht, solange man sie antippen soll
-    if (this.inStation && this.state === 'station' && this.stStep === 'box' && !this.anims.length) this.bar.position.y = this.barBaseY + Math.max(0, Math.sin(time * 5)) * 0.05 * (Math.sin(time * 2.5) > 0 ? 1 : 0);
+    if (this.inStation && this.state === 'station' && this.stStep === 'box' && !this.anims.length) {
+      this.stSoaps.forEach((f, j) => { const tt = time - j * 0.18; f.mesh.position.y = f.home.y + (this.stN > 1 ? Math.sin(tt * 2.2) * 0.035 : Math.max(0, Math.sin(tt * 5)) * 0.05 * (Math.sin(tt * 2.5) > 0 ? 1 : 0)); });
+    }
     if (this.state === 'pickSoap') this.bar.position.y = this.barBaseY + Math.max(0, Math.sin(time * 5)) * 0.05 * (Math.sin(time * 2.5) > 0 ? 1 : 0);
     if (this.state === 'decorFill' && !this.deco.busy) this.updateLidHint(time);
     if (this.anims.length) this.runAnims(dt);
@@ -1681,9 +1774,10 @@ export class Game {
     // Geschenktheke: Blick auf die Schachtel, Bogenregal darüber im Bild
     const S = STATION_CAM;
     const P = TABLE_SPOT.pkg;
-    this.stLook.set((P.x + STATION_SOAP.x) / 2, TABLE_Y + S.ly, P.z + S.lz);
+    const nS = this.stN || 1, fitW = nS > 1 ? Math.max(S.fitW, MULTI[nS].w + 0.75) : S.fitW;
+    this.stLook.set(nS > 1 ? P.x : (P.x + STATION_SOAP.x) / 2, TABLE_Y + S.ly + (nS > 1 ? 0.12 : 0), P.z + S.lz + (nS > 1 ? (MULTI[nS].r > 1 ? 0.34 : 0.08) : 0));   // tiefe 4er-Schachtel: Blick weiter nach vorn -> Schachtel rutscht über die Karte
     _camDir.set(...S.dir).normalize();
-    const d2 = Math.max(S.fitW / 2 / Math.tan(hf / 2), S.fitH / 2 / Math.tan(vf / 2));
+    const d2 = Math.max(fitW / 2 / Math.tan(hf / 2), S.fitH * (fitW / S.fitW) / 2 / Math.tan(vf / 2));
     this.stPos.copy(this.stLook).addScaledVector(_camDir, d2);
   }
 
