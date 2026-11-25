@@ -22,10 +22,15 @@ const NC = 4, COMP_W = 0.56, POST = 0.07, RAIL = 0.04, PLINTH_H = 0.1, RACK_H = 
 const RACK_W = NC * COMP_W + (NC + 1) * POST;
 const RACK_D = 0.35;
 const FLOOR_Y = MIDDLE_SHELF.y + RAIL + PLINTH_H;           // Oberkante der Sockel: hier stehen die Seifen
-// SS-17: Seifen liegen im Fach auf der Seite (um z gedreht, Prägung zeigt weiter nach vorn), mehrere flach gestapelt.
-const LIE = Math.PI / 2, STACK_MAX_H = 0.54;                // Stapelhöhe passt unter den Bogen
+// SS-18: Seifen liegen im Fach auf dem Rücken (um x gekippt: Motiv-Seite oben, nicht seitlich gedreht), mehrere flach
+// übereinander gestapelt. Liegend: Breite BW (x), Tiefe BH (z), Höhe BD (y) je Stück.
+const LIE = -Math.PI / 2, STACK_MAX_H = 0.54;               // Stapelhöhe passt unter den Bogen
+const LIE_SCALE = 0.36;                                     // liegend: so tief, dass das Stück ins Fach passt (BH * 0.36 = 0.43)
+const LIE_Z = WALL_Z + 0.03 + BH * LIE_SCALE / 2;           // hinten an der Rückwand anliegend
 const STACK_JIT = [0, 0.018, -0.014];                       // leicht versetzt gestapelt (natürlicher, Stücke zählbar)
-const _zAxis = new THREE.Vector3(0, 0, 1), _qz = new THREE.Quaternion();
+const _qz = new THREE.Quaternion(), _lieAxis = new THREE.Vector3(1, 0, 0);
+/** Skalierung eines Stapels aus n liegenden Stücken (passt in Tiefe und unter den Bogen). */
+const stackScale = (n) => Math.min(LIE_SCALE, STACK_MAX_H / (n * BD));
 const compX = (c) => -RACK_W / 2 + POST + COMP_W / 2 + c * (COMP_W + POST);
 const LABEL_W = 0.54, LABEL_H = 0.19, LCW = 512, LCH = 180;
 
@@ -270,13 +275,13 @@ export class ShelfSoaps {
   /** Stapel in Fach i: Skalierung (passt unter den Bogen) und Lage des obersten Stücks (das fliegt). */
   layoutHome(i) {
     const n = 1 + this.spareN[i];
-    this.hs[i] = Math.min(SHELF_SCALE, STACK_MAX_H / (n * BW));
-    const h = BW * this.hs[i];                              // liegend: Breite wird zur Höhe
-    this.home[i].set(compX(this.comp(i)) + STACK_JIT[n - 1], FLOOR_Y + h * (n - 0.5), SHELF_Z);
+    this.hs[i] = stackScale(n);
+    const h = BD * this.hs[i];                              // auf dem Rücken: Tiefe wird zur Höhe
+    this.home[i].set(compX(this.comp(i)) + STACK_JIT[n - 1], FLOOR_Y + h * (n - 0.5), LIE_Z);
   }
   setBlobAt(i) {
     const k = this.hs[i];
-    _m.compose(_p.set(compX(this.comp(i)), FLOOR_Y + 0.003, SHELF_Z), _q.identity(), _s.set(BH * k * 1.25, 1, BD * k * 2.4));
+    _m.compose(_p.set(compX(this.comp(i)), FLOOR_Y + 0.003, LIE_Z), _q.identity(), _s.set(BW * k * 1.5, 1, BH * k * 1.35));
     this.blob.setMatrixAt(i, _m);
   }
 
@@ -294,9 +299,9 @@ export class ShelfSoaps {
       const idx = i * SPARE_SHOWN + k, soap = this.soaps[i];
       if (!soap || k >= this.spareN[i]) { this.spare.setMatrixAt(idx, _zero); continue; }
       // flach liegend gestapelt: Stück k liegt unten (k = 0 auf dem Sockel), das oberste ist das aktive
-      const n = 1 + this.spareN[i], sc = Math.min(SHELF_SCALE, STACK_MAX_H / (n * BW)), h = BW * sc;
-      _p.set(compX(this.comp(i)) + STACK_JIT[k], FLOOR_Y + h * (k + 0.5), SHELF_Z - 0.004 * k);
-      _m.compose(_p, _q.setFromAxisAngle(_zAxis, LIE), _s.set(sc, sc, sc));
+      const n = 1 + this.spareN[i], sc = stackScale(n), h = BD * sc;
+      _p.set(compX(this.comp(i)) + STACK_JIT[k], FLOOR_Y + h * (k + 0.5), LIE_Z);
+      _m.compose(_p, _q.setFromAxisAngle(_lieAxis, LIE), _s.set(sc, sc, sc));
       this.spare.setMatrixAt(idx, _m);
       _c.setRGB(soap.base[0] * 0.93, soap.base[1] * 0.93, soap.base[2] * 0.93, THREE.SRGBColorSpace);
       this.spare.setColorAt(idx, _c);
@@ -307,7 +312,7 @@ export class ShelfSoaps {
   /** lie: 1 = liegend (im Regal), 0 = aufrecht (über der Schale); dazwischen beim Flug. */
   place(i, pos, scale, rotX = 0, lie = 1) {
     if (rotX) _q.setFromAxisAngle(_xAxis, rotX); else _q.identity();
-    if (lie) _q.multiply(_qz.setFromAxisAngle(_zAxis, LIE * lie));
+    if (lie) _q.multiply(_qz.setFromAxisAngle(_lieAxis, LIE * lie));
     _m.compose(pos, _q, _s.set(scale, scale, scale * this.frac[i]));
     this.body.setMatrixAt(i, _m);
     this.face.setMatrixAt(i, _m2.multiplyMatrices(_m, this.faceOffset));
