@@ -34,7 +34,7 @@ import { KNIFE_X, SKEW_RISE, poseKnife, syncSlope } from './cutGeom.js';
 // Schneide-Kamera im Spiel (SS-14). Der Startbildschirm behält ZOOM_FIT_*/CLOSE_DIR aus cutGeom.js.
 const STATION_SOAP = new THREE.Vector3(0.72, 0, -0.62);   // Seife wartet rechts neben der Schachtel (y = Tisch)
 const STATION_MULTI = { ly: 0.1, lz: 0.24 };   // SS-17: Zusatz-Blickpunkt für Sammel-Schachteln
-const STATION_CAM = { dir: [0, 0.9, 1], fitW: 2.65, fitH: 3.0, ly: 0.75, lz: -0.2 };   // Schachtel über der Karte, Bogenregal ganz im Bild
+const STATION_CAM = { dir: [0, 0.9, 1], fitW: 2.65, fitH: 3.0, ly: 0.75, lz: -0.2 };   // Schachtel über der Karte, Theke ganz im Bild
 const CUT_CAM = { dir: new THREE.Vector3(0.2, 1.15, 1).normalize(), fitW: 3.2, fitH: 3.9, lookDy: 0.3 };
 
 const FILL_CAP = 40, FILL_MAX_KINDS = 4;     // Teile pro Füllungs-Sorte, verschiedene Füllungen
@@ -104,26 +104,16 @@ export class Game {
         if (st === 'packed') this.swipeStart(e);
         return;
       }
-      // beim Schneiden andere Seife im Regal antippen = Seife wechseln
-      // erst beim Loslassen und nur als echter Tipp (ohne Wischen): das schräge Messer ruht etwas höher,
-      // ein Wisch, der dort über einer Regal-Seife beginnt, darf die Seife nicht wechseln
-      if (st === 'cutting') {
-        const i = this.shelf.pick(this.tapNdc, this.camera, (s) => s !== this.block.soap, true);   // nur direkt getroffen (Wischen beginnt oft in der Nähe)
-        this.switchTap = i >= 0 ? { i, x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId } : null;
-        return;
-      }
+      // SS-19: kein Küchenregal mehr – während des Schneidens kein Seifen-Wechsel per Tipp ins Regal
+      if (st === 'cutting') return;
       if (st !== 'choose' && st !== 'shelf' && st !== 'pickPkg' && st !== 'pickSoap') return;
-      // Reihenfolge: Seife direkt getroffen > Zettel (genaues Rechteck) > Seife in der Nähe > Schrank
-      if (st === 'shelf' && this.stocked) {
-        const i = this.shelf.pick(this.tapNdc, this.camera, this.isAvailable, true);
+      // Reihenfolge: Schale (Seife holen) > Zettel > Schrank
+      if (st === 'shelf' && this.stocked && this.hitBowl()) {
+        const i = this.nextShelfSlot();
         if (i >= 0) { this.pickSoap(i); return; }
       }
       const n = this.notes.pick(this.tapNdc, this.camera);
       if (n >= 0) { this.openNote(n); return; }
-      if (st === 'shelf' && this.stocked) {
-        const i = this.shelf.pick(this.tapNdc, this.camera, this.isAvailable);
-        if (i >= 0) { this.pickSoap(i); return; }
-      }
       if (st === 'choose' || st === 'shelf') {
         if (this.hitCabinet()) this.openCabinet();
       } else if (st === 'pickPkg') {
@@ -213,7 +203,7 @@ export class Game {
   noteRecipes() { return this.notes ? this.notes.orders.filter(Boolean).map((o) => o.mix.map((m) => m.soap.id + ':' + m.pct).join('+')) : []; }
   noteNames() { return this.notes ? this.notes.orders.filter(Boolean).map((o) => o.customer) : []; }
 
-  /** Keine Bestellung aktiv: Spieler wählt einen Zettel am Regal. */
+  /** Keine Bestellung aktiv: Spieler wählt einen Zettel am Brett. */
   toChoose() {
     this.state = 'choose';
     this.order = null;
@@ -221,7 +211,7 @@ export class Game {
     this.ui.setOrder(null);
     this.ui.setCut(null);
     this.shelf.setSoaps([]);
-    this.ui.hint('Wähle eine Bestellung am Regal');
+    this.ui.hint('Wähle eine Bestellung am Brett');
     this.ui.actions([]);
   }
 
@@ -282,7 +272,7 @@ export class Game {
   /**
    * Vollbild-Schrank: Seifen für den ganzen Auftrag herausnehmen. Jedes Fach ist immer voll; jedes
    * Antippen nimmt ein ganzes Stück mehr (Zähler am Fach), das Minus legt eins zurück. Mit
-   * „Ins Regal stellen“ ist die Auswahl für diesen Auftrag endgültig (Schrank bleibt danach zu).
+   * „Seifen nehmen“ ist die Auswahl für diesen Auftrag endgültig (Schrank bleibt danach zu).
    * Kein Hinweis, wie viele Stücke nötig sind – das ist das Rätsel.
    */
   openCabinet() {
@@ -303,7 +293,7 @@ export class Game {
       if (!o) return 'Nimm zuerst eine Bestellung an';
       if (!orderSorts(o).includes(d.soap)) return 'Nicht in der Bestellung';
       const t = this.take.get(d.soap.id) || 0;
-      if (t >= TAKE_MAX) return `Mehr als ${TAKE_MAX} passen nicht ins Regal`;
+      if (t >= TAKE_MAX) return `Mehr als ${TAKE_MAX} Stück gehen nicht`;
       this.take.set(d.soap.id, t + 1);
       if (!t) sndDrawer(); else sndStack(t + 1);
       haptic(t ? 8 : 12);
@@ -329,15 +319,15 @@ export class Game {
   cabinetLocked() {
     sndWood(0, 0.45); haptic(6);
     this.ui.popup('Der Schrank bleibt zu');
-    this.ui.hint('Erst nach diesem Auftrag wieder – arbeite mit den Seifen im Regal');
+    this.ui.hint('Erst nach diesem Auftrag wieder – arbeite mit den geholten Seifen');
   }
 
   takeTotal() { let n = 0; for (const v of this.take.values()) n += v; return n; }
 
-  /** Knopf-Text im Schrank: 'Ins Regal stellen · 3 Stücke'. */
+  /** Knopf-Text im Schrank: 'Seifen nehmen · 3 Stücke'. */
   takeLabel() {
     const n = this.takeTotal();
-    return n ? `Ins Regal stellen · ${n} ${n === 1 ? 'Stück' : 'Stücke'}` : 'Ins Regal stellen';
+    return n ? `Seifen nehmen · ${n} ${n === 1 ? 'Stück' : 'Stücke'}` : 'Seifen nehmen';
   }
 
   /** Geholte Stücke einer Sorte (für Anzeige und spätere Seifenkörbe). */
@@ -354,31 +344,17 @@ export class Game {
     list.forEach((x, i) => { const s = this.supply.get(x.id); this.shelf.setSpares(i, s ? Math.max(0, s.pieces - 1) : 0); this.shelf.setCount(i, s ? s.pieces : 0); });
   }
 
-  /** Alle geholten Seifen fliegen (nacheinander) von oben auf das mittlere Brett. Ab jetzt ist der Schrank zu. */
+  /** Geholte Seifen sind bereit (SS-19: kein Regal mehr, die erste Seife kommt später von oben in die Schale). */
   stockShelf() {
     this.state = 'stocking';
     this.stocked = true;
     for (const [id, n] of this.take) this.supply.set(id, { pieces: n, cur: SLICES });
     const list = this.shelfSorts();
     this.shelf.setSoaps(list, this.shelfFracs());
-    this.updateShelfSupply(list);                  // SS-17: Stapelhöhe steht vorher fest (oberstes Stück landet obendrauf)
+    this.updateShelfSupply(list);
     this.shelf.spare.visible = false;
-    const home = this.shelf.home, n = list.length;
-    for (let i = 0; i < n; i++) this.shelf.hide(i);
-    this.play(0.5 + n * 0.12, (e) => {
-      const T = e * (0.5 + n * 0.12);
-      for (let i = 0; i < n; i++) {
-        const t = Math.min(1, Math.max(0, (T - i * 0.12) / 0.5));
-        if (t <= 0) continue;
-        const k = easeOut(t);
-        _t.copy(home[i]); _t.y += (1 - k) * 0.9 + Math.sin(t * Math.PI) * 0.06;
-        this.shelf.place(i, _t, this.shelf.hs[i] * (0.4 + 0.6 * k));
-      }
-    }, () => {
-      this.shelf.spare.visible = true;
-      this.shelf.setSoaps(list, this.shelfFracs()); this.updateShelfSupply(list); sndWood();
-      if (this.checkEnough()) this.toShelf();
-    }, (t) => t);
+    sndWood();
+    if (this.checkEnough()) this.toShelf();
   }
 
   /** Länge der Seifenstücke im Regal: so viele Scheiben, wie das vorderste Stück noch hat. */
@@ -461,15 +437,35 @@ export class Game {
     if (!this.stocked) this.ui.hint(this.order.items.length > 1 ? `${this.order.items.length} Seifen – hol alle Stücke aus dem Schrank` : 'Hol die Seifen aus dem Schrank');
     else if (missing.length) {
       const m = this.order.mix.find((x) => x.soap === missing[0]);
-      this.ui.hint(`${multi}${m.soap.name}: ${m.pct / PCT_PER_SLICE} Scheiben für ${m.pct} % – tippe aufs Stück`);
+      this.ui.hint(`${multi}${m.soap.name}: ${m.pct / PCT_PER_SLICE} Scheiben für ${m.pct} % – tippe auf die Schale`);
     } else this.ui.hint(multi + (this.order.additive && !this.additives.includes(this.order.additive) ? `Fast fertig – noch ${this.order.additive.name} hinzufügen` : 'Die Mischung stimmt – jetzt schmelzen'));
     const acts = [];
+    if (this.stocked && missing.length) {
+      const slot = this.nextShelfSlot();
+      if (slot >= 0) acts.push({ label: `✂ ${missing[0].name} schneiden`, alt: true, onClick: () => this.pickSoap(slot) });
+    }
     if (this.stocked) acts.push({ label: '✨ Zusätze', onClick: () => this.openAdditives() });
     if (this.loose.used > 0) acts.push({ label: '🔥 Schmelzen', alt: true, onClick: () => this.toOven() });
     this.ui.actions(acts);
   }
 
-  /** Seife im Regal angetippt: sie fliegt über die Schale, dann geht das Schneiden los. */
+  /** Nächste fehlende Sorte, die noch Stücke hat (für Knopf und Schalen-Tipp). */
+  nextShelfSlot() {
+    const miss = this.missingSoaps();
+    if (!miss.length) return -1;
+    return this.shelf.soaps.findIndex((s) => s && s.id === miss[0].id && this.slicesLeft(s.id) > 0);
+  }
+
+  /** Tipp auf die Schale (großzügig, für Finger). */
+  hitBowl() {
+    _ray.setFromCamera(this.tapNdc, this.camera);
+    if (this.bowl && _ray.intersectObject(this.bowl, true).length) return true;
+    if (!this.bowl) return false;
+    _t.copy(this.bowl.position).project(this.camera);
+    return Math.hypot(_t.x - this.tapNdc.x, (_t.y - this.tapNdc.y) * 0.7) < 0.28;
+  }
+
+  /** Seife kommt von oben in die Schale, dann geht das Schneiden los. */
   pickSoap(slot) {
     if (this.state !== 'shelf') return;
     const soap = this.shelf.soaps[slot];
@@ -1702,15 +1698,7 @@ export class Game {
     this.now = time;
     this.updateRigAndCamera(dt);
     this.updateViewShift(dt);
-    // nächste gewünschte Seife im Regal hüpft leicht (zeigt: hier antippen)
-    let bob = -1;
-    if (this.state === 'shelf') {
-      const list = this.shelf.soaps;
-      // erste Sorte, von der noch deutlich zu wenig drin ist (ohne Allokation)
-      const mix = this.order ? this.order.mix : null;
-      if (mix) for (let k = 0; k < mix.length && bob < 0; k++) if ((this.pcts[mix[k].soap.id] || 0) < mix[k].pct - 4) bob = list.indexOf(mix[k].soap);
-    }
-    this.shelf.update(dt, time, bob);
+    this.shelf.update(dt, time, -1);   // SS-19: keine hüpfende Regal-Seife mehr
     this.notes.update(dt, time, this.state === 'choose');
     // schwebende Deko folgt dem Finger (geglättet) und schaukelt leicht
     if (this.drag) {

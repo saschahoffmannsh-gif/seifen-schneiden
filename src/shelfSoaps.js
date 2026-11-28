@@ -36,53 +36,13 @@ const LABEL_W = 0.54, LABEL_H = 0.19, LCW = 512, LCH = 180;
 
 /** Holzsockel + lila Bogenrahmen + dunkle Rückwand. Ein Draw-Call je Teil, keine Schatten-Maps. */
 function buildRack(scene) {
-  const y0 = MIDDLE_SHELF.y;
-  const shape = new THREE.Shape();
-  const R = 0.06, L = -RACK_W / 2, Rt = RACK_W / 2, T = RACK_H;
-  shape.moveTo(L, 0); shape.lineTo(Rt, 0); shape.lineTo(Rt, T - R); shape.quadraticCurveTo(Rt, T, Rt - R, T);
-  shape.lineTo(L + R, T); shape.quadraticCurveTo(L, T, L, T - R); shape.lineTo(L, 0);
-  const archH = 0.15, sideTop = RACK_H - 0.08 - archH;
-  for (let c = 0; c < NC; c++) {
-    const x0 = compX(c) - COMP_W / 2, x1 = compX(c) + COMP_W / 2;
-    const h = new THREE.Path();
-    h.moveTo(x0, RAIL); h.lineTo(x1, RAIL); h.lineTo(x1, sideTop);
-    h.absellipse(compX(c), sideTop, COMP_W / 2, archH, 0, Math.PI, false);
-    h.lineTo(x0, RAIL);
-    shape.holes.push(h);
-  }
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: RACK_D - 0.02, bevelEnabled: true, bevelThickness: 0.01, bevelSize: 0.008, bevelSegments: 2, curveSegments: 14 });
-  const lilac = new THREE.MeshStandardMaterial({ color: 0xa88bd4, roughness: 0.6, metalness: 0, envMapIntensity: 0.5 });
-  const frame = new THREE.Mesh(geo, lilac);
-  frame.position.set(0, y0, WALL_Z + 0.012);
-  scene.add(frame);
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(RACK_W - 0.02, RACK_H - 0.02), new THREE.MeshStandardMaterial({ color: 0x7a64a2, roughness: 0.85 }));
-  back.position.set(0, y0 + RACK_H / 2, WALL_Z + 0.014);
-  scene.add(back);
-  const plinths = new THREE.InstancedMesh(new RoundedBoxGeometry(0.44, PLINTH_H, 0.28, 2, 0.012),
-    new THREE.MeshStandardMaterial({ color: 0xcf9a5c, roughness: 0.62, envMapIntensity: 0.4 }), NC);
-  for (let c = 0; c < NC; c++) plinths.setMatrixAt(c, _m.makeTranslation(compX(c), y0 + RAIL + PLINTH_H / 2, SHELF_Z + 0.01));
-  scene.add(plinths);
-  // Tafel-Schilder: eine Canvas-Textur (4 Zeilen), je Fach eine Fläche vorne am Sockel
-  const cv = document.createElement('canvas'); cv.width = LCW; cv.height = LCH * NC;
-  const tex = new THREE.CanvasTexture(cv);
-  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-  tex.minFilter = THREE.LinearMipmapLinearFilter; tex.generateMipmaps = true;
-  const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
-  const labels = [];
-  for (let c = 0; c < NC; c++) {
-    const g = new THREE.PlaneGeometry(LABEL_W, LABEL_H), uv = g.attributes.uv;
-    for (let k = 0; k < uv.count; k++) uv.setY(k, (NC - 1 - c + uv.getY(k)) / NC);
-    const m = new THREE.Mesh(g, mat);
-    m.position.set(compX(c), y0 + 0.07, WALL_Z + RACK_D + 0.03);   // Tafel vorne am Fach, über Leiste und Sockel
-    scene.add(m); labels.push(m);
-  }
-  return { cv, tex, labels, plinths, deco: buildStationDeco(scene) };
+  // SS-19: kein Bogenregal mehr in der Küche (Schrank ist die Menü-Kachel). Nur Pack-Deko auf dem mittleren Brett.
+  return { cv: null, tex: null, labels: [], plinths: null, deco: buildStationDeco(scene) };
 }
 
-/** SS-15 Geschenktheke: Bandspulen, Geschenkpapierrollen, Washi-Tape und Holzstempel in den Bogenfächern (nur Deko). */
 function buildStationDeco(scene) {
   const g = new THREE.Group(); g.visible = false; scene.add(g);
-  const z = SHELF_Z + 0.02, y0 = FLOOR_Y;
+  const z = SHELF_Z + 0.02, y0 = MIDDLE_SHELF.y;
   const wood = new THREE.MeshStandardMaterial({ color: 0xd9aa6e, roughness: 0.6 });
   const darkWood = new THREE.MeshStandardMaterial({ color: 0x9a6338, roughness: 0.55 });
   const cyl = new THREE.CylinderGeometry(1, 1, 1, 28);
@@ -94,7 +54,7 @@ function buildStationDeco(scene) {
     add(cyl, mat(color, 0.35), x, y, z, R * 0.9, W, R * 0.9, 0, ry, Math.PI / 2);
     for (const s of [-1, 1]) add(cyl, wood, x + Math.cos(ry) * s * (W / 2 + 0.006), y, z - Math.sin(ry) * s * (W / 2 + 0.006), R + 0.012, 0.012, R + 0.012, 0, ry, Math.PI / 2);
   };
-  const cx0 = compX(0), cx1 = compX(1), cx2 = compX(2), cx3 = compX(3);
+  const cx0 = -1.05, cx1 = -0.35, cx2 = 0.36, cx3 = 1.08;
   spool(cx0 - 0.15, '#f29bb8', 0.15); spool(cx0 - 0.05, '#c9a6ee', 0.1); spool(cx0 + 0.05, '#e8e27a', 0.05); spool(cx0 + 0.15, '#f6c38f', 0);
   spool(cx1 - 0.1, '#e0475c', -0.1); spool(cx1, '#58b878', -0.05); spool(cx1 + 0.1, '#7fb6e6', 0);
   // Geschenkpapierrollen (stehend), Muster per Canvas
@@ -221,7 +181,7 @@ export class ShelfSoaps {
   comp(i) { return i + ((NC - Math.min(NC, this.soaps.length)) >> 1); }
 
   /** Tafel-Schilder neu malen (nur bei Änderung von Sorte/Anzahl). */
-  drawLabels() {
+  drawLabels() { if (!this.rack || !this.rack.cv) return;
     const { cv, tex } = this.rack, g = cv.getContext('2d');
     const bySlot = new Array(NC).fill(-1);
     for (let i = 0; i < this.soaps.length; i++) bySlot[this.comp(i)] = i;
@@ -265,8 +225,7 @@ export class ShelfSoaps {
       _c.setRGB(soap.base[0], soap.base[1], soap.base[2], THREE.SRGBColorSpace);
       this.body.setColorAt(i, _c); this.face.setColorAt(i, _c.set(1, 1, 1));
       this.tile.array[i] = soap.id + (hasMotif(soap) ? 100 : 0);
-      this.place(i, this.home[i], this.hs[i]);
-      this.setBlobAt(i);
+      this.hide(i);
     }
     this.body.instanceColor.needsUpdate = true; this.face.instanceColor.needsUpdate = true; this.tile.needsUpdate = true;
     this.blob.instanceMatrix.needsUpdate = true;
@@ -274,10 +233,8 @@ export class ShelfSoaps {
 
   /** Stapel in Fach i: Skalierung (passt unter den Bogen) und Lage des obersten Stücks (das fliegt). */
   layoutHome(i) {
-    const n = 1 + this.spareN[i];
-    this.hs[i] = stackScale(n);
-    const h = BD * this.hs[i];                              // auf dem Rücken: Tiefe wird zur Höhe
-    this.home[i].set(compX(this.comp(i)) + STACK_JIT[n - 1], FLOOR_Y + h * (n - 0.5), LIE_Z);
+    this.hs[i] = 0.85;
+    this.home[i].set(0, 2.35, 0.12);                        // SS-19: kommt von oben, nicht vom Regal
   }
   setBlobAt(i) {
     const k = this.hs[i];
@@ -292,25 +249,15 @@ export class ShelfSoaps {
     this.spareN[i] = n; this.drawSpares();
     if (!this.soaps[i]) return;
     this.layoutHome(i);
-    if (i !== this.fly && i !== this.back && this.isShown(i)) { this.place(i, this.home[i], this.hs[i]); this.setBlobAt(i); this.blob.instanceMatrix.needsUpdate = true; }
+    /* Stapel nicht mehr sichtbar in der Küche */
   }
   drawSpares() {
-    for (let i = 0; i < MAX; i++) for (let k = 0; k < SPARE_SHOWN; k++) {
-      const idx = i * SPARE_SHOWN + k, soap = this.soaps[i];
-      if (!soap || k >= this.spareN[i]) { this.spare.setMatrixAt(idx, _zero); continue; }
-      // flach liegend gestapelt: Stück k liegt unten (k = 0 auf dem Sockel), das oberste ist das aktive
-      const n = 1 + this.spareN[i], sc = stackScale(n), h = BD * sc;
-      _p.set(compX(this.comp(i)) + STACK_JIT[k], FLOOR_Y + h * (k + 0.5), LIE_Z);
-      _m.compose(_p, _q.setFromAxisAngle(_lieAxis, LIE), _s.set(sc, sc, sc));
-      this.spare.setMatrixAt(idx, _m);
-      _c.setRGB(soap.base[0] * 0.93, soap.base[1] * 0.93, soap.base[2] * 0.93, THREE.SRGBColorSpace);
-      this.spare.setColorAt(idx, _c);
-    }
-    this.spare.instanceMatrix.needsUpdate = true; this.spare.instanceColor.needsUpdate = true;
+    for (let i = 0; i < MAX * SPARE_SHOWN; i++) this.spare.setMatrixAt(i, _zero);
+    this.spare.instanceMatrix.needsUpdate = true;
   }
 
   /** lie: 1 = liegend (im Regal), 0 = aufrecht (über der Schale); dazwischen beim Flug. */
-  place(i, pos, scale, rotX = 0, lie = 1) {
+  place(i, pos, scale, rotX = 0, lie = 0) {
     if (rotX) _q.setFromAxisAngle(_xAxis, rotX); else _q.identity();
     if (lie) _q.multiply(_qz.setFromAxisAngle(_lieAxis, LIE * lie));
     _m.compose(pos, _q, _s.set(scale, scale, scale * this.frac[i]));
@@ -360,16 +307,14 @@ export class ShelfSoaps {
   }
   landBack() {
     const i = this.back; this.back = -1;
-    if (!this.soaps[i]) return;
-    this.place(i, this.home[i], this.hs[i]);
-    this.setBlobAt(i); this.blob.instanceMatrix.needsUpdate = true;
+    if (i >= 0) this.hide(i);
   }
   /** Position auf der Flugbahn Regal (e=0) -> über der Schale (e=1). */
   flyPose(i, t) {
     const e = t * t * (3 - 2 * t), h = this.home[i];
     const back = i === this.back, f = back ? this.backFrom : _to.set(0, BLOCK_BASE_Y + BH / 2, 0);
     _p.set(h.x + (f.x - h.x) * e, h.y + (f.y - h.y) * e + Math.sin(t * Math.PI) * 0.45, h.z + (f.z - h.z) * e);
-    this.place(i, _p, this.hs[i] + (1 - this.hs[i]) * e, back ? this.backAng * e : 0, 1 - e);
+    this.place(i, _p, this.hs[i] + (1 - this.hs[i]) * e, back ? this.backAng * (1 - e) : 0, 0);
   }
 
   /** Pro Frame: Flug animieren, nächste gewünschte Seife leicht hüpfen lassen. Keine Allokationen. */
