@@ -7,7 +7,7 @@ import { lookCanvas } from './soapLooks.js';
 const ROWS = 2, FACE = new Map();
 const rgb = (c, k = 1) => `rgb(${Math.round(c[0] * 255 * k)},${Math.round(c[1] * 255 * k)},${Math.round(c[2] * 255 * k)})`;
 function faceOf(soap) {
-  if (!FACE.has(soap.id)) FACE.set(soap.id, lookCanvas(soap, 120, 200));
+  if (!FACE.has(soap.id)) FACE.set(soap.id, lookCanvas(soap, 180, 300));
   return FACE.get(soap.id);
 }
 
@@ -64,7 +64,7 @@ function paintComp(cv, soap, n, dpr) {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   const W = w / dpr, H = h / dpr;
   g.clearRect(0, 0, W, H);
-  const floor = H - 2, unit = Math.min(W * 0.52, (floor - 4) / 1.55);
+  const floor = H - 2, unit = Math.min(W * 0.7, (floor - 4) / 1.5);
   if (soap && n > 0) drawStack(g, soap, W / 2, floor, n, unit);
 }
 
@@ -77,27 +77,33 @@ function roundRect(g, x, y, w, h, r) {
 function defaultItems() { return SOAP_LIST.map((soap) => ({ soap, pieces: 2 })); }
 
 /**
- * Baut den Schrank in die Kachel. getItems() liefert { soap, pieces }[] (fehlend = alle Sorten ×2).
- * Rückgabe: refresh() zeichnet die Fächer neu.
+ * Baut den Schrank in den Container (Vollbild-Ansicht). getItems() liefert
+ * { items: [{ soap, pieces }], caption } oder eine Liste; fehlt der Auftragvorrat,
+ * gilt die Auslage aller Sorten (je 2 Stück).
  */
-export function mountHomeShelf(tile, getItems) {
-  const cab = tile.querySelector('.hs-cab') || tile;
-  cab.innerHTML = `<div class="hs-frame" aria-hidden="true"></div>
-    <div class="hs-scroll scroll-x" tabindex="0" aria-label="Seifenregal, seitlich wischen">
+export function mountHomeShelf(cab, getItems) {
+  cab.innerHTML = `<div class="hs-scroll scroll-x" tabindex="0" aria-label="Seifenregal, seitlich wischen">
       <div class="hs-track"></div>
     </div>`;
   const scroll = cab.querySelector('.hs-scroll'), track = cab.querySelector('.hs-track');
   let bayW = 0, wrapping = false, dragged = false, px = 0, py = 0;
 
-  function items() {
-    const list = (getItems && getItems()) || defaultItems();
-    return list.length ? list : defaultItems();
+  function pack() {
+    const raw = (getItems && getItems()) || null;
+    if (raw && raw.items) return raw;
+    if (Array.isArray(raw) && raw.length) return { items: raw, caption: '' };
+    return { items: defaultItems(), caption: 'Die Sorten der Manufaktur' };
   }
 
   function build() {
-    const list = items(), cols = Math.ceil(list.length / ROWS);
+    const { items: list, caption } = pack();
+    const msg = document.getElementById('shelf-msg');
+    if (msg) msg.textContent = caption || '';
+    const cols = Math.max(1, Math.ceil(list.length / ROWS));
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const cssW = 66, cssH = 34;
+    const box = scroll.getBoundingClientRect();
+    const cssW = Math.max(120, Math.round((box.width || 360) * 0.42));
+    const cssH = Math.max(90, Math.round(((box.height || 400) / ROWS) - 44));
     const makeBay = () => {
       const bay = document.createElement('div'); bay.className = 'hs-bay';
       for (let r = 0; r < ROWS; r++) {
@@ -105,6 +111,7 @@ export function mountHomeShelf(tile, getItems) {
         for (let c = 0; c < cols; c++) {
           const it = list[r * cols + c];
           const cell = document.createElement('div'); cell.className = 'hs-comp' + (it && it.pieces > 0 ? '' : ' empty');
+          cell.style.width = cssW + 'px';
           const cv = document.createElement('canvas');
           cv.style.width = cssW + 'px'; cv.style.height = cssH + 'px';
           cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
@@ -118,19 +125,21 @@ export function mountHomeShelf(tile, getItems) {
       return bay;
     };
     track.innerHTML = '';
-    const a = makeBay(), b = makeBay();
-    track.appendChild(a); track.appendChild(b);
+    const a = makeBay();
+    track.appendChild(a);
     bayW = a.offsetWidth;
+    const loop = bayW > (scroll.clientWidth + 8);
+    if (loop) track.appendChild(makeBay());
     wrapping = true; scroll.scrollLeft = 0; wrapping = false;
+    scroll.dataset.loop = loop ? '1' : '0';
   }
 
   scroll.addEventListener('scroll', () => {
-    if (wrapping || !bayW) return;
+    if (wrapping || !bayW || scroll.dataset.loop !== '1') return;
     if (scroll.scrollLeft >= bayW) { wrapping = true; scroll.scrollLeft -= bayW; wrapping = false; }
     else if (scroll.scrollLeft <= 0) { wrapping = true; scroll.scrollLeft += bayW; wrapping = false; }
   }, { passive: true });
 
-  // Tipp gegen Scroll: ein Wisch in der Kachel gilt nicht als Tipp (und löst keine andere Kachel aus)
   scroll.addEventListener('pointerdown', (e) => { dragged = false; px = e.clientX; py = e.clientY; }, { passive: true });
   scroll.addEventListener('pointermove', (e) => {
     if (Math.abs(e.clientX - px) > 8 || Math.abs(e.clientY - py) > 8) dragged = true;

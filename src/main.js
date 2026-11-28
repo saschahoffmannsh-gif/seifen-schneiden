@@ -71,7 +71,11 @@ window.__menu = createMenu({
   board: () => ({ orders: game.notes.orders, active: game.order, canAccept: game.state === 'choose' && !game.order, accept: (i) => game.acceptOrder(i) }),
   // t95u Räume: Hauptmenü-Kacheln navigieren selbst; nach einem Raum-Schritt kommt das Spiel hierher zurück
   rooms: { packReady: () => game.packReady, packCount: () => game.packCount, enterPack: () => game.enterStation(), enterKitchen: () => game.enterKitchen(),
-    shelfContents: () => SOAP_LIST.map((soap) => { const s = game.supply.get(soap.id); return { soap, pieces: s ? s.pieces : 2 }; }) },
+    shelfContents: () => {
+      const taken = SOAP_LIST.map((soap) => { const s = game.supply.get(soap.id); return s && s.pieces > 0 ? { soap, pieces: s.pieces } : null; }).filter(Boolean);
+      if (taken.length) return { items: taken, caption: 'Dein Vorrat für den Auftrag' };
+      return { items: SOAP_LIST.map((soap) => ({ soap, pieces: 2 })), caption: 'Die Sorten der Manufaktur' };
+    } },
 });
 game.onRoomDone = () => window.__menu.show();
 window.__decoItems = DECO_ITEMS;

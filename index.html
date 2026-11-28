@@ -150,7 +150,7 @@
         <div id="home-bar" class="home-bar" aria-label="Fortschritt"></div>
         <div id="home-grid" class="home-grid">
           <button class="tile t-orders" data-tile="orders"><img alt="" data-ico="orders"><span>Bestellungen</span></button>
-          <div class="tile t-shelf" data-tile="shelf" role="img" aria-label="Seifenregal"><div class="hs-cab"></div><span>Seifenregal</span></div>
+          <button class="tile t-shelf" data-tile="shelf"><img alt="" data-ico="shelf"><span>Seifenregal</span></button>
           <button class="tile t-kitchen" data-tile="kitchen"><img alt="" data-ico="kitchen"><span>Küche</span></button>
           <button class="tile t-pack" data-tile="pack"><img alt="" data-ico="pack"><span>Verpacken</span></button>
         </div>
@@ -168,6 +168,15 @@
       </div>
       <div id="ord-msg" class="ord-msg"></div>
       <div id="ord-list" class="ord-list scroll-y"></div>
+    </div>
+    <!-- Seifenregal (Kachel im Hauptmenü): offener Holzschrank, seitlich scrollbar -->
+    <div id="shelf-view" class="ord-view shelf-view" aria-label="Seifenregal">
+      <div class="ord-head">
+        <button id="shelf-back" class="round-btn small" aria-label="Zurück zum Menü"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg></button>
+        <h2 class="ord-title shelf-title">Seifenregal</h2>
+      </div>
+      <div id="shelf-msg" class="ord-msg"></div>
+      <div id="shelf-cab" class="hs-cab"></div>
     </div>
   </div>
 

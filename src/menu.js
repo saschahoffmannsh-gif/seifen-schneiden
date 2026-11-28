@@ -63,7 +63,6 @@ export function createMenu({ getCoins, board = null, rooms = null }) {
     $('home-rating').setAttribute('aria-label', rt.n ? `Shop-Bewertung ${rt.avg.toFixed(1)} von 5 Sternen aus ${rt.n} Bewertungen` : 'Noch keine Shop-Bewertung');
     $('home-bar').innerHTML = `<span class="hb-coin">${ICON.coin}<b>${getCoins()}</b></span><span class="hb-track"><i style="width:${Math.max(6, Math.round(un / all * 100))}%"></i><em>${un}/${all}</em></span><span class="hb-star">${ICON.star}</span>`;
     packBadge();
-    if (homeShelf) homeShelf.refresh();
     placeSoaps();
   }
   // 3D-Seifen mittig in den freien Raum zwischen Wortmarke und Menü setzen
@@ -158,16 +157,16 @@ export function createMenu({ getCoins, board = null, rooms = null }) {
     clearTimeout(homeT);
     homeT = setTimeout(() => { if (start.classList.contains('home')) scene3d.stop(); }, 700);
   }
-  homeShelf = mountHomeShelf(start.querySelector('.tile.t-shelf'), () => rooms && rooms.shelfContents ? rooms.shelfContents() : null);
+  homeShelf = mountHomeShelf($('shelf-cab'), () => rooms && rooms.shelfContents ? rooms.shelfContents() : null);
   for (const b of start.querySelectorAll('.tile')) {
     const img = b.querySelector('img');
     if (img && HOME_ICONS[b.dataset.tile]) img.src = HOME_ICONS[b.dataset.tile];
-    if (b.dataset.tile === 'shelf') continue;   // SS-19: Kachel ist der Schrank, Scroll ≠ Tipp
     b.addEventListener('click', () => {
       b.classList.remove('wob'); void b.offsetWidth; b.classList.add('wob');   // kleiner Wackler (noch ohne eigene Seite)
       const t = b.dataset.tile;
       if (t === 'kitchen') setTimeout(() => { if (start.classList.contains('open')) { rooms && rooms.enterKitchen(); hide(); } }, 320);
       if (t === 'orders' && board) setTimeout(openOrders, 220);
+      if (t === 'shelf') setTimeout(openShelf, 220);
       if (t === 'pack' && rooms) setTimeout(() => {
         if (!start.classList.contains('open')) return;
         if (rooms.packReady()) { hide(); rooms.enterPack(); } else toast('Noch keine fertige Seife – erst in der Küche eine machen');
@@ -253,12 +252,22 @@ export function createMenu({ getCoins, board = null, rooms = null }) {
   $('ord-list').addEventListener('pointercancel', () => { ordTouch.moved = true; }, { passive: true });
   $('ord-list').addEventListener('scroll', () => { if (Math.abs($('ord-list').scrollTop - ordTouch.top) > 6) ordTouch.moved = true; }, { passive: true });
   const ordScrolled = () => ordTouch.moved;
-  function openOrders() { renderOrders(); $('ord-list').scrollTop = 0; start.classList.add('orders'); }
+  function openOrders() { start.classList.remove('shelf'); renderOrders(); $('ord-list').scrollTop = 0; start.classList.add('orders'); }
   function closeOrders() { start.classList.remove('orders'); refreshStart(); }
   $('ord-back').onclick = closeOrders;
 
-  function show() {
+  function openShelf() {
     start.classList.remove('orders');
+    if (homeShelf) homeShelf.refresh();
+    const sc = document.querySelector('#shelf-cab .hs-scroll');
+    if (sc) sc.scrollLeft = 0;
+    start.classList.add('shelf');
+  }
+  function closeShelf() { start.classList.remove('shelf'); refreshStart(); }
+  $('shelf-back').onclick = closeShelf;
+
+  function show() {
+    start.classList.remove('orders', 'shelf');
     const home = started;   // aus dem Spiel zurück: direkt ins Hauptmenü
     slide.reset();
     start.classList.toggle('home', home);
