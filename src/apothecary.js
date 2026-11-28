@@ -8,10 +8,11 @@ import { SOAP_LIST } from './soaps.js';
 import { makeEnvTexture } from './setting/textures.js';
 
 const COLS = 4, ROWS = 5;
-const CELL = 0.48, DIV = 0.175, PITCH = CELL + DIV, DEPTH = 0.38;
-const FRAME = 0.11, BASE_H = 0.09, CROWN_H = 0.068, BACK_T = 0.07;
-const SOAP_W = 0.40, SOAP_H = 0.25, SOAP_D = 0.36, SOAP_R = 0.082;
-const DAMP = 6.2, CAM_TILT = 20 * Math.PI / 180;
+const CELL_W = 0.52, CELL_H = 0.45, DIV = 0.14;
+const PITCH_X = CELL_W + DIV, PITCH_Y = CELL_H + DIV, DEPTH = 0.46;
+const FRAME = 0.12, BASE_H = 0.075, CROWN_H = 0.06, BACK_T = 0.07;
+const SOAP_W = CELL_W * 0.78, SOAP_H = CELL_H * 0.58, SOAP_D = CELL_W * 0.76, SOAP_R = 0.09;
+const DAMP = 6.2, CAM_TILT = 15 * Math.PI / 180, SOAP_TILT = 18 * Math.PI / 180;
 const PINK_BG = 0xffd9ea;
 
 const FACE = new Map();
@@ -21,12 +22,21 @@ function rgb(c, k = 1) {
 }
 function col(soap) {
   const a = soap.base, b = soap.light || soap.base;
-  const k = 0.82;
-  return new THREE.Color(
-    a[0] * k + b[0] * (1 - k),
-    a[1] * k + b[1] * (1 - k),
-    a[2] * k + b[2] * (1 - k),
+  const c = new THREE.Color(
+    a[0] * 0.92 + b[0] * 0.08,
+    a[1] * 0.92 + b[1] * 0.08,
+    a[2] * 0.92 + b[2] * 0.08,
   );
+  const hsl = { h: 0, s: 0, l: 0 };
+  c.getHSL(hsl);
+  // sattere Candy-Pastellfarben, Creme bleibt warm und hell
+  const sBoost = hsl.s < 0.18 ? 1.15 : 1.32;
+  c.setHSL(
+    hsl.h,
+    Math.min(0.92, hsl.s * sBoost),
+    Math.max(0.36, Math.min(0.78, hsl.l * 0.94 + 0.03)),
+  );
+  return c;
 }
 
 function drawGlyph(g, id, r) {
@@ -137,7 +147,7 @@ function drawGlyph(g, id, r) {
   }
 }
 
-function paintGlyph(g, soap, S, scale = 0.46) {
+function paintGlyph(g, soap, S, scale = 0.40) {
   g.save();
   g.translate(S / 2, S / 2);
   g.lineJoin = 'round';
@@ -204,14 +214,14 @@ function reliefAlbedo(soap, S = 512) {
   g.fillStyle = rgb(body, 1);
   g.fillRect(0, 0, S, S);
   const dark = lum < 0.38
-    ? 'rgba(0,0,0,0.5)'
-    : `rgba(${Math.round(body.r * 40)},${Math.round(body.g * 40)},${Math.round(body.b * 40)},0.85)`;
+    ? 'rgba(0,0,0,0.4)'
+    : `rgba(${Math.round(body.r * 55)},${Math.round(body.g * 55)},${Math.round(body.b * 55)},0.65)`;
   const light = lum < 0.38
-    ? 'rgba(255,255,255,0.45)'
-    : 'rgba(255,255,255,0.85)';
+    ? 'rgba(255,255,255,0.4)'
+    : 'rgba(255,255,255,0.75)';
   const recess = lum < 0.38
-    ? rgb(new THREE.Color(Math.min(1, body.r * 1.35 + 0.1), Math.min(1, body.g * 1.35 + 0.1), Math.min(1, body.b * 1.35 + 0.1)))
-    : rgb(new THREE.Color(body.r * 0.66, body.g * 0.66, body.b * 0.66));
+    ? rgb(new THREE.Color(Math.min(1, body.r * 1.28 + 0.08), Math.min(1, body.g * 1.28 + 0.08), Math.min(1, body.b * 1.28 + 0.08)))
+    : rgb(new THREE.Color(body.r * 0.78, body.g * 0.78, body.b * 0.78));
   const run = (dx, dy, fill) => {
     g.save();
     g.translate(dx, dy);
@@ -253,18 +263,25 @@ function stampMaps(soap) {
 
 function starTex() {
   const c = document.createElement('canvas');
-  c.width = c.height = 128;
+  c.width = c.height = 256;
   const g = c.getContext('2d');
-  g.translate(64, 64);
-  const glow = g.createRadialGradient(0, 0, 1, 0, 0, 56);
-  glow.addColorStop(0, 'rgba(255, 252, 220, 0.9)');
-  glow.addColorStop(0.22, 'rgba(255, 236, 150, 0.45)');
-  glow.addColorStop(1, 'rgba(255, 236, 150, 0)');
-  g.fillStyle = glow; g.beginPath(); g.arc(0, 0, 56, 0, 7); g.fill();
-  g.fillStyle = '#fff6c8';
+  g.translate(128, 128);
+  const glow = g.createRadialGradient(0, 0, 2, 0, 0, 120);
+  glow.addColorStop(0, 'rgba(255, 240, 150, 0.95)');
+  glow.addColorStop(0.2, 'rgba(255, 210, 80, 0.55)');
+  glow.addColorStop(1, 'rgba(255, 200, 60, 0)');
+  g.fillStyle = glow; g.beginPath(); g.arc(0, 0, 120, 0, 7); g.fill();
+  g.fillStyle = '#ffe56a';
   g.beginPath();
   for (let i = 0; i < 8; i++) {
-    const a = i * Math.PI / 4 - Math.PI / 2, r = i % 2 ? 6 : 46;
+    const a = i * Math.PI / 4 - Math.PI / 2, r = i % 2 ? 14 : 110;
+    i ? g.lineTo(Math.cos(a) * r, Math.sin(a) * r) : g.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  g.closePath(); g.fill();
+  g.fillStyle = '#fff8d0';
+  g.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = i * Math.PI / 4 - Math.PI / 2, r = i % 2 ? 7 : 70;
     i ? g.lineTo(Math.cos(a) * r, Math.sin(a) * r) : g.moveTo(Math.cos(a) * r, Math.sin(a) * r);
   }
   g.closePath(); g.fill();
@@ -307,24 +324,25 @@ function toyWoodTex(aniso, opts = {}) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const g = c.getContext('2d');
-  const tones = opts.tones || ['#f6d7a0', '#f3cc8e', '#f8deb0', '#efc484'];
+  const tones = opts.tones || ['#efc37a', '#e4b56a', '#f3cc88', '#dca85c'];
+  const grain = opts.grain || 0.14;
   const pw = w / planks;
   for (let p = 0; p < planks; p++) {
     const x0 = p * pw;
     g.fillStyle = tones[p % tones.length];
     g.fillRect(x0, 0, pw, h);
     const lg = g.createLinearGradient(x0, 0, x0 + pw, 0);
-    lg.addColorStop(0, 'rgba(160, 90, 30, .05)');
-    lg.addColorStop(0.5, 'rgba(255, 248, 220, .08)');
-    lg.addColorStop(1, 'rgba(160, 90, 30, .06)');
+    lg.addColorStop(0, 'rgba(120, 60, 16, .16)');
+    lg.addColorStop(0.45, 'rgba(255, 236, 190, .12)');
+    lg.addColorStop(1, 'rgba(120, 60, 16, .14)');
     g.fillStyle = lg; g.fillRect(x0, 0, pw, h);
-    for (let l = 0; l < 8; l++) {
-      g.strokeStyle = `rgba(180, 110, 40, ${0.025 + (l % 3) * 0.015})`;
-      g.lineWidth = 1;
-      const gx = x0 + 10 + (l / 8) * (pw - 20), ph = l * 0.7;
+    for (let l = 0; l < 14; l++) {
+      g.strokeStyle = `rgba(130, 70, 22, ${grain * (0.45 + (l % 3) * 0.25)})`;
+      g.lineWidth = 1 + (l % 2);
+      const gx = x0 + 8 + (l / 14) * (pw - 16), ph = l * 0.85;
       g.beginPath();
-      for (let y = 0; y <= h; y += 8) {
-        const x = gx + Math.sin(y * 0.01 + ph) * 2;
+      for (let y = 0; y <= h; y += 6) {
+        const x = gx + Math.sin(y * 0.014 + ph) * 3.5;
         if (y === 0) g.moveTo(x, y); else g.lineTo(x, y);
       }
       g.stroke();
@@ -354,32 +372,42 @@ export function mountApothecary(canvas, getItems) {
   const env = pmrem.fromEquirectangular(envSrc).texture;
   envSrc.dispose(); pmrem.dispose();
   scene.environment = env;
-  scene.environmentIntensity = 0.28;
+  scene.environmentIntensity = 0.42;
 
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  const woodMap = toyWoodTex(aniso);
+  const woodMap = toyWoodTex(aniso, {
+    planks: 3, tones: ['#e8c078', '#f0cc8a', '#e2b66c'], grain: 0.07,
+  });
   woodMap.repeat.set(1, 1);
   const wood = new THREE.MeshStandardMaterial({
-    map: woodMap, color: 0xfff0d0, roughness: 0.62, metalness: 0, envMapIntensity: 0.12,
+    map: woodMap, color: 0xffffff, roughness: 0.58, metalness: 0, envMapIntensity: 0.14,
+  });
+  const backMap = toyWoodTex(aniso, {
+    planks: 5,
+    tones: ['#c4893e', '#b47a34', '#cb9348', '#a86c2c'], grain: 0.22,
   });
   const woodBack = new THREE.MeshStandardMaterial({
-    color: 0xf0c07a, roughness: 0.74, metalness: 0, envMapIntensity: 0.06,
+    map: backMap, color: 0xffffff, roughness: 0.72, metalness: 0, envMapIntensity: 0.06,
   });
   const lilac = new THREE.MeshPhysicalMaterial({
-    color: 0xd8bef4, roughness: 0.34, metalness: 0.04, clearcoat: 0.4, clearcoatRoughness: 0.3,
-    envMapIntensity: 0.3, emissive: 0xf3e8ff, emissiveIntensity: 0.05,
+    color: 0xd4b4f0, roughness: 0.32, metalness: 0.05, clearcoat: 0.5, clearcoatRoughness: 0.28,
+    envMapIntensity: 0.35, emissive: 0xf3e8ff, emissiveIntensity: 0.04,
+  });
+  const lilacHi = new THREE.MeshPhysicalMaterial({
+    color: 0xf3e6ff, roughness: 0.22, metalness: 0.04, clearcoat: 0.65, clearcoatRoughness: 0.2,
+    envMapIntensity: 0.4, emissive: 0xffffff, emissiveIntensity: 0.08,
   });
 
-  scene.add(new THREE.HemisphereLight(0xfff6fb, 0xe8bf88, 1.02));
-  const sun = new THREE.DirectionalLight(0xfff8f0, 0.82);
-  sun.position.set(-0.2, 4.2, 7.2);
+  scene.add(new THREE.HemisphereLight(0xfff6e8, 0xd4a060, 1.18));
+  const sun = new THREE.DirectionalLight(0xfff3d8, 1.2);
+  sun.position.set(-2.2, 5.4, 5.5);
   scene.add(sun);
-  const fill = new THREE.DirectionalLight(0xffe8f4, 0.28);
-  fill.position.set(2.2, 2.2, 4.4);
+  const fill = new THREE.DirectionalLight(0xffe4c8, 0.32);
+  fill.position.set(2.4, 2.4, 4.2);
   scene.add(fill);
 
-  const cabW = COLS * PITCH + DIV + FRAME * 2;
-  const gridH = ROWS * PITCH + DIV;
+  const cabW = COLS * PITCH_X + DIV + FRAME * 2;
+  const gridH = ROWS * PITCH_Y + DIV;
   const cabH = gridH + BASE_H + CROWN_H;
   const cabD = DEPTH + BACK_T;
   const cabinet = new THREE.Group();
@@ -393,29 +421,31 @@ export function mountApothecary(canvas, getItems) {
     return m;
   };
 
-  addBox(lilac, FRAME, cabH, cabD + 0.04, -cabW / 2 + FRAME / 2, cabH / 2, 0, 0.05);
-  addBox(lilac, FRAME, cabH, cabD + 0.04, cabW / 2 - FRAME / 2, cabH / 2, 0, 0.05);
-  addBox(lilac, cabW + 0.02, CROWN_H, cabD + 0.06, 0, cabH - CROWN_H / 2, 0.01, 0.034);
-  addBox(lilac, cabW + 0.02, BASE_H, cabD + 0.06, 0, BASE_H / 2, 0.01, 0.034);
+  addBox(lilac, FRAME, cabH, cabD + 0.05, -cabW / 2 + FRAME / 2, cabH / 2, 0.01, 0.055);
+  addBox(lilac, FRAME, cabH, cabD + 0.05, cabW / 2 - FRAME / 2, cabH / 2, 0.01, 0.055);
+  addBox(lilac, cabW + 0.03, CROWN_H, cabD + 0.07, 0, cabH - CROWN_H / 2, 0.015, 0.04);
+  addBox(lilacHi, cabW + 0.02, CROWN_H * 0.38, cabD + 0.05, 0, cabH - CROWN_H * 0.22, 0.03, 0.03);
+  addBox(lilacHi, FRAME * 0.45, cabH - CROWN_H * 0.4, 0.03, -cabW / 2 + FRAME * 0.72, cabH / 2 - CROWN_H * 0.1, cabD / 2 + 0.015, 0.02);
+  addBox(lilac, cabW + 0.03, BASE_H, cabD + 0.07, 0, BASE_H / 2, 0.015, 0.04);
   addBox(woodBack, cabW - FRAME * 1.7, gridH, BACK_T, 0, BASE_H + gridH / 2, -DEPTH / 2 - BACK_T / 2, 0.02);
   for (let r = 0; r <= ROWS; r++) {
-    addBox(wood, cabW - FRAME * 2, DIV, cabD - BACK_T * 0.2, 0, BASE_H + r * PITCH, 0.01, 0.055);
+    addBox(wood, cabW - FRAME * 2, DIV, cabD - BACK_T * 0.35, 0, BASE_H + r * PITCH_Y, 0.035, 0.058);
   }
   for (let c = 1; c < COLS; c++) {
-    const x = -cabW / 2 + FRAME + DIV / 2 + c * PITCH;
-    addBox(wood, DIV, gridH, cabD - BACK_T * 0.2, x, BASE_H + gridH / 2, 0.01, 0.055);
+    const x = -cabW / 2 + FRAME + DIV / 2 + c * PITCH_X;
+    addBox(wood, DIV, gridH, cabD - BACK_T * 0.35, x, BASE_H + gridH / 2, 0.035, 0.058);
   }
 
-  function boardCenterY(rowFromBottom) { return BASE_H + rowFromBottom * PITCH; }
+  function boardCenterY(rowFromBottom) { return BASE_H + rowFromBottom * PITCH_Y; }
   function shelfTop(rowFromBottom) { return boardCenterY(rowFromBottom) + DIV / 2; }
   function cellPos(col, row) {
-    const x = -cabW / 2 + FRAME + DIV + CELL / 2 + col * PITCH;
-    const y = shelfTop(ROWS - 1 - row) + CELL / 2;
-    return { x, y, z: DEPTH / 2 - SOAP_D / 2 - 0.035 };
+    const x = -cabW / 2 + FRAME + DIV + CELL_W / 2 + col * PITCH_X;
+    const y = shelfTop(ROWS - 1 - row) + CELL_H / 2;
+    return { x, y, z: DEPTH / 2 - SOAP_D / 2 - 0.03 };
   }
 
   const aoMat = new THREE.MeshBasicMaterial({ map: cubbyAOTex(), transparent: true, depthWrite: false, opacity: 0.95 });
-  const aoGeo = new THREE.PlaneGeometry(CELL * 0.98, CELL * 0.98);
+  const aoGeo = new THREE.PlaneGeometry(CELL_W * 0.98, CELL_H * 0.98);
   for (let row = 0; row < ROWS; row++) {
     for (let c = 0; c < COLS; c++) {
       const p = cellPos(c, row);
@@ -427,22 +457,24 @@ export function mountApothecary(canvas, getItems) {
 
   const soapsRoot = new THREE.Group();
   cabinet.add(soapsRoot);
-  const bodyGeo = new RoundedBoxGeometry(SOAP_W, SOAP_H, SOAP_D, 6, SOAP_R);
-  const faceGeo = new THREE.PlaneGeometry(SOAP_W - SOAP_R * 1.85, SOAP_D - SOAP_R * 1.85);
+  const bodyGeo = new RoundedBoxGeometry(SOAP_W, SOAP_H, SOAP_D, 7, SOAP_R);
+  const faceGeo = new THREE.PlaneGeometry(SOAP_W * 0.72, SOAP_D * 0.72);
   const hlTex = (() => {
     const c = document.createElement('canvas'); c.width = c.height = 256;
     const g = c.getContext('2d');
-    const gr = g.createRadialGradient(96, 100, 2, 96, 100, 120);
-    gr.addColorStop(0, 'rgba(255,255,255,.95)');
-    gr.addColorStop(0.28, 'rgba(255,255,255,.35)');
+    const gr = g.createRadialGradient(80, 80, 2, 80, 80, 130);
+    gr.addColorStop(0, 'rgba(255,255,255,1)');
+    gr.addColorStop(0.22, 'rgba(255,255,255,.45)');
     gr.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
     return tex(c);
   })();
-  const hlGeo = new THREE.PlaneGeometry(SOAP_W * 0.62, SOAP_D * 0.48);
+  const hlGeo = new THREE.PlaneGeometry(SOAP_W * 0.7, SOAP_D * 0.55);
   const blobMat = new THREE.MeshBasicMaterial({ map: blobTex(), transparent: true, depthWrite: false });
   const blobGeo = new THREE.PlaneGeometry(SOAP_W * 1.12, SOAP_D * 0.9);
-  const starMat = new THREE.MeshBasicMaterial({ map: starTex(), transparent: true, depthWrite: false, opacity: 0.7 });
+  const starMat = new THREE.MeshBasicMaterial({
+    map: starTex(), transparent: true, depthWrite: false, depthTest: false, opacity: 1,
+  });
   const starGeo = new THREE.PlaneGeometry(1, 1);
   const sparkles = [];
   const labelAnchors = [];
@@ -450,28 +482,33 @@ export function mountApothecary(canvas, getItems) {
   function addSoap(group, soap, yOff) {
     const bodyCol = col(soap);
     const body = new THREE.Mesh(bodyGeo, new THREE.MeshPhysicalMaterial({
-      color: bodyCol, roughness: 0.28, metalness: 0,
-      clearcoat: 0.62, clearcoatRoughness: 0.22, envMapIntensity: 0.4,
+      color: bodyCol, roughness: 0.22, metalness: 0,
+      clearcoat: 0.82, clearcoatRoughness: 0.14, envMapIntensity: 0.55,
     }));
-    body.position.y = yOff;
     const maps = stampMaps(soap);
     const face = new THREE.Mesh(faceGeo, new THREE.MeshPhysicalMaterial({
-      color: 0xffffff, map: maps.albedo, bumpMap: maps.bump, bumpScale: 0.08,
-      normalMap: maps.normal, normalScale: new THREE.Vector2(1.25, 1.25),
-      roughness: 0.38, metalness: 0,
-      clearcoat: 0.22, clearcoatRoughness: 0.4, envMapIntensity: 0.22,
+      color: 0xffffff, map: maps.albedo, bumpMap: maps.bump, bumpScale: 0.06,
+      normalMap: maps.normal, normalScale: new THREE.Vector2(1.05, 1.05),
+      roughness: 0.3, metalness: 0,
+      clearcoat: 0.45, clearcoatRoughness: 0.28, envMapIntensity: 0.35,
     }));
     face.rotation.x = -Math.PI / 2;
-    face.position.set(0, yOff + SOAP_H / 2 + 0.0012, 0);
     const hl = new THREE.Mesh(hlGeo, new THREE.MeshBasicMaterial({
-      map: hlTex, transparent: true, depthWrite: false, opacity: 0.62,
+      map: hlTex, transparent: true, depthWrite: false, opacity: 0.88,
     }));
     hl.rotation.x = -Math.PI / 2;
-    hl.position.set(-SOAP_W * 0.08, yOff + SOAP_H / 2 + 0.0024, SOAP_D * 0.02);
+    hl.position.set(-SOAP_W * 0.14, SOAP_H + 0.0032, -SOAP_D * 0.08);
     const sh = new THREE.Mesh(blobGeo, blobMat);
     sh.rotation.x = -Math.PI / 2;
     sh.position.set(0, yOff - SOAP_H / 2 + 0.003, 0.01);
-    group.add(sh); group.add(body); group.add(face); group.add(hl);
+    const pivot = new THREE.Group();
+    pivot.position.set(0, yOff - SOAP_H / 2, 0);
+    pivot.rotation.x = SOAP_TILT;
+    body.position.y = SOAP_H / 2;
+    face.position.set(0, SOAP_H + 0.0014, 0);
+    hl.position.y = SOAP_H + 0.0032;
+    pivot.add(body); pivot.add(face); pivot.add(hl);
+    group.add(sh); group.add(pivot);
   }
 
   function addSparkle(group, x, y, z, s) {
@@ -480,6 +517,7 @@ export function mountApothecary(canvas, getItems) {
     m.scale.setScalar(s);
     m.userData.phase = Math.random() * 6;
     m.userData.base = s;
+    m.renderOrder = 4;
     group.add(m);
     sparkles.push(m);
   }
@@ -527,13 +565,13 @@ export function mountApothecary(canvas, getItems) {
       const p = cellPos(col, row);
       const g = new THREE.Group();
       g.position.set(p.x, p.y, p.z);
-      const floorY = -CELL / 2 + SOAP_H / 2 + 0.012;
+      const floorY = -CELL_H / 2 + SOAP_H / 2 + 0.012;
       addSoap(g, soap, floorY);
-      const topY = floorY + SOAP_H * 0.55;
-      addSparkle(g, -SOAP_W * 0.58, topY + 0.05, SOAP_D * 0.38, 0.048);
-      addSparkle(g, SOAP_W * 0.56, topY + 0.03, SOAP_D * 0.32, 0.04);
-      addSparkle(g, -SOAP_W * 0.3, topY + 0.07, -SOAP_D * 0.22, 0.036);
-      addSparkle(g, SOAP_W * 0.28, topY + 0.06, SOAP_D * 0.05, 0.034);
+      const topY = floorY + SOAP_H * 0.7;
+      addSparkle(g, -SOAP_W * 0.62, topY + 0.1, SOAP_D * 0.55, 0.13);
+      addSparkle(g, SOAP_W * 0.6, topY + 0.06, SOAP_D * 0.5, 0.1);
+      addSparkle(g, -SOAP_W * 0.15, topY + 0.16, SOAP_D * 0.2, 0.085);
+      addSparkle(g, SOAP_W * 0.22, topY + 0.02, SOAP_D * 0.62, 0.075);
       soapsRoot.add(g);
 
       if (labelsRoot) {
@@ -575,22 +613,21 @@ export function mountApothecary(canvas, getItems) {
     renderer.setSize(w, h, false);
     const saT = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sa-top')) || 0;
     const saB = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sa-bottom')) || 0;
-    const topHUD = saT + 88, botHUD = saB + 52;
+    const topHUD = saT + 86, botHUD = saB + 58;
     const bandMid = (topHUD + (h - botHUD)) / 2 / h;
     const bandH = Math.max(0.45, (h - botHUD - topHUD) / h);
-    const apparentH = cabH * Math.cos(CAM_TILT) + cabD * Math.sin(CAM_TILT);
-    const wantH = apparentH / (bandH * 0.95);
-    const halfH = wantH / 2;
-    const halfW = halfH * (w / h);
+    // Genau 3 Fächer + linker Rahmen füllen die Bildbreite.
+    const visW = FRAME + 3 * PITCH_X;
+    const halfW = visW / 2;
+    const halfH = halfW * (h / w);
     camera.left = -halfW; camera.right = halfW;
     camera.top = halfH; camera.bottom = -halfH;
     camera.setViewOffset(w, h, 0, (0.5 - bandMid) * h, w, h);
     camera.updateProjectionMatrix();
     camZ = 8;
     camY = lookY + camZ * Math.tan(CAM_TILT);
-    const visW = 2 * halfW;
     worldPerPx = visW / w;
-    const peek = FRAME * 0.35;
+    const peek = 0;
     camMin = -cabW / 2 + visW / 2 - peek;
     camMax = cabW / 2 - visW / 2 + peek;
     if (camMax < camMin) { const mid = (camMin + camMax) / 2; camMin = camMax = mid; }
@@ -670,9 +707,9 @@ export function mountApothecary(canvas, getItems) {
       applyCam();
     }
     for (const s of sparkles) {
-      const k = 0.9 + 0.12 * Math.sin(time * 2.4 + s.userData.phase);
+      const k = 0.82 + 0.28 * Math.sin(time * 3.1 + s.userData.phase);
       s.scale.setScalar(s.userData.base * k);
-      s.material.opacity = 0.42 + 0.22 * Math.sin(time * 2.8 + s.userData.phase * 1.3);
+      s.material.opacity = 0.65 + 0.35 * Math.sin(time * 3.4 + s.userData.phase * 1.2);
       s.lookAt(camera.position);
     }
     renderer.render(scene, camera);
