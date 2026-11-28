@@ -728,3 +728,49 @@ div.st-step { animation: stPulse 2.4s var(--ease) infinite; }
 #quality.order #q-stars { gap: 2px; height: 58px; }
 #quality.order #q-stars .qs, #quality.order #q-stars .qs:nth-child(2) { width: 42px; height: 42px; margin-bottom: 0; }
 #quality.order #q-stars .qs:nth-child(3) { width: 54px; height: 54px; margin-bottom: 6px; }
+
+/* ---------- SS-19: Seifenregal-Kachel ist ein offener Holzschrank ---------- */
+.tile.t-shelf {
+  --t-l: #c9a06a; --t: #b88950; --t-d: #9a6a38;
+  padding: 0; overflow: hidden; cursor: default;
+  background:
+    linear-gradient(180deg, rgba(255, 236, 210, .35), rgba(80, 42, 16, .12) 40%, rgba(40, 20, 8, .28)),
+    #a87a45;
+  align-items: stretch; justify-content: stretch;
+}
+.tile.t-shelf::before { display: none; }
+.tile.t-shelf:active { transform: none; box-shadow: inset 0 -6px 0 rgba(0, 0, 0, .1), inset 0 4px 0 rgba(255, 255, 255, .6), 0 5px 0 var(--ol), 0 12px 18px rgba(60, 25, 70, .25); }
+  .tile.t-shelf > span {
+  position: absolute; left: 0; right: 0; bottom: 3px; z-index: 2; pointer-events: none;
+  font-size: clamp(13px, 4vw, 17px);
+}
+  .hs-cab { position: absolute; inset: 5px 5px 28px; border-radius: 16px; overflow: hidden;
+  background: linear-gradient(180deg, #8a5a32, #6e4628 40%, #5a381e);
+  box-shadow: inset 0 0 0 3px #c49a5c, inset 0 0 0 5px #7a4e28, inset 0 10px 16px rgba(0, 0, 0, .28);
+}
+.hs-frame { display: none; }
+.hs-scroll {
+  position: absolute; inset: 6px 4px 4px; overflow-x: auto; overflow-y: hidden;
+  touch-action: pan-x; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; cursor: grab;
+}
+.hs-scroll::-webkit-scrollbar { display: none; }
+.hs-track { display: flex; height: 100%; align-items: stretch; }
+.hs-bay { display: flex; flex-direction: column; flex: 0 0 auto; height: 100%; justify-content: space-between; gap: 3px; }
+.hs-shelf {
+  display: flex; flex: 1 1 0; align-items: flex-end; gap: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, .2) 0 4px, transparent 10px),
+              linear-gradient(#d2a66a, #c08a48 70%, #a87438);
+  border-bottom: 3px solid #7a4e28; box-shadow: inset 0 2px 0 rgba(255, 230, 190, .4);
+}
+.hs-comp { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 0 1px 2px; position: relative; width: 66px; }
+.hs-comp + .hs-comp { box-shadow: inset 1px 0 0 rgba(80, 40, 16, .28); }
+.hs-comp canvas { display: block; pointer-events: none; }
+.hs-comp b {
+  display: block; width: calc(100% - 4px); margin-top: 1px; padding: 1px 3px 1px;
+  border-radius: 3px; background: #2f3a33; border: 1.5px solid #b07a44;
+  font: 600 7.5px/1 Fredoka, "DM Sans", sans-serif; color: #fbf7ee; text-align: center;
+  letter-spacing: .01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-shadow: none; pointer-events: none;
+}
+.hs-comp.empty b { color: #9aa39c; background: #5a625c; }

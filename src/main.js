@@ -1,4 +1,5 @@
 import { barsNeeded, makeOrder } from './orders.js';
+import { SOAP_LIST } from './soaps.js';
 import './sound.js';   // zuerst: Ton an/aus (vor dem ersten AudioContext)
 import { ADDITIVES } from './additives.js';
 import { DECO_ITEMS } from './decoItems.js';
@@ -69,7 +70,8 @@ window.__menu = createMenu({
   // Bestellungen-Ansicht: echte Aufträge vom Brett; annehmen wie über den Zettel
   board: () => ({ orders: game.notes.orders, active: game.order, canAccept: game.state === 'choose' && !game.order, accept: (i) => game.acceptOrder(i) }),
   // t95u Räume: Hauptmenü-Kacheln navigieren selbst; nach einem Raum-Schritt kommt das Spiel hierher zurück
-  rooms: { packReady: () => game.packReady, packCount: () => game.packCount, enterPack: () => game.enterStation(), enterKitchen: () => game.enterKitchen() },
+  rooms: { packReady: () => game.packReady, packCount: () => game.packCount, enterPack: () => game.enterStation(), enterKitchen: () => game.enterKitchen(),
+    shelfContents: () => SOAP_LIST.map((soap) => { const s = game.supply.get(soap.id); return { soap, pieces: s ? s.pieces : 2 }; }) },
 });
 game.onRoomDone = () => window.__menu.show();
 window.__decoItems = DECO_ITEMS;

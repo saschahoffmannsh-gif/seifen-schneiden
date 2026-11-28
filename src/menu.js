@@ -17,6 +17,7 @@ import icoPack from './assets/home/pack.webp';
 const HOME_ICONS = { orders: icoOrders, shelf: icoShelf, kitchen: icoKitchen, pack: icoPack };
 import { avatarStyle } from './avatars.js';
 import { soapCss } from './cabinet.js';
+import { mountHomeShelf } from './homeShelf.js';
 import { shapeIconURL, DEFAULT_SHAPE } from './shapes.js';
 // Kunden-Porträts (4×4-Blatt, generiert): Name -> Zelle
 const CARD_COLORS = ['c-mint', 'c-sun', 'c-lilac', 'c-peach', 'c-sky'];
@@ -36,7 +37,7 @@ function closeModal(id) { $(id).classList.remove('open'); }
 
 export function createMenu({ getCoins, board = null, rooms = null }) {
   const start = $('start');
-  let started = false, openedAt = 0, stopT = 0;
+  let started = false, openedAt = 0, stopT = 0, homeShelf = null;
   const scene3d = createStartScene($('st-canvas'));
 
   function refreshStart() {
@@ -62,6 +63,7 @@ export function createMenu({ getCoins, board = null, rooms = null }) {
     $('home-rating').setAttribute('aria-label', rt.n ? `Shop-Bewertung ${rt.avg.toFixed(1)} von 5 Sternen aus ${rt.n} Bewertungen` : 'Noch keine Shop-Bewertung');
     $('home-bar').innerHTML = `<span class="hb-coin">${ICON.coin}<b>${getCoins()}</b></span><span class="hb-track"><i style="width:${Math.max(6, Math.round(un / all * 100))}%"></i><em>${un}/${all}</em></span><span class="hb-star">${ICON.star}</span>`;
     packBadge();
+    if (homeShelf) homeShelf.refresh();
     placeSoaps();
   }
   // 3D-Seifen mittig in den freien Raum zwischen Wortmarke und Menü setzen
@@ -156,8 +158,11 @@ export function createMenu({ getCoins, board = null, rooms = null }) {
     clearTimeout(homeT);
     homeT = setTimeout(() => { if (start.classList.contains('home')) scene3d.stop(); }, 700);
   }
+  homeShelf = mountHomeShelf(start.querySelector('.tile.t-shelf'), () => rooms && rooms.shelfContents ? rooms.shelfContents() : null);
   for (const b of start.querySelectorAll('.tile')) {
-    b.querySelector('img').src = HOME_ICONS[b.dataset.tile];
+    const img = b.querySelector('img');
+    if (img && HOME_ICONS[b.dataset.tile]) img.src = HOME_ICONS[b.dataset.tile];
+    if (b.dataset.tile === 'shelf') continue;   // SS-19: Kachel ist der Schrank, Scroll ≠ Tipp
     b.addEventListener('click', () => {
       b.classList.remove('wob'); void b.offsetWidth; b.classList.add('wob');   // kleiner Wackler (noch ohne eigene Seite)
       const t = b.dataset.tile;
