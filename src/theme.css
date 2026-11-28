@@ -760,10 +760,10 @@ div.st-step { animation: stPulse 2.4s var(--ease) infinite; }
 .shelf-pill {
   position: absolute; left: 0; top: 0;
   transform: translate(-50%, -50%);
-  padding: 4px 12px 5px; border-radius: 999px;
+  padding: 3px 10px 4px; border-radius: 999px;
   background: linear-gradient(180deg, #fde8ff, #f3c4f4 55%, #e6a8ea);
   border: 3px solid var(--ol); box-shadow: 0 3px 0 var(--ol-a);
-  font: 600 15px/1.1 var(--f-body); color: var(--ol); letter-spacing: .01em;
+  font: 600 13px/1.05 var(--f-body); color: var(--ol); letter-spacing: .01em;
   white-space: nowrap; text-align: center;
 }
 #shelf-hint {
