@@ -169,14 +169,15 @@
       <div id="ord-msg" class="ord-msg"></div>
       <div id="ord-list" class="ord-list scroll-y"></div>
     </div>
-    <!-- Seifenregal (Kachel im Hauptmenü): offener Holzschrank, seitlich scrollbar -->
+    <!-- Seifenregal: 3D-Apothekerschrank, Kamera fährt seitlich (Kachel bleibt Kachel) -->
     <div id="shelf-view" class="ord-view shelf-view" aria-label="Seifenregal">
-      <div class="ord-head">
+      <canvas id="shelf-canvas" aria-hidden="true"></canvas>
+      <div class="ord-head shelf-head">
         <button id="shelf-back" class="round-btn small" aria-label="Zurück zum Menü"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg></button>
         <h2 class="ord-title shelf-title">Seifenregal</h2>
       </div>
-      <div id="shelf-msg" class="ord-msg"></div>
-      <div id="shelf-cab" class="hs-cab"></div>
+      <div id="shelf-msg" class="shelf-msg"></div>
+      <div id="shelf-hint" aria-hidden="true">‹ wischen ›</div>
     </div>
   </div>
 

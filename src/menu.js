@@ -17,7 +17,7 @@ import icoPack from './assets/home/pack.webp';
 const HOME_ICONS = { orders: icoOrders, shelf: icoShelf, kitchen: icoKitchen, pack: icoPack };
 import { avatarStyle } from './avatars.js';
 import { soapCss } from './cabinet.js';
-import { mountHomeShelf } from './homeShelf.js';
+import { mountApothecary } from './apothecary.js';
 import { shapeIconURL, DEFAULT_SHAPE } from './shapes.js';
 // Kunden-Porträts (4×4-Blatt, generiert): Name -> Zelle
 const CARD_COLORS = ['c-mint', 'c-sun', 'c-lilac', 'c-peach', 'c-sky'];
@@ -37,7 +37,7 @@ function closeModal(id) { $(id).classList.remove('open'); }
 
 export function createMenu({ getCoins, board = null, rooms = null }) {
   const start = $('start');
-  let started = false, openedAt = 0, stopT = 0, homeShelf = null;
+  let started = false, openedAt = 0, stopT = 0, apo = null;
   const scene3d = createStartScene($('st-canvas'));
 
   function refreshStart() {
@@ -157,7 +157,8 @@ export function createMenu({ getCoins, board = null, rooms = null }) {
     clearTimeout(homeT);
     homeT = setTimeout(() => { if (start.classList.contains('home')) scene3d.stop(); }, 700);
   }
-  homeShelf = mountHomeShelf($('shelf-cab'), () => rooms && rooms.shelfContents ? rooms.shelfContents() : null);
+  apo = mountApothecary($('shelf-canvas'), () => rooms && rooms.shelfContents ? rooms.shelfContents() : null);
+  window.__apothecary = apo;
   for (const b of start.querySelectorAll('.tile')) {
     const img = b.querySelector('img');
     if (img && HOME_ICONS[b.dataset.tile]) img.src = HOME_ICONS[b.dataset.tile];
@@ -258,16 +259,15 @@ export function createMenu({ getCoins, board = null, rooms = null }) {
 
   function openShelf() {
     start.classList.remove('orders');
-    if (homeShelf) homeShelf.refresh();
-    const sc = document.querySelector('#shelf-cab .hs-scroll');
-    if (sc) sc.scrollLeft = 0;
     start.classList.add('shelf');
+    if (apo) { apo.refresh(); apo.resetCam(); apo.start(); }
   }
-  function closeShelf() { start.classList.remove('shelf'); refreshStart(); }
+  function closeShelf() { start.classList.remove('shelf'); if (apo) apo.stop(); refreshStart(); }
   $('shelf-back').onclick = closeShelf;
 
   function show() {
     start.classList.remove('orders', 'shelf');
+    if (apo) apo.stop();
     const home = started;   // aus dem Spiel zurück: direkt ins Hauptmenü
     slide.reset();
     start.classList.toggle('home', home);

@@ -74,7 +74,7 @@ window.__menu = createMenu({
     shelfContents: () => {
       const taken = SOAP_LIST.map((soap) => { const s = game.supply.get(soap.id); return s && s.pieces > 0 ? { soap, pieces: s.pieces } : null; }).filter(Boolean);
       if (taken.length) return { items: taken, caption: 'Dein Vorrat für den Auftrag' };
-      return { items: SOAP_LIST.map((soap) => ({ soap, pieces: 3 })), caption: 'Die Sorten der Manufaktur' };
+      return { items: SOAP_LIST.map((soap) => ({ soap, pieces: 2 })), caption: 'Die Sorten der Manufaktur' };
     } },
 });
 game.onRoomDone = () => window.__menu.show();
